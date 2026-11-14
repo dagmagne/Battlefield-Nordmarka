@@ -5,6 +5,14 @@ import postW from './post.wgsl';
 import objDefW from './objdeform.wgsl';
 import objectW from './object.wgsl';
 import stampW from './stamp.wgsl';
+import treeDefW from './treedeform.wgsl';
+import treeW from './tree.wgsl';
+import shadowW from './shadow.wgsl';
+import shTreeW from './shadowtree.wgsl';
+import shObjW from './shadowobj.wgsl';
+import { buildTrees } from './trees.js';
+import { NEAR, NCN, FAR, FCN } from './world.js';
+import { ortho } from './math.js';
 import { buildGroomer, groomerParts, TILL_Z, SWATH } from './groomer.js';
 import { perspRZ, lookAt, mul, invert, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, PLAY } from './world.js';
@@ -157,6 +165,102 @@ async function main() {
     return { vb: mkBuf(mesh.v, GPUBufferUsage.VERTEX), ib: mkBuf(mesh.i, GPUBufferUsage.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
   const groomer = mkObj(buildGroomer());
+
+  // ---------- shadows ----------
+  const NC = Q.casc, SPLITS = Q.casc === 3 ? [26, 105, 420] : [38, 190, 190];
+  const bglS = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }] });
+  const shU = [], shBG = [], shData = [], shPass = [], shPlanes = [];
+  for (let i = 0; i < 3; i++) {
+    shU[i] = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }); shData[i] = new Float32Array(20); shPlanes[i] = new Float32Array(16);
+    shBG[i] = device.createBindGroup({ layout: bglS, entries: [{ binding: 0, resource: { buffer: shU[i] } }] });
+    shPass[i] = { colorAttachments: [], depthStencilAttachment: { view: shadowViews[i], depthLoadOp: 'clear', depthStoreOp: 'store', depthClearValue: 1 } };
+  }
+  const shDepth = { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less', depthBias: 2, depthBiasSlopeScale: 2.5 };
+  const objShMod = mod(shadowW + objDefW + shObjW, 'objshadow');
+  const objShPipe = device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bglS, bglO] }), vertex: { module: objShMod, entryPoint: 'vs', buffers: objVB }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
+
+  // ---------- trees ----------
+  const TM = buildTrees();
+  const treeVB = mkBuf(TM.v, GPUBufferUsage.VERTEX), treeIB = mkBuf(TM.i, GPUBufferUsage.INDEX), treeInst = mkBuf(W.trees.data, GPUBufferUsage.VERTEX);
+  const treeBufs = [{ arrayStride: 40, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }] },
+    { arrayStride: 32, stepMode: 'instance', attributes: [{ shaderLocation: 3, offset: 0, format: 'float32x4' }, { shaderLocation: 4, offset: 16, format: 'float32x4' }] }];
+  const treeMod = mod(common + treeDefW + treeW, 'tree');
+  const treePipe = device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bgl0, bglO] }),
+    vertex: { module: treeMod, entryPoint: 'vs', buffers: treeBufs }, fragment: { module: treeMod, entryPoint: 'fs', targets: [{ format: HDR }] },
+    primitive: { cullMode: 'none' }, depthStencil: depthGE, multisample: { count: Q.msaa, alphaToCoverageEnabled: Q.msaa > 1 },
+  });
+  const treeShMod = mod(shadowW + treeDefW + shTreeW, 'treeshadow');
+  const treeShPipe = device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bglS, bglO] }), vertex: { module: treeShMod, entryPoint: 'vs', buffers: treeBufs }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
+  const LOD = [42 * Q.lodMul, 200 * Q.lodMul, 850 * Q.lodMul];
+  const lodBG = [[0, LOD[0], 0], [LOD[0], LOD[1], 0], [LOD[1], LOD[2], 1], [LOD[2], 1e9, 1]].map((r) => {
+    const u = mkBuf(new Float32Array([r[0], r[1], r[2], 0]), GPUBufferUsage.UNIFORM);
+    return device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] });
+  });
+  const camPlanes = new Float32Array(20);
+  function planesFrom(out, m, n) { // 4 side planes (+ near)
+    for (let i = 0; i < 4; i++) { const a = i >> 1, sg = i & 1 ? -1 : 1; for (let k = 0; k < 4; k++) out[i * 4 + k] = m[k * 4 + 3] + sg * m[k * 4 + a]; }
+    if (n > 4) for (let k = 0; k < 4; k++) out[16 + k] = m[k * 4 + 3] - m[k * 4 + 2];
+  }
+  function vis(pl, n, x0, y0, z0, x1, y1, z1) {
+    for (let i = 0; i < n; i++) { const a = pl[i * 4], b = pl[i * 4 + 1], c = pl[i * 4 + 2]; if (a * (a > 0 ? x1 : x0) + b * (b > 0 ? y1 : y0) + c * (c > 0 ? z1 : z0) + pl[i * 4 + 3] < 0) return false; }
+    return true;
+  }
+  const TP = TM.parts, TT = W.trees;
+  let treeDraws = 0;
+  function drawTrees(p, pl, np, shadow) {
+    p.setVertexBuffer(0, treeVB); p.setVertexBuffer(1, treeInst); p.setIndexBuffer(treeIB, 'uint32');
+    const ccx = Math.floor((cam.x + HALF) / NEAR), ccz = Math.floor((cam.z + HALF) / NEAR), rad = Math.ceil(LOD[1] / 0.85 / NEAR) + 1;
+    const i0 = Math.max(0, ccx - rad), i1 = Math.min(NCN - 1, ccx + rad), j0 = Math.max(0, ccz - rad), j1 = Math.min(NCN - 1, ccz + rad);
+    for (let l = 0; l < 2; l++) {
+      p.setBindGroup(1, lodBG[l]);
+      const lo = l ? LOD[0] / 1.15 : -1, hi = LOD[l] / 0.85;
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const nc = j * NCN + i, y0 = TT.nearY[nc * 2], y1 = TT.nearY[nc * 2 + 1]; if (y1 < y0) continue;
+        const x0 = i * NEAR - HALF, z0 = j * NEAR - HALF, dx = x0 + 16 - cam.x, dz = z0 + 16 - cam.z, dh = Math.hypot(dx, dz);
+        const dy = cam.y > y1 ? cam.y - y1 : cam.y < y0 ? y0 - cam.y : 0, dyM = Math.max(Math.abs(cam.y - y0), Math.abs(cam.y - y1));
+        const dmin = Math.hypot(Math.max(0, dh - 23), dy), dmax = Math.hypot(dh + 23, dyM);
+        if (dmin >= hi || dmax <= lo) continue;
+        if (!vis(pl, np, x0 - 5, y0 - 1, z0 - 5, x0 + NEAR + 5, y1 + 1, z0 + NEAR + 5)) continue;
+        let st = TT.nearStart[nc];
+        for (let s = 0; s < 3; s++) { const c = TT.nearCnt[nc * 3 + s]; if (c) { const P = TP[l * 3 + s]; p.drawIndexed(P.count, c, P.first, P.base, st); st += c; treeDraws++; } }
+      }
+    }
+    for (let l = 2; l < (shadow ? 3 : 4); l++) {
+      p.setBindGroup(1, lodBG[l]);
+      const lo = LOD[l - 1] / 1.15, hi = l === 2 ? LOD[2] / 0.85 : 1e9, P = TP[4 + l];
+      for (let fc = 0; fc < FCN * FCN; fc++) {
+        const c = TT.farCnt[fc]; if (!c) continue;
+        const x0 = (fc % FCN) * FAR - HALF, z0 = ((fc / FCN) | 0) * FAR - HALF, y0 = TT.farY[fc * 2], y1 = TT.farY[fc * 2 + 1];
+        const dh = Math.hypot(x0 + 64 - cam.x, z0 + 64 - cam.z), dmin = Math.max(0, dh - 91), dmax = dh + 91 + Math.abs(cam.y - y0);
+        if (dmin >= hi || dmax <= lo) continue;
+        if (!vis(pl, np, x0 - 8, y0 - 1, z0 - 8, x0 + FAR + 8, y1 + 1, z0 + FAR + 8)) continue;
+        p.drawIndexed(P.count, c, P.first, P.base, TT.farStart[fc]); treeDraws++;
+      }
+    }
+  }
+  const lview = new Float32Array(16), lproj = new Float32Array(16), lvp = new Float32Array(16);
+  function updateCascades(aspect, fovy) {
+    const Lx = GU[O.sunDir], Ly = GU[O.sunDir + 1], Lz = GU[O.sunDir + 2];
+    let rx = Lz, rz = -Lx; const rl = Math.hypot(rx, rz); rx /= rl; rz /= rl; // right = up x L
+    const ux = Ly * rz, uy = Lz * rx - Lx * rz, uz = -Ly * rx; // up2 = L x right
+    const fx = -view[2], fy = -view[6], fz = -view[10], th = Math.tan(fovy / 2), k2 = 1 + th * th * (1 + aspect * aspect);
+    let n = 0.25;
+    for (let c = 0; c < 3; c++) {
+      const f = SPLITS[c], d = Math.min(f, (n + f) / 2 * k2), r = Math.sqrt((f - d) * (f - d) + f * f * (k2 - 1)) * 1.02, D = 520;
+      const cx = cam.x + fx * d, cy = cam.y + fy * d, cz = cam.z + fz * d, tex = 2 * r / Q.shadow;
+      const sx = Math.round((cx * rx + cz * rz) / tex) * tex, sy = Math.round((cx * ux + cy * uy + cz * uz) / tex) * tex, sz = cx * Lx + cy * Ly + cz * Lz;
+      lview[0] = rx; lview[1] = ux; lview[2] = Lx; lview[3] = 0; lview[4] = 0; lview[5] = uy; lview[6] = Ly; lview[7] = 0; lview[8] = rz; lview[9] = uz; lview[10] = Lz; lview[11] = 0;
+      lview[12] = -sx; lview[13] = -sy; lview[14] = -(sz + D); lview[15] = 1;
+      ortho(lproj, -r, r, -r, r, 0, 2 * D); mul(lvp, lproj, lview);
+      GU.set(lvp, O.shadowMat + c * 16); GU[O.casc + c] = f; GU[O.cascTex + c] = tex;
+      shData[c].set(lvp, 0); shData[c][16] = cam.x; shData[c][17] = cam.y; shData[c][18] = cam.z;
+      device.queue.writeBuffer(shU[c], 0, shData[c]);
+      planesFrom(shPlanes[c], lvp, 4);
+      n = f * 0.88;
+    }
+    if (NC === 2) GU[O.casc + 2] = SPLITS[1];
+  }
 
   // ---------- grooming mask stamps ----------
   const stampMod = mod(stampW, 'stamp');
@@ -338,6 +442,9 @@ async function main() {
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
     GU[O.camPos] = cam.x; GU[O.camPos + 1] = cam.y; GU[O.camPos + 2] = cam.z; GU[O.camPos + 3] = R.time;
     writeTod(GU, O);
+    updateCascades(rw / rh, cam.fov * (R.w < R.h ? 1.35 : 1));
+    GU[O.lod2 + 2] = Q.msaa > 1 ? 1 : 0;
+    planesFrom(camPlanes, vp, 5); treeDraws = 0;
     updateStamps();
     const BM = groomerParts(groomer.d, veh), nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[131] = 1;
@@ -355,9 +462,17 @@ async function main() {
     }
     const enc = device.createCommandEncoder();
     if (stN) { const sp = enc.beginRenderPass(stampPass); sp.setPipeline(stampPipe); sp.setVertexBuffer(0, stBuf); sp.draw(6, stN); sp.end(); }
+    for (let c = 0; c < NC; c++) {
+      const sp = enc.beginRenderPass(shPass[c]);
+      sp.setBindGroup(0, shBG[c]);
+      sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
+      sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, true);
+      sp.end();
+    }
     const p = enc.beginRenderPass(mainPass);
     p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
     p.setBindGroup(0, bg0);
+    p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, false);
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
     for (let l = 0; l < NL; l++) {
       p.setBindGroup(1, lvBG[l]);
@@ -389,7 +504,7 @@ async function main() {
   }
   let waiters = [], waitN = 0;
   window.__waitFrames = (n) => new Promise((r) => { waitN = n; waiters.push(r); });
-  window.__info = () => `tier=${Q.name} ${R.w}x${R.h} scale=${R.scale} trees=${W.trees.count}`;
+  window.__info = () => `tier=${Q.name} ${R.w}x${R.h} scale=${R.scale} trees=${W.trees.count} draws=${treeDraws}`;
   window.__R = R; window.__W = W; window.__cam = cam; window.__veh = veh;
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none';

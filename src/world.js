@@ -58,7 +58,7 @@ function lakeS(L, x, z) {
 }
 const segDist = (x, z, ax, az, bx, bz) => { const vx = bx - ax, vz = bz - az; const t = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz), 0, 1); return Math.hypot(x - ax - vx * t, z - az - vz * t); };
 
-export async function genWorld(tick) {
+export async function genWorld(tick, Q) {
   const H = new Float32Array(HN * HN);
   const mat = new Uint8Array(HN * HN * 4); // R lake, G creek, B bog, A alpine
   const W = { H, WS, HN };
@@ -328,7 +328,7 @@ export async function genWorld(tick) {
             else if (r3 < pb + pp) { sp = 1; ht = (11 + 10 * r2) * (0.35 + 0.65 * smooth(0.2, 0.8, af)); wd = 0.9 + 0.3 * r1; }
             else { sp = 0; ht = (7 + 17 * r2 * Math.sqrt(r2)) * (0.22 + 0.78 * smooth(0.1, 0.85, af)); wd = 0.85 + 0.35 * r1 + (1 - af) * 0.4; }
           }
-          if (r1 > p || tn[sp] >= 127) continue;
+          if (r1 > p * Q.trees || tn[sp] >= 127) continue;
           if (!inner) { ht *= 1.35; wd *= 1.25; }
           const o = tn[sp]++ * 8, T = tmp[sp];
           T[o] = x; T[o + 1] = y - 0.15; T[o + 2] = z; T[o + 3] = ht; T[o + 4] = r0 * 6.283; T[o + 5] = sp; T[o + 6] = r2 * 0.999 + ((hx * 7 + hz * 13) & 7); T[o + 7] = wd;
