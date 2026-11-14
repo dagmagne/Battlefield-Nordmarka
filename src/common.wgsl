@@ -98,14 +98,14 @@ fn localLights(P: vec3f, N: vec3f, wrap: f32) -> vec3f {
   var c = spotL(P, N, G.l0p, G.l0d, G.l0c, wrap) + spotL(P, N, G.l1p, G.l1d, G.l1c, wrap);
   // beacon: rotating point light
   let v = G.l2p.xyz - P; let d2 = dot(v, v); let l = v * inverseSqrt(d2);
-  let beam = pow(saturate(dot(-l, G.l2d.xyz)), 6.0) + 0.06;
+  let beam = pow(saturate(dot(-l, G.l2d.xyz)), 6.0) * 0.5 + 0.02;
   let w = saturate(1.0 - sqrt(d2) / G.l2p.w);
   c += G.l2c.rgb * beam * w * w / (1.0 + d2 * 0.05) * saturate((dot(N, l) + wrap) / (1.0 + wrap));
   return c;
 }
 fn lampLight(wxz: vec2f, hAbove: f32) -> vec3f {
   let a = textureSampleLevel(normTex, linSmp, (wxz + G.world.x) * G.world.y, 0.0).a;
-  return vec3f(1.0, 0.74, 0.42) * (a * a * G.misc.x * 5.0 / (1.0 + hAbove * hAbove * 0.03));
+  return vec3f(1.0, 0.74, 0.42) * (a * a * G.misc.x * 1.0 / (1.0 + hAbove * hAbove * 0.03));
 }
 
 // ---------- shadows ----------

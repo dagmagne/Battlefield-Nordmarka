@@ -25,9 +25,9 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   }
   else if (m == 2u) { alb = vec3f(0.93, 0.95, 0.98); }
   else if (m == 3u) { alb *= 0.7 + 0.5 * fbm3(wp.xz * 1.3 + wp.y * 2.1); snowy = 1.0; }
-  else if (m == 4u) { spec = 0.5; gloss = 300.0; refl = 1.0; emis = vec3f(1.0, 0.7, 0.4) * 0.02 * night * isG; }
+  else if (m == 4u) { spec = 0.5; gloss = 300.0; refl = 1.0; emis = vec3f(1.0, 0.7, 0.4) * 0.003 * night * isG; }
   else if (m == 5u) { spec = 0.2; gloss = 40.0; snowy = 1.0 - isG; }
-  else if (m == 6u) { emis = in.col * (0.03 + night) * 22.0; alb = vec3f(0.8); }
+  else if (m == 6u) { emis = in.col * (0.03 + night) * 7.0; alb = vec3f(0.8); }
   else if (m == 7u) {
     let f = fract(uv); let mull = step(0.08, f.x) * step(f.x, 0.92) * step(0.1, f.y) * step(f.y, 0.9) * step(0.035, abs(f.x - 0.5)) * step(0.03, abs(f.y - 0.55));
     let glow = 0.6 + 0.4 * vn(floor(uv) * 3.7 + 1.0);
@@ -36,8 +36,8 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   }
   else if (m == 8u) { spec = 0.4; gloss = 30.0; alb = mix(alb, vec3f(0.93), 0.35); }
   else if (m == 9u) { alb = vec3f(0.03); alb = mix(alb, vec3f(0.9), 0.25 * vn(vec2f(uv.x * 5.0, uv.y * 3.0))); }
-  else if (m == 10u) { emis = in.col * (3.0 + 20.0 * night); }
-  else if (m == 11u) { emis = in.col * (0.6 + 14.0 * pow(saturate(dot(n, G.l2d.xyz)), 3.0)) * (0.5 + night); }
+  else if (m == 10u) { emis = in.col * (2.0 + 6.0 * night); }
+  else if (m == 11u) { emis = in.col * (0.6 + 8.0 * pow(saturate(dot(n, G.l2d.xyz)), 3.0)) * (0.5 + 0.5 * night); }
   else if (m == 12u) { alb = mix(vec3f(0.11, 0.11, 0.12), vec3f(0.27, 0.25, 0.22), fbm3(wp.xz * 0.9 + wp.y * 1.7)); alb *= 0.7 + 0.6 * vn(wp.xz * 7.0 + wp.y * 5.0); snowy = 1.3; }
   else if (m == 13u) { // sign board: text-ish bars
     let f = uv; let row = floor(f.y * 3.0); let rf = fract(f.y * 3.0);

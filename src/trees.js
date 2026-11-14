@@ -58,12 +58,12 @@ function spruce(lod) {
   const b = new TB();
   if (lod === 0) {
     b.tube([[0, 0, 0, 0.017], [0, 0.5, 0, 0.011], [0, 0.97, 0, 0.002]], 6, 0, 0.55, 0.8);
-    const K = 16;
+    const K = 21;
     for (let k = 0; k < K; k++) {
-      const t = k / (K - 1), y = 0.1 + 0.86 * Math.pow(t, 0.92), len = 0.165 * Math.pow(1 - y, 0.72) + 0.012, nb = Math.round(7.4 - 3.4 * t);
+      const t = k / (K - 1), y = 0.09 + 0.87 * Math.pow(t, 0.95), len = 0.165 * Math.pow(1 - y, 0.72) + 0.012, nb = Math.round(8.6 - 4.2 * t);
       for (let j = 0; j < nb; j++) {
         const r = R(k * 17 + j), ph = (j + 0.6 * r) / nb * Math.PI * 2 + k * 2.4;
-        b.frond(y + (r - 0.5) * 0.02, ph, len * (0.82 + 0.36 * R(k * 31 + j + 5)), 0.78 - 0.5 * t, len * 0.42, 0.62 + 0.38 * y);
+        b.frond(y + (r - 0.5) * 0.025, ph, len * (0.78 + 0.44 * R(k * 31 + j + 5)), (0.8 - 0.5 * t) * (0.75 + 0.5 * R(k * 7 + j * 3)), len * 0.36, 0.62 + 0.38 * y);
       }
     }
     b.tier(0, 0.955, 0, 0.022, 1.2, 5, 0.3, 1, 2.0);
@@ -100,18 +100,25 @@ function pine(lod) {
 }
 function birch(lod) {
   const b = new TB();
-  const sides = lod ? 4 : 6, nl = lod ? 4 : 8;
-  b.tube([[0, 0, 0, 0.02], [0.012, 0.3, -0.006, 0.015], [-0.008, 0.62, 0.01, 0.009], [0.006, 0.9, 0, 0.003]], sides, 3, 0.2, 0.5);
+  const sides = lod ? 4 : 6, nl = lod ? 5 : 9;
+  b.tube([[0, 0, 0, 0.021], [0.012, 0.3, -0.006, 0.016], [-0.01, 0.62, 0.012, 0.009], [0.008, 0.93, 0, 0.0025]], sides, 3, 0.0, 0.35);
   for (let i = 0; i < nl; i++) {
-    const f = i / (nl - 1), y = 0.3 + 0.5 * f, ph = i * 2.4 + R(i + 3), len = 0.3 * (1 - f * 0.55) * (0.8 + 0.4 * R(i + 11)), up = 0.62 + 0.25 * R(i + 5);
-    const ex = Math.cos(ph) * len * (1 - up * 0.5), ez = Math.sin(ph) * len * (1 - up * 0.5), ey = y + len * up;
-    b.tube([[0, y, 0, 0.007], [ex * 0.55, y + len * up * 0.62, ez * 0.55, 0.0045], [ex, ey, ez, 0.0015]], lod ? 3 : 4, 3, 0.6, 1);
-    const w = lod ? 0.13 : 0.1, h = lod ? 0.3 : 0.24;
-    b.card(ex, ey + 0.035, ez, ph + 0.9, w, h, 0.25, 0.9); b.card(ex, ey + 0.035, ez, ph - 0.7, w, h, -0.25, 0.9);
-    if (!lod) { b.card(ex * 0.55, y + len * up * 0.62 + 0.04, ez * 0.55, ph + 2.2, w * 0.9, h * 0.9, 0.2, 0.75); b.card(ex * 0.8, y + len * up * 0.85 + 0.03, ez * 0.8, ph + 0.2, w * 0.8, h * 0.8, -0.2, 0.8); }
+    const f = i / (nl - 1), y = 0.27 + 0.52 * f, ph = i * 2.4 + R(i + 3), len = 0.3 * (1 - f * 0.5) * (0.8 + 0.4 * R(i + 11)), up = 0.55 + 0.3 * R(i + 5);
+    const ex = Math.cos(ph) * len * (1 - up * 0.45), ez = Math.sin(ph) * len * (1 - up * 0.45), ey = y + len * up;
+    const mx = ex * 0.5, mz = ez * 0.5, my = y + len * up * 0.6;
+    b.tube([[0, y, 0, 0.0075], [mx, my, mz, 0.0045], [ex, ey, ez, 0.0012]], lod ? 3 : 4, 3, 0.55, 1);
+    // twig sprays: fan cards whose apex sits on the limb
+    const w = lod ? 0.15 : 0.115, h = lod ? 0.3 : 0.25;
+    b.card(ex, ey + 0.02, ez, ph + 1.1, w, h, 0.5, 0.95); b.card(ex, ey - 0.01, ez, ph - 0.5, w * 0.9, -h * 0.75, -0.6, 1);
+    if (!lod) {
+      b.card(mx, my + 0.015, mz, ph + 2.3, w, h * 0.95, 0.5, 0.8); b.card(mx, my - 0.01, mz, ph + 0.4, w * 0.9, -h * 0.7, -0.6, 0.9);
+      const sx = Math.cos(ph + 1.2) * len * 0.3, sz = Math.sin(ph + 1.2) * len * 0.3;
+      b.tube([[mx, my, mz, 0.003], [mx + sx, my + len * 0.22, mz + sz, 0.001]], 3, 3, 0.9, 1);
+      b.card(mx + sx, my + len * 0.22 + 0.01, mz + sz, ph + 2.9, w * 0.85, h * 0.8, 0.4, 0.9);
+    }
   }
-  b.card(0, 1.0, 0, 0.3, 0.1, 0.26, 0.15, 1); b.card(0, 1.0, 0, 1.9, 0.1, 0.26, -0.15, 1);
-  if (!lod) { b.card(0.01, 0.92, 0, 2.6, 0.12, 0.25, 0.3, 1); b.card(0, 0.86, 0.01, 1.1, 0.13, 0.26, -0.3, 0.9); }
+  b.card(0, 0.9, 0, 0.3, 0.09, -0.2, 0.2, 1); b.card(0, 0.9, 0, 1.9, 0.09, -0.2, -0.2, 1);
+  if (!lod) { b.card(0.01, 0.94, 0, 2.6, 0.11, 0.24, 0.4, 1); b.card(0, 0.9, 0.01, 1.1, 0.11, 0.24, -0.4, 0.9); }
   return b;
 }
 

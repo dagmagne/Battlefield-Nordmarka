@@ -35,25 +35,37 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       if (under) { snow = 0.0; g *= 0.5; }
       alb = g; trans = 1.0;
     }
-  } else if (kind > 1.5 && kind < 2.5) { // birch twig card
-    let fine = saturate(duv.x * 26.0);
+  } else if (kind > 1.5 && kind < 2.5) { // birch twig spray: main twigs from the apex with alternating side shoots
+    let y = uv.y; let px = max(duv.x, duv.y);
+    let fine = saturate(px * 45.0);
     var a = 0.0;
-    for (var l = 0; l < 2; l++) {
-      let fl = f32(l);
-      let x = uv.x * (13.0 + fl * 7.0) + sin(uv.y * (5.0 + fl * 3.0) + seed * 20.0 + fl * 2.0) * 0.5 + fl * 0.37;
-      let id = floor(x); let r = ihash(vec2i(i32(id), l + i32(seed * 50.0)));
-      let w = 0.16 + 0.1 * r;
-      let ln = 1.0 - smoothstep(w * 0.4, w, tri(x + 0.5));
-      a = max(a, ln * step(uv.y, 0.35 + 0.65 * r) * smoothstep(0.0, 0.04, uv.y));
+    for (var k = 0; k < 4; k++) {
+      let fk = f32(k); let r1 = ihash(vec2i(k, i32(seed * 97.0))); let r2 = ihash(vec2i(k + 9, i32(seed * 61.0)));
+      let dirx = (fk - 1.5) * 0.22 + (r1 - 0.5) * 0.14;
+      let len = 0.62 + 0.38 * r2; let t = y / len;
+      let xc = 0.5 + dirx * (1.7 * t - 0.7 * t * t) * len * 1.35 + sin(y * 9.0 + r1 * 20.0) * 0.012;
+      let ddx = uv.x - xc;
+      let w = 0.0085 * (1.0 - 0.55 * t);
+      var l = (1.0 - smoothstep(w * 0.5, w + px, abs(ddx))) * step(t, 1.0);
+      let m = y * 12.0 + r1 * 7.0; let cell = floor(m); let f = m - cell;
+      let sd = f32(i32(cell) & 1) * 2.0 - 1.0;
+      let sl = 0.1 * (1.0 - 0.45 * t) * (0.5 + ihash(vec2i(i32(cell), k + i32(seed * 31.0))));
+      let dxs = ddx * sd;
+      l = max(l, (1.0 - smoothstep(0.003, 0.0055 + px, abs(dxs - f * sl))) * step(0.0, dxs) * step(dxs, sl) * step(t, 0.96) * step(0.06, t));
+      a = max(a, l);
     }
-    let env = smoothstep(0.0, 0.12, uv.x) * smoothstep(1.0, 0.88, uv.x) * smoothstep(1.0, 0.8, uv.y);
-    alpha = mix(a, 0.3, fine) * env;
-    alb = mix(vec3f(0.16, 0.11, 0.12), vec3f(0.78, 0.78, 0.84), 0.5 + 0.3 * vn(wp.xz * 3.0));
-    trans = 0.5;
-  } else if (kind > 2.5) { // birch bark
+    let env = smoothstep(0.02, 0.2, uv.x) * smoothstep(0.98, 0.8, uv.x) * smoothstep(1.0, 0.75, y);
+    alpha = mix(a, 0.26 * env, fine);
+    let frost = 0.25 + 0.4 * vn(wp.xz * 2.0 + wp.y * 3.0);
+    alb = mix(vec3f(0.13, 0.08, 0.075), vec3f(0.8, 0.8, 0.86), frost);
+    trans = 0.3;
+  } else if (kind > 2.5) { // birch bark: white with dark lenticels, darker limbs
     let dk = in.ao;
-    let mk = smoothstep(0.62, 0.75, vn(vec2f(uv.x * 5.0 + seed * 9.0, wp.y * 7.0))) * 0.85 + smoothstep(0.7, 0.8, vn(vec2f(uv.x * 2.0, wp.y * 1.3 + seed * 5.0)));
-    alb = mix(vec3f(0.8, 0.78, 0.74), vec3f(0.05, 0.045, 0.045), saturate(mk + smoothstep(0.5, 1.0, dk) * 0.9 + smoothstep(1.2, 0.0, in.hy) * 0.5));
+    let lent = smoothstep(0.7, 0.8, vn(vec2f(uv.x * 4.0 + seed * 9.0, wp.y * 26.0))) * smoothstep(0.35, 0.6, vn(vec2f(uv.x * 2.0, wp.y * 3.0 + seed * 5.0)));
+    let scar = smoothstep(0.78, 0.86, vn(vec2f(uv.x * 3.0 + seed * 3.0, wp.y * 1.6 + seed * 15.0)));
+    let basef = smoothstep(1.4, 0.0, in.hy) * (0.5 + 0.5 * vn(vec2f(uv.x * 8.0, wp.y * 5.0)));
+    alb = mix(vec3f(0.82, 0.8, 0.76), vec3f(0.05, 0.045, 0.045), saturate(lent * 0.85 + scar + basef * 0.8 + smoothstep(0.45, 0.9, dk)));
+    snow = smoothstep(0.8, 0.95, vn(vec2f(uv.x * 2.0 + seed, wp.y * 0.6)) + n.x * 0.15) * 0.5 * step(dk, 0.5);
   } else { // conifer bark
     let b = vn(vec2f(uv.x * 12.0, wp.y * 2.5 + seed * 5.0));
     alb = mix(vec3f(0.09, 0.07, 0.06), vec3f(0.2, 0.16, 0.13), b);

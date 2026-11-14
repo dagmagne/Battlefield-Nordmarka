@@ -18,8 +18,8 @@ fn baseH(xz: vec2f) -> f32 {
 fn pressOf(m: vec4f) -> f32 { return max(smoothstep(0.08, 0.3, m.r), m.b * 0.85); }
 fn bermOf(m: vec4f) -> f32 { return smoothstep(0.02, 0.1, m.r) * (1.0 - smoothstep(0.1, 0.28, m.r)); }
 fn icePatch(p: vec2f) -> f32 {
-  let q = vec2f(p.x * 0.6 + p.y * 0.8, p.y * 0.6 - p.x * 0.8) * vec2f(0.011, 0.034);
-  return smoothstep(0.55, 0.63, fbm3(q) + 0.12 * vn(p * 0.21));
+  let q = vec2f(p.x * 0.6 + p.y * 0.8, p.y * 0.6 - p.x * 0.8) * vec2f(0.016, 0.03);
+  return smoothstep(0.6, 0.66, fbm3(q) + 0.1 * vn(p * 0.21));
 }
 // soft-snow displacement above the packed base: x = height, yz = gradient
 fn snowDetail(p: vec2f, dist: f32, mt: vec4f) -> vec3f {
@@ -167,10 +167,11 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   if (expo > 0.01) {
     let q = vec2f(p.x * 0.6 + p.y * 0.8, p.y * 0.6 - p.x * 0.8);
     let w1 = vnoise(q * vec2f(0.5, 2.6) + nA * 3.0);
-    S += vec2f(w1.y * 0.5 * 0.6 - w1.z * 2.6 * 0.8, w1.y * 0.5 * 0.8 + w1.z * 2.6 * 0.6) * 0.09 * expo;
+    S += vec2f(w1.y * 0.5 * 0.6 - w1.z * 2.6 * 0.8, w1.y * 0.5 * 0.8 + w1.z * 2.6 * 0.6) * 0.04 * expo * (0.3 + vn(p * 0.027 + 5.0));
   }
-  var rock = smoothstep(0.62, 0.95, slope0 + (nA - 0.5) * 0.45 + (nB - 0.5) * 0.25 + alpine * 0.12);
-  rock = max(rock, alpine * smoothstep(0.69, 0.76, vn(p * 0.045 + 31.0) * 0.6 + nB * 0.4) * smoothstep(0.12, 0.3, slope0));
+  let big = fbm3(p * 0.021 + 7.0);
+  var rock = smoothstep(0.74, 1.0, slope0 + (big - 0.5) * 0.45 + alpine * 0.08);
+  rock = max(rock, alpine * smoothstep(0.64, 0.7, big * 0.75 + nB * 0.25) * smoothstep(0.16, 0.36, slope0));
   rock *= 1.0 - max(groomed, imp);
   if (rock > 0.01) { let rn = vnoise(p * 1.9); let rn2 = vnoise(p * 6.3); S += (rn.yz * 1.9 * 0.22 + rn2.yz * 6.3 * 0.03) * rock; }
   var n = normalize(vec3f(-S.x, 1.0, -S.y));
@@ -187,10 +188,10 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   alb *= 1.0 - 0.07 * cordAvg - 0.3 * groove - 0.06 * imp;
   alb = mix(alb, vec3f(0.80, 0.86, 0.95), alpine * 0.35 * smoothstep(0.45, 0.7, nB));
   // sedge tufts on bogs
-  let tuft = mt.b * smoothstep(0.78, 0.9, vn(p * 2.3)) * smoothstep(0.4, 0.7, vn(p * 0.4 + 9.0)) * (1.0 - groomed) * (1.0 - smoothstep(80.0, 200.0, dist));
-  alb = mix(alb, vec3f(0.42, 0.33, 0.16), tuft * 0.8);
-  let rcol = mix(vec3f(0.10, 0.10, 0.11), vec3f(0.23, 0.21, 0.19), vn(p * 0.7) * 0.6 + vn(p * 4.1) * 0.4);
-  let rsnow = smoothstep(0.55, 0.8, n.y + (vn(p * 2.7) - 0.5) * 0.5);
+  let tuft = mt.b * smoothstep(0.84, 0.93, vn(p * 6.0)) * smoothstep(0.5, 0.75, vn(p * 0.3 + 9.0)) * (1.0 - groomed) * (1.0 - smoothstep(80.0, 200.0, dist));
+  alb = mix(alb, vec3f(0.45, 0.36, 0.2), tuft * 0.55);
+  let rcol = mix(vec3f(0.09, 0.09, 0.1), vec3f(0.2, 0.185, 0.17), fbm3(p * 0.33) ) * (0.8 + 0.4 * vn(p * 3.1));
+  let rsnow = smoothstep(0.3, 0.72, vn(vec2f((p.x + p.y) * 0.16, wp.y * 0.55)) * 0.5 + vn(p * 0.9) * 0.3 + vn(p * 4.3) * 0.2 + (n.y - 0.75) * 0.6);
   alb = mix(alb, mix(rcol, alb, rsnow * 0.75), rock);
   var snowy = 1.0 - rock * (1.0 - rsnow * 0.75);
 

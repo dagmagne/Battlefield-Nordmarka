@@ -338,7 +338,7 @@ async function main() {
   const parts = new Particles(Q.parts), partBuf = device.createBuffer({ size: Q.parts * 48, usage: U.VERTEX | U.COPY_DST });
   let glowN = 0, glowBuf;
   { const g = [];
-    for (const L of W.lamps) g.push(L.x + Math.sin(L.yaw) * 1.55, L.y + 6.0, L.z + Math.cos(L.yaw) * 1.55, 1.5, 3.2, 2.3, 1.2, 0, 2, 0, 0, 0);
+    for (const L of W.lamps) g.push(L.x + Math.sin(L.yaw) * 1.55, L.y + 6.0, L.z + Math.cos(L.yaw) * 1.55, 1.4, 1.0, 0.72, 0.38, 0, 2, 0, 0, 0);
     glowN = g.length / 12; glowBuf = mkBuf(new Float32Array(g), U.VERTEX); }
   const em = { spray: 0, exh: 0, smoke: 0, kick: 0 };
   const tmp3 = new Float32Array(3); let fwdX = 0, fwdZ = -1, eBM = null;
@@ -347,16 +347,17 @@ async function main() {
     eBM = BM;
     const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw), sp = Math.abs(veh.v), dir = veh.v >= 0 ? 1 : -1;
     if (veh.tillPos > 0.9 && sp > 0.3) {
-      em.spray += dt * sp * 22;
-      while (em.spray >= 1) { em.spray--; loc((rnd() - 0.5) * SWATH, 0.25 + rnd() * 0.2, 3.3 + rnd() * 0.5);
-        const bk = (0.4 + rnd() * 1.6) * dir, lat = (rnd() - 0.5) * 1.6, vy = 0.8 + rnd() * 2.2;
-        parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.5 + rnd() * 0.7, 0.1 + rnd() * 0.16, 0.5, 0, 1, 1, 1, 0.5); }
+      em.spray += dt * sp * 80;
+      while (em.spray >= 1) { em.spray--; loc((rnd() - 0.5) * SWATH, 0.12 + rnd() * 0.25, 3.5 + rnd() * 0.6);
+        const bk = (0.3 + rnd() * 1.8) * dir, lat = (rnd() - 0.5) * 1.2, vy = 0.6 + rnd() * 2.0;
+        if (rnd() < 0.94) parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.3 + rnd() * 0.45, 0.007 + rnd() * 0.013, 0, 0, 1, 1, 1, 0.9);
+        else parts.emit(tmp3[0], tmp3[1] + 0.2, tmp3[2], s * bk * 0.5, 0.3 + rnd() * 0.4, c * bk * 0.5, 1.2 + rnd(), 0.3, 0.6, 1, 1, 1, 1, 0.1); }
     }
     if (sp > 0.5) {
-      em.kick += dt * sp * 9;
+      em.kick += dt * sp * 14;
       while (em.kick >= 1) { em.kick--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (0.95 + rnd() * 1.0), 0.15, veh.v > 0 ? 2.2 : -2.2);
-        parts.emit(tmp3[0], tmp3[1], tmp3[2], s * dir * (0.5 + rnd()) + c * (rnd() - 0.5), 0.6 + rnd() * 1.6, c * dir * (0.5 + rnd()) - s * (rnd() - 0.5), 0.4 + rnd() * 0.5, 0.08 + rnd() * 0.1, 0.35, 0, 1, 1, 1, 0.4); }
-      if (veh.v > 0.5 && rnd() < dt * sp * 3) { const sd = rnd() < 0.5 ? -1 : 1; loc(sd * 2.45, 0.3 + rnd() * 0.5, -3.7); parts.emit(tmp3[0], tmp3[1], tmp3[2], -s * sp * 0.6 + c * sd * 1.2, 0.5 + rnd(), -c * sp * 0.6 - s * sd * 1.2, 0.5 + rnd() * 0.4, 0.1 + rnd() * 0.12, 0.4, 0, 1, 1, 1, 0.4); }
+        parts.emit(tmp3[0], tmp3[1], tmp3[2], s * dir * (0.5 + rnd()) + c * (rnd() - 0.5), 0.6 + rnd() * 1.6, c * dir * (0.5 + rnd()) - s * (rnd() - 0.5), 0.3 + rnd() * 0.4, 0.007 + rnd() * 0.012, 0, 0, 1, 1, 1, 0.9); }
+      if (veh.v > 0.5 && rnd() < dt * sp * 3) { const sd = rnd() < 0.5 ? -1 : 1; loc(sd * 2.45, 0.3 + rnd() * 0.5, -3.7); parts.emit(tmp3[0], tmp3[1], tmp3[2], -s * sp * 0.6 + c * sd * 1.2, 0.5 + rnd(), -c * sp * 0.6 - s * sd * 1.2, 0.4 + rnd() * 0.4, 0.008 + rnd() * 0.014, 0, 0, 1, 1, 1, 0.9); }
     }
     em.exh += dt * (5 + 26 * Math.abs(veh.throttle));
     while (em.exh >= 1) { em.exh--; loc(0.98, 3.1, -0.03); parts.emit(tmp3[0], tmp3[1], tmp3[2], (rnd() - 0.5) * 0.4 + fwdX * veh.v * 0.5, 1.8 + rnd() * 1.2, (rnd() - 0.5) * 0.4 + fwdZ * veh.v * 0.5, 0.9 + rnd() * 0.7, 0.09, 0.55, 1, 0.09, 0.09, 0.1, 0.3 + 0.25 * Math.abs(veh.throttle)); }
@@ -477,6 +478,7 @@ async function main() {
   }
   function simulate(dt) {
     let th = inp.th, st = inp.st;
+    if (R.force) { th = R.force[0]; st = R.force[1]; }
     if (R.auto) { // follow the lit loop
       const t = W.trails[0]; let i = R.auto.i;
       while (Math.hypot(t.pts[i * 2] - veh.x, t.pts[i * 2 + 1] - veh.z) < 7) i = (i + 1) % t.n;
@@ -578,10 +580,10 @@ async function main() {
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[131] = 1;
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
-    setLight(O.l0p, BM, 0, 2.7, -2.15, 0, -0.2, -1, 90, Math.cos(0.75), Math.cos(0.3), 2.6 * nt, 2.45 * nt, 2.1 * nt);
-    setLight(O.l1p, BM, 0, 2.65, -0.2, 0, -0.5, 1, 32, Math.cos(1.1), Math.cos(0.5), 1.3 * nt, 1.25 * nt, 1.1 * nt);
+    setLight(O.l0p, BM, 0, 2.7, -2.15, 0, -0.2, -1, 90, Math.cos(0.75), Math.cos(0.3), 1.25 * nt, 1.18 * nt, 1.0 * nt);
+    setLight(O.l1p, BM, 0, 2.65, -0.2, 0, -0.5, 1, 32, Math.cos(1.1), Math.cos(0.5), 0.5 * nt, 0.48 * nt, 0.42 * nt);
     { const a = R.time * 5.5, o = O.l2p; GU[o] = BM[0] * 0.6 + BM[4] * 2.75 + BM[8] * -1.1 + BM[12]; GU[o + 1] = BM[1] * 0.6 + BM[5] * 2.75 + BM[9] * -1.1 + BM[13]; GU[o + 2] = BM[2] * 0.6 + BM[6] * 2.75 + BM[10] * -1.1 + BM[14]; GU[o + 3] = 26;
-      GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 1.6 * nt; GU[o + 9] = 0.6 * nt; GU[o + 10] = 0.06 * nt; }
+      GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 0.8 * nt; GU[o + 9] = 0.3 * nt; GU[o + 10] = 0.03 * nt; }
     device.queue.writeBuffer(gBuf, 0, GU);
     for (let l = 0; l < NL; l++) {
       const c = lvCell(l);
@@ -668,6 +670,9 @@ async function main() {
   window.__step = (dt, n = 1) => { R.manual = true; for (let i = 0; i < n; i++) tickFrame(dt, dt); return device.queue.onSubmittedWorkDone(); };
   window.__info = () => `tier=${Q.name} ${R.w}x${R.h} scale=${R.scale.toFixed(2)} trees=${W.trees.count} draws=${draws} gpu=${R.gpuMs.toFixed(2)}ms ft=${R.ft.toFixed(2)}`;
   window.__pose = (q, tod) => { R.pose = q; if (tod) { setTod(tod - 1, true); tshDirty = 1; } };
+  window.__look = (ex, eh, ez, tx, th, tz) => { const ey = W.heightAt(ex, ez) + eh, ty = W.heightAt(tx, tz) + th, dx = tx - ex, dy = ty - ey, dz = tz - ez; R.pose = [ex, ey, ez, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))]; };
+  window.__chase = (yaw, pitch, dist) => { R.pose = null; cam.mode = 0; cam.orbYaw = yaw; cam.orbPitch = pitch; cam.dist = dist; cam.idle = -1e9; R.snap = true; };
+  window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
   window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = yaw; veh.v = 0; veh.y = W.heightAt(x, z); cam.baseYaw = yaw; stInit = false; R.snap = true; };
   Object.assign(window, { __R: R, __W: W, __cam: cam, __veh: veh, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });

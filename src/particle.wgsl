@@ -30,7 +30,7 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
     return vec4f(col * g * (1.0 - smoothstep(0.8, 1.0, r)), 0.0);
   }
   let n = vn(in.uv * 1.7 + in.seed * 37.0) * 0.6 + vn(in.uv * 4.1 + in.seed * 11.0) * 0.4;
-  a = saturate((1.0 - r) * 1.6 - (1.0 - n) * mix(0.35, 0.9, step(0.5, in.kind))) * in.col.a;
+  if (in.kind < 0.5) { a = saturate((1.0 - r) * 2.5) * in.col.a; } else { a = saturate((1.0 - r) * 1.6 - (1.0 - n) * 0.9) * in.col.a; }
   a = a * a * (3.0 - 2.0 * a);
   return vec4f(col * a, a);
 }
