@@ -13,6 +13,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   var alb = in.col; var spec = 0.04; var gloss = 24.0; var emis = vec3f(0.0); var snowy = 0.0; var refl = 0.0;
   let m = in.mat; let uv = in.uv; let isG = OB.tr.w;
   let night = G.misc.x;
+  if (m == 4u && isG > 0.5 && G.groom.w > 0.5) { discard; }
   if (m == 0u) { spec = 0.12; gloss = 60.0; refl = 0.06; }
   else if (m == 1u || m == 17u) { // boards: vertical (1) or horizontal cladding (17)
     var q = uv; if (m == 17u) { q = uv.yx; }

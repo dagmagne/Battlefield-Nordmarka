@@ -6,11 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b1420">
+<link rel="icon" href="data:,">
 <title>Løypemaskin – Nordmarka groomer</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#0b1420;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:#eef3f8}
-#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
 #load,#err{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at 50% 30%,#1c3350,#0b1420 70%);z-index:20;padding:24px;text-align:center}
 #load h1,#err h1{margin:0;font-weight:600;font-size:26px;letter-spacing:.02em}
 #bar{width:min(320px,70vw);height:4px;border-radius:2px;background:#ffffff22;overflow:hidden}
@@ -19,12 +20,110 @@ html,body{margin:0;height:100%;background:#0b1420;overflow:hidden;overscroll-beh
 #err{display:none}
 #err p{max-width:520px;margin:0;opacity:.85;font-size:15px}
 #err ul{text-align:left;max-width:520px;margin:0;padding-left:20px;opacity:.85}
-#err code{background:#ffffff18;padding:1px 6px;border-radius:4px}
+kbd{margin:0 1px}
+#err code,kbd{background:#ffffff1c;padding:1px 7px;border-radius:5px;font:600 12px ui-monospace,Menlo,monospace;border:1px solid #ffffff22}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:5;--sl:max(12px,env(safe-area-inset-left));--sr:max(12px,env(safe-area-inset-right));--st:max(10px,env(safe-area-inset-top));--sb:max(12px,env(safe-area-inset-bottom))}
+#ui>*{position:absolute}
+.pill{background:#0b1420a8;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid #ffffff1f;border-radius:12px}
+#hud{left:var(--sl);top:var(--st);padding:7px 12px;display:flex;gap:12px;align-items:center;font-variant-numeric:tabular-nums}
+#spd{font-weight:650;font-size:17px;min-width:2ch;text-align:right}
+#hud small{opacity:.6;font-size:11px;margin-left:3px}
+.st{font-size:11px;font-weight:650;letter-spacing:.06em;padding:3px 8px;border-radius:7px;background:#ffffff14;color:#ffffff80}
+.st.on{background:#3fd08a;color:#052414}
+#top{right:var(--sr);top:var(--st);display:flex;gap:8px}
+.btn{pointer-events:auto;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#eef3f8;font:650 10px/1 system-ui,sans-serif;letter-spacing:.06em;background:#0b1420b0;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid #ffffff2c;border-radius:14px;width:52px;height:52px;padding:0;transition:transform .08s,background .15s}
+.btn:active,.btn.down{transform:scale(.93);background:#2a4566d0}
+.btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn.on{background:#3fd08ae6;color:#052414;border-color:#baf5d6}
+#acts{right:var(--sr);bottom:var(--sb);display:none;gap:12px;align-items:flex-end}
+#acts .btn{border-radius:50%;width:76px;height:76px;font-size:11px}
+#acts .btn svg{width:26px;height:26px}
+#bT{width:88px!important;height:88px!important}
+#fly{right:var(--sr);bottom:var(--sb);display:none;gap:12px}
+#fly .btn{border-radius:50%;width:76px;height:76px}
+.touch #acts{display:flex}
+.touch.flying #acts{display:none}
+.touch.flying #fly{display:flex}
+.desk .tonly{display:none!important}
+#joy{left:0;top:0;width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:50%;border:2px solid #ffffff55;background:#0b142050;display:none}
+#joy i{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px;border-radius:50%;background:#ffffffd0;box-shadow:0 2px 10px #0006}
+#joyhint{left:calc(var(--sl) + 26px);bottom:calc(var(--sb) + 26px);width:118px;height:118px;border-radius:50%;border:2px dashed #ffffff40;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:650;letter-spacing:.08em;color:#ffffff70;text-align:center}
+.touch #joyhint{display:flex}
+#dbg{left:var(--sl);top:calc(var(--st) + 52px);padding:8px 11px;font:11px/1.5 ui-monospace,Menlo,monospace;white-space:pre;display:none}
+#toast{left:50%;top:calc(var(--st) + 60px);transform:translateX(-50%);padding:7px 14px;font-weight:600;opacity:0;transition:opacity .25s}
+#keys{left:var(--sl);bottom:var(--sb);padding:6px 11px;font-size:11.5px;opacity:.75}
+.touch #keys{display:none}
+.modal{inset:0;display:none;align-items:center;justify-content:center;background:#060b12a0;pointer-events:auto;padding:12px}
+.modal.show{display:flex}
+.card{max-width:560px;width:100%;max-height:100%;overflow:auto;padding:18px 20px;border-radius:18px}
+.card h2{margin:0 0 12px;font-size:18px;font-weight:650}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #ffffff14;flex-wrap:wrap}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg button,.card .go{pointer-events:auto;cursor:pointer;font:600 13px system-ui,sans-serif;color:#eef3f8;background:#ffffff14;border:1px solid #ffffff22;border-radius:9px;padding:8px 12px;min-height:38px}
+.seg button.on{background:#e9f2ff;color:#0b1420}
+.card .go{background:#3fd08a;color:#052414;border:0;width:100%;margin-top:14px;padding:12px;font-size:15px}
+.grid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;align-items:center;font-size:13.5px}
+.grid b{white-space:nowrap;font-weight:500}
+.note{opacity:.6;font-size:12px;margin-top:8px}
+@media (max-height:420px){#acts .btn,#fly .btn{width:66px;height:66px}#bT{width:76px!important;height:76px!important}.btn{width:46px;height:46px}}
+@media (orientation:portrait){#acts{flex-direction:column;align-items:flex-end}#joyhint{bottom:calc(var(--sb) + 40px)}}
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="ui"></div>
+<canvas id="c" tabindex="0"></canvas>
+<div id="ui">
+  <div id="hud" class="pill"><span><span id="spd">0</span><small>km/h</small></span><span id="sT" class="st on">TILLER</span><span id="sS" class="st on">TRACKS</span><span id="sC" class="st">CHASE</span></div>
+  <div id="top">
+    <button class="btn" id="bD" aria-label="Time of day"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>TIME</button>
+    <button class="btn" id="bC" aria-label="Camera"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>CAM</button>
+    <button class="btn" id="bG" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>MENU</button>
+  </div>
+  <div id="joyhint">DRIVE</div>
+  <div id="joy"><i></i></div>
+  <div id="acts">
+    <button class="btn on" id="bS"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18"/></svg>TRACKS</button>
+    <button class="btn on" id="bT"><svg viewBox="0 0 24 24"><path d="M3 9h18M5 9v8M9 9v8M13 9v8M17 9v8M21 9v2"/></svg>TILLER</button>
+  </div>
+  <div id="fly">
+    <button class="btn" id="bDn"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>DOWN</button>
+    <button class="btn" id="bUp"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>UP</button>
+  </div>
+  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <kbd>Space</kbd> tiller · <kbd>T</kbd> tracks · <kbd>C</kbd> camera · <kbd>F</kbd> fly · <kbd>1</kbd>–<kbd>4</kbd> time · <kbd>H</kbd> help</div>
+  <div id="dbg" class="pill"></div>
+  <div id="toast" class="pill"></div>
+  <div id="help" class="modal"><div class="card pill">
+    <h2>Løypemaskin — groom Nordmarka</h2>
+    <div class="grid desk-only" id="hD">
+      <b><kbd>W</kbd> <kbd>S</kbd></b><span>Throttle / reverse</span>
+      <b><kbd>A</kbd> <kbd>D</kbd></b><span>Steer</span>
+      <b><kbd>Space</kbd></b><span>Raise / lower the tiller (corduroy)</span>
+      <b><kbd>T</kbd></b><span>Track-setter (classic tracks)</span>
+      <b><kbd>C</kbd></b><span>Camera: chase · cab · orbit — drag to look, wheel to zoom</span>
+      <b><kbd>F</kbd></b><span>Free-fly: click to capture the mouse, <kbd>WASD</kbd> + <kbd>Q</kbd>/<kbd>E</kbd>, <kbd>Shift</kbd> = fast</span>
+      <b><kbd>1</kbd>–<kbd>4</kbd></b><span>Midday · golden hour · blue hour · night</span>
+      <b><kbd>N</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Snowfall · this help · menu</span>
+    </div>
+    <div class="grid" id="hT">
+      <b>Left thumb</b><span>Joystick: push to drive, sideways to steer</span>
+      <b>Right side</b><span>Drag to look around · pinch to zoom</span>
+      <b>TILLER / TRACKS</b><span>Lower the tiller for corduroy, the track-setter for classic tracks</span>
+      <b>CAM · TIME</b><span>Chase, cab, orbit and free-fly cameras · time of day</span>
+      <b>3-finger tap</b><span>Performance overlay</span>
+    </div>
+    <button class="go" id="hGo">Start grooming</button>
+  </div></div>
+  <div id="menu" class="modal"><div class="card pill">
+    <h2>Settings</h2>
+    <div class="row"><span>Quality <span class="note">(reloads)</span></span><div class="seg" id="mQ"><button data-v="auto">Auto</button><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button><button data-v="ultra">Ultra</button></div></div>
+    <div class="row"><span>Time of day</span><div class="seg" id="mD"><button data-v="0">Midday</button><button data-v="1">Golden</button><button data-v="2">Blue hour</button><button data-v="3">Night</button></div></div>
+    <div class="row"><span>Snowfall</span><div class="seg" id="mN"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
+    <div class="row"><span>Dynamic resolution</span><div class="seg" id="mR"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
+    <div class="row"><span>Performance overlay</span><div class="seg" id="mB"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
+    <div class="row"><span>Controls</span><div class="seg"><button id="mH">Show help</button></div></div>
+    <div class="note" id="mI"></div>
+    <button class="go" id="mGo">Close</button>
+  </div></div>
+</div>
 <div id="load"><h1>Løypemaskin</h1><div id="bar"><i></i></div><div id="msg">Starting…</div></div>
 <div id="err"><h1>WebGPU is not available</h1><p id="errp"></p>
 <ul>
