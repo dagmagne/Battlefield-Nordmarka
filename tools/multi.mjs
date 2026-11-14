@@ -1,0 +1,20 @@
+// Batch screenshots in one headed Chrome session.
+// usage: node tools/multi.mjs "<query>" '<json [{out, eval, frames}]>' [--w --h --dpr --mobile]
+import { chromium } from 'playwright-core';
+const a = process.argv.slice(2);
+const opt = (k, d) => { const i = a.indexOf('--' + k); return i < 0 ? d : a[i + 1]; };
+const w = +opt('w', 1728), h = +opt('h', 1117), dpr = +opt('dpr', 2), mobile = a.includes('--mobile');
+const jobs = JSON.parse(a[1]);
+const browser = await chromium.launch({ channel: 'chrome', headless: false, args: ['--enable-gpu', '--ignore-gpu-blocklist', `--window-size=${Math.min(w, 1728)},${Math.min(h + 90, 1117)}`, '--hide-scrollbars'] });
+const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, hasTouch: mobile, isMobile: mobile });
+const page = await ctx.newPage();
+page.on('console', (m) => { const t = m.type(); if ((t === 'error' && !/404/.test(m.text())) || t === 'warning' || a.includes('--log')) console.log(`[${t}]`, m.text().slice(0, 1200)); });
+page.on('pageerror', (e) => console.log('[pageerror]', String(e.stack || e).slice(0, 1200)));
+await page.goto(`http://localhost:8080/index.html?${a[0]}`);
+await page.waitForFunction('window.__ready===true', null, { timeout: 90000 });
+for (const j of jobs) {
+  if (j.eval) { const r = await page.evaluate(j.eval); if (r !== undefined && r !== null) console.log(j.out || '', JSON.stringify(r)); }
+  await page.evaluate((n) => window.__waitFrames(n), j.frames || 12);
+  if (j.out) { await page.screenshot({ path: j.out }); console.log('ok', j.out); }
+}
+await browser.close();

@@ -13,6 +13,8 @@ import shObjW from './shadowobj.wgsl';
 import { buildTrees } from './trees.js';
 import { NEAR, NCN, FAR, FCN } from './world.js';
 import { ortho } from './math.js';
+import tshW from './tshadow.wgsl';
+import { buildProps } from './props.js';
 import { buildGroomer, groomerParts, TILL_Z, SWATH } from './groomer.js';
 import { perspRZ, lookAt, mul, invert, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, PLAY } from './world.js';
@@ -165,6 +167,14 @@ async function main() {
     return { vb: mkBuf(mesh.v, GPUBufferUsage.VERTEX), ib: mkBuf(mesh.i, GPUBufferUsage.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
   const groomer = mkObj(buildGroomer());
+  const props = mkObj(buildProps(W));
+  // terrain shadow bake
+  const tshMod = mod(tshW, 'tshadow');
+  const tshPipe = device.createRenderPipeline({ layout: 'auto', vertex: { module: tshMod, entryPoint: 'vs' }, fragment: { module: tshMod, entryPoint: 'fs', targets: [{ format: 'rg16float' }] } });
+  const tshU = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }), tshD = new Float32Array(4);
+  const tshBG = device.createBindGroup({ layout: tshPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: tshU } }, { binding: 1, resource: heightTex.createView() }] });
+  const tshPass = { colorAttachments: [{ view: tshTex.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] };
+  let tshDirty = 3;
 
   // ---------- shadows ----------
   const NC = Q.casc, SPLITS = Q.casc === 3 ? [26, 105, 420] : [38, 190, 190];
@@ -382,6 +392,8 @@ async function main() {
 
   // ---------- state ----------
   veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z);
+  if (qs.get('veh')) { const q = qs.get('veh').split(',').map(Number); veh.x = q[0]; veh.z = q[1]; veh.yaw = q[2] || 0; veh.y = W.heightAt(veh.x, veh.z); }
+  if (qs.get('cam')) R.pose = qs.get('cam').split(',').map(Number);
   setTod(clamp((+qs.get('tod') || 1) - 1, 0, 3), true);
   GU[O.world] = HALF; GU[O.world + 1] = 1 / WS; GU[O.world + 2] = 1024; GU[O.world + 3] = 1 / 2048;
   GU[O.screen + 2] = 2048 / Q.mask; GU[O.screen + 3] = Q.mask;
@@ -432,9 +444,10 @@ async function main() {
     requestAnimationFrame(frame);
     let dt = Math.min(0.05, (tms - last) / 1000 || 0.016); last = tms;
     R.time += dt; R.frame++;
-    updateTod(dt);
+    if (updateTod(dt)) tshDirty = 2;
     simulate(dt);
     updateCamera(dt);
+    if (R.pose) { const q = R.pose; cam.x = q[0]; cam.y = q[1]; cam.z = q[2]; const cp = Math.cos(q[4]); lookAt(view, q[0], q[1], q[2], q[0] - Math.sin(q[3]) * cp, q[1] + Math.sin(q[4]), q[2] - Math.cos(q[3]) * cp, 0, 1, 0); }
 
     const rw = Math.max(8, Math.round(R.w * R.scale)), rh = Math.max(8, Math.round(R.h * R.scale));
     perspRZ(proj, cam.fov * (R.w < R.h ? 1.35 : 1), rw / rh, 0.25);
@@ -461,11 +474,16 @@ async function main() {
       device.queue.writeBuffer(lvBuf[l], 0, lvData);
     }
     const enc = device.createCommandEncoder();
+    if (tshDirty > 0 && (--tshDirty === 0 || (R.frame & 3) === 0)) {
+      tshD[0] = GU[O.sunDir]; tshD[1] = GU[O.sunDir + 1]; tshD[2] = GU[O.sunDir + 2]; device.queue.writeBuffer(tshU, 0, tshD);
+      const tp = enc.beginRenderPass(tshPass); tp.setPipeline(tshPipe); tp.setBindGroup(0, tshBG); tp.draw(3); tp.end();
+    }
     if (stN) { const sp = enc.beginRenderPass(stampPass); sp.setPipeline(stampPipe); sp.setVertexBuffer(0, stBuf); sp.draw(6, stN); sp.end(); }
     for (let c = 0; c < NC; c++) {
       const sp = enc.beginRenderPass(shPass[c]);
       sp.setBindGroup(0, shBG[c]);
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
+      sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
       sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, true);
       sp.end();
     }
@@ -479,6 +497,7 @@ async function main() {
       if (l === 0) { p.setIndexBuffer(tibF, 'uint32'); p.drawIndexed(tiFull.length); } else { if (l === 1) p.setIndexBuffer(tibR, 'uint32'); p.drawIndexed(tiRing.length); }
     }
     p.setPipeline(objPipe); p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n);
+    p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
     p.setPipeline(skyPipe); p.draw(3);
     p.end();
 
@@ -505,6 +524,8 @@ async function main() {
   let waiters = [], waitN = 0;
   window.__waitFrames = (n) => new Promise((r) => { waitN = n; waiters.push(r); });
   window.__info = () => `tier=${Q.name} ${R.w}x${R.h} scale=${R.scale} trees=${W.trees.count} draws=${treeDraws}`;
+  window.__pose = (q, tod) => { R.pose = q; if (tod) setTod(tod - 1, true); tshDirty = 1; };
+  window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = yaw; veh.y = W.heightAt(x, z); stInit = false; R.frame = 0; };
   window.__R = R; window.__W = W; window.__cam = cam; window.__veh = veh;
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none';
