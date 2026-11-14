@@ -2,6 +2,10 @@ import common from './common.wgsl';
 import terrainW from './terrain.wgsl';
 import skyW from './sky.wgsl';
 import postW from './post.wgsl';
+import objDefW from './objdeform.wgsl';
+import objectW from './object.wgsl';
+import stampW from './stamp.wgsl';
+import { buildGroomer, groomerParts, TILL_Z, SWATH } from './groomer.js';
 import { perspRZ, lookAt, mul, invert, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, PLAY } from './world.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
@@ -25,7 +29,7 @@ const GU = new Float32Array(188);
 
 const R = { frame: 0, time: 0, scale: 1 }; // renderer state
 const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.2, fov: 55 * Math.PI / 180, mode: 0, orbYaw: 0, orbPitch: 0.22, dist: 13, tx: 0, ty: 0, tz: 0 };
-const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0 };
+const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, tillDown: true, tillPos: 1, setDown: true, setPos: 1, bladePos: 1, dist: 0, trL: 0, trR: 0, yawRate: 0 };
 const keys = new Set();
 const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16), ivp = new Float32Array(16);
 
@@ -137,6 +141,85 @@ async function main() {
     depthStencil: { format: DF, depthWriteEnabled: false, depthCompare: 'equal' }, multisample: msState,
   });
 
+  // ---------- objects (groomer + props) ----------
+  const bglO = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }] });
+  const objMod = mod(common + objDefW + objectW, 'object');
+  const objVB = [{ arrayStride: 56, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }, { shaderLocation: 3, offset: 40, format: 'float32x4' }] }];
+  const objPipe = device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bgl0, bglO] }),
+    vertex: { module: objMod, entryPoint: 'vs', buffers: objVB }, fragment: { module: objMod, entryPoint: 'fs', targets: [{ format: HDR }] },
+    primitive: { cullMode: 'none' }, depthStencil: depthGE, multisample: msState,
+  });
+  const mkObj = (mesh) => {
+    const u = device.createBuffer({ size: 528, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }), d = new Float32Array(132);
+    for (let i = 0; i < 8; i++) d[i * 16] = d[i * 16 + 5] = d[i * 16 + 10] = d[i * 16 + 15] = 1;
+    device.queue.writeBuffer(u, 0, d);
+    return { vb: mkBuf(mesh.v, GPUBufferUsage.VERTEX), ib: mkBuf(mesh.i, GPUBufferUsage.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
+  };
+  const groomer = mkObj(buildGroomer());
+
+  // ---------- grooming mask stamps ----------
+  const stampMod = mod(stampW, 'stamp');
+  const sBlend = { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } };
+  const stampPipe = device.createRenderPipeline({
+    layout: 'auto',
+    vertex: { module: stampMod, entryPoint: 'vs', buffers: [{ arrayStride: 64, stepMode: 'instance', attributes: [0, 1, 2, 3].map((i) => ({ shaderLocation: i, offset: i * 16, format: 'float32x4' })) }] },
+    fragment: { module: stampMod, entryPoint: 'fs', targets: [{ format: 'rgba8unorm', blend: sBlend, writeMask: 7 }, { format: 'rg16float', blend: sBlend }] },
+  });
+  const stampPass = { colorAttachments: [{ view: maskA.createView(), loadOp: 'load', storeOp: 'store' }, { view: maskB.createView(), loadOp: 'load', storeOp: 'store' }] };
+  const stData = new Float32Array(48), stBuf = device.createBuffer({ size: 192, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+  const stPrev = new Float32Array(12), stCur = new Float32Array(12), stS = new Float32Array(3); let stN = 0, stInit = false, tillWas = false;
+  const TEXM = 2048 / Q.mask;
+  { // pre-stamp the existing trail network as old, snowed-in grooming
+    let n = 0; for (const t of W.trails) n += t.n - 1;
+    const d = new Float32Array(n * 16); let o = 0;
+    for (const t of W.trails) {
+      const P = t.pts, hw = SWATH / 2; let px0, pz0, px1, pz1, s = 0;
+      for (let i = 0; i < t.n; i++) {
+        const a = Math.max(0, i - 1), b = Math.min(t.n - 1, i + 1); let tx = P[b * 2] - P[a * 2], tz = P[b * 2 + 1] - P[a * 2 + 1]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
+        const lx = P[i * 2] + tz * hw, lz = P[i * 2 + 1] - tx * hw, rx = P[i * 2] - tz * hw, rz = P[i * 2 + 1] + tx * hw;
+        if (i > 0) { d.set([px0, pz0, px1, pz1, lx, lz, rx, rz, s, s + 2, 0, 1, 0.45, 0.45, 0, TEXM], o); o += 16; s += 2; }
+        px0 = lx; pz0 = lz; px1 = rx; pz1 = rz;
+      }
+    }
+    const b = mkBuf(d, GPUBufferUsage.VERTEX), e = device.createCommandEncoder(), p = e.beginRenderPass(stampPass);
+    p.setPipeline(stampPipe); p.setVertexBuffer(0, b); p.draw(6, n); p.end(); device.queue.submit([e.finish()]);
+  }
+  function stampPts(out) { // world xz of: tiller L,R ; left track l,r ; right track l,r
+    const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw);
+    const P = (i, lx, lz) => { out[i * 2] = veh.x + c * lx + s * lz; out[i * 2 + 1] = veh.z - s * lx + c * lz; };
+    P(0, -SWATH / 2, TILL_Z); P(1, SWATH / 2, TILL_Z); P(2, -2.0, 1.3); P(3, -0.9, 1.3); P(4, 0.9, 1.3); P(5, 2.0, 1.3);
+  }
+  function updateStamps() {
+    stampPts(stCur); stN = 0;
+    if (!stInit) { stPrev.set(stCur); stInit = true; }
+    const till = veh.tillPos > 0.97;
+    if (till && !tillWas) { stPrev[0] = stCur[0]; stPrev[1] = stCur[1]; stPrev[2] = stCur[2]; stPrev[3] = stCur[3]; }
+    tillWas = till;
+    for (let k = 0; k < 3; k++) {
+      const i = k * 4, mv = Math.hypot(stCur[i] - stPrev[i], stCur[i + 1] - stPrev[i + 1]) + Math.hypot(stCur[i + 2] - stPrev[i + 2], stCur[i + 3] - stPrev[i + 3]);
+      if (mv < 0.07) continue;
+      if (k > 0 || till) {
+        const o = stN * 16, d = stData;
+        d[o] = stPrev[i]; d[o + 1] = stPrev[i + 1]; d[o + 2] = stPrev[i + 2]; d[o + 3] = stPrev[i + 3];
+        d[o + 4] = stCur[i]; d[o + 5] = stCur[i + 1]; d[o + 6] = stCur[i + 2]; d[o + 7] = stCur[i + 3];
+        d[o + 8] = stS[k]; d[o + 9] = veh.dist;
+        if (k === 0) { d[o + 10] = 0; d[o + 11] = 1; d[o + 12] = 1; d[o + 13] = veh.setPos > 0.9 ? 1 : 0; d[o + 14] = 0; }
+        else { d[o + 10] = k === 1 ? 0.3 / 4.6 : 3.2 / 4.6; d[o + 11] = k === 1 ? 1.4 / 4.6 : 4.3 / 4.6; d[o + 12] = 0; d[o + 13] = 0; d[o + 14] = 1; }
+        d[o + 15] = TEXM; stN++;
+      }
+      stS[k] = veh.dist;
+      stPrev[i] = stCur[i]; stPrev[i + 1] = stCur[i + 1]; stPrev[i + 2] = stCur[i + 2]; stPrev[i + 3] = stCur[i + 3];
+    }
+    if (stN) device.queue.writeBuffer(stBuf, 0, stData, 0, stN * 16);
+  }
+  function setLight(o, BM, lx, ly, lz, dx, dy, dz, range, outer, inner, r, g, b) {
+    GU[o] = BM[0] * lx + BM[4] * ly + BM[8] * lz + BM[12]; GU[o + 1] = BM[1] * lx + BM[5] * ly + BM[9] * lz + BM[13]; GU[o + 2] = BM[2] * lx + BM[6] * ly + BM[10] * lz + BM[14]; GU[o + 3] = range;
+    const l = 1 / Math.hypot(dx, dy, dz); dx *= l; dy *= l; dz *= l;
+    GU[o + 4] = BM[0] * dx + BM[4] * dy + BM[8] * dz; GU[o + 5] = BM[1] * dx + BM[5] * dy + BM[9] * dz; GU[o + 6] = BM[2] * dx + BM[6] * dy + BM[10] * dz; GU[o + 7] = outer;
+    GU[o + 8] = r; GU[o + 9] = g; GU[o + 10] = b; GU[o + 11] = inner;
+  }
+
   // ---------- post ----------
   const postMod = mod(postW, 'post');
   const bglP = device.createBindGroupLayout({ entries: [
@@ -189,7 +272,7 @@ async function main() {
   if (window.visualViewport) visualViewport.addEventListener('resize', resize);
 
   // ---------- input (keyboard for now) ----------
-  addEventListener('keydown', (e) => { keys.add(e.code); if (e.code >= 'Digit1' && e.code <= 'Digit4') setTod(+e.code[5] - 1); if (e.code === 'KeyC') cam.mode = (cam.mode + 1) % 3; });
+  addEventListener('keydown', (e) => { keys.add(e.code); if (e.code === 'Space') { veh.tillDown = !veh.tillDown; e.preventDefault(); } if (e.code === 'KeyT') veh.setDown = !veh.setDown; if (e.code >= 'Digit1' && e.code <= 'Digit4') setTod(+e.code[5] - 1); if (e.code === 'KeyC') cam.mode = (cam.mode + 1) % 3; });
   addEventListener('keyup', (e) => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
 
@@ -210,6 +293,10 @@ async function main() {
     const target = th * vmax * (1 - 0.85 * clamp(Math.sin(veh.pitch) * Math.sign(veh.v || th) / 0.5, 0, 1));
     veh.v += (target - veh.v) * Math.min(1, dt * 1.6) - 9.8 * Math.sin(veh.pitch) * 0.12 * dt;
     if (th === 0 && Math.abs(veh.v) < 0.05) veh.v = 0;
+    veh.dist += veh.v * dt;
+    const k3 = Math.min(1, dt * 2.5); veh.tillPos += ((veh.tillDown ? 1 : 0) - veh.tillPos) * k3 * 1.6; veh.tillPos = clamp(veh.tillPos + (veh.tillDown ? dt : -dt) * 0.6, 0, 1); veh.setPos = clamp(veh.setPos + (veh.setDown ? dt : -dt) * 1.5, 0, 1);
+    veh.yawRate = veh.steer * lerp(0.9, 0.55, Math.min(1, Math.abs(veh.v) / 6)) * (veh.v < -0.2 ? -1 : 1);
+    veh.trL += (veh.v + veh.yawRate * 1.45) * dt; veh.trR += (veh.v - veh.yawRate * 1.45) * dt;
     veh.yaw += veh.steer * dt * lerp(0.9, 0.55, Math.min(1, Math.abs(veh.v) / 6)) * (veh.v < -0.2 ? -1 : 1);
     veh.x = clamp(veh.x + fx * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + fz * veh.v * dt, -PLAY, PLAY);
     const rx = -fz, rz = fx, hl = 1.9, hw = 1.3, h = W.heightAt;
@@ -251,6 +338,14 @@ async function main() {
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
     GU[O.camPos] = cam.x; GU[O.camPos + 1] = cam.y; GU[O.camPos + 2] = cam.z; GU[O.camPos + 3] = R.time;
     writeTod(GU, O);
+    updateStamps();
+    const BM = groomerParts(groomer.d, veh), nt = 0.12 + 0.88 * GU[O.misc];
+    groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[131] = 1;
+    device.queue.writeBuffer(groomer.u, 0, groomer.d);
+    setLight(O.l0p, BM, 0, 2.7, -2.15, 0, -0.2, -1, 90, Math.cos(0.75), Math.cos(0.3), 2.6 * nt, 2.45 * nt, 2.1 * nt);
+    setLight(O.l1p, BM, 0, 2.65, -0.2, 0, -0.5, 1, 32, Math.cos(1.1), Math.cos(0.5), 1.3 * nt, 1.25 * nt, 1.1 * nt);
+    { const a = R.time * 5.5, o = O.l2p; GU[o] = BM[0] * 0.6 + BM[4] * 2.75 + BM[8] * -1.1 + BM[12]; GU[o + 1] = BM[1] * 0.6 + BM[5] * 2.75 + BM[9] * -1.1 + BM[13]; GU[o + 2] = BM[2] * 0.6 + BM[6] * 2.75 + BM[10] * -1.1 + BM[14]; GU[o + 3] = 26;
+      GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 1.6 * nt; GU[o + 9] = 0.6 * nt; GU[o + 10] = 0.06 * nt; }
     GU[O.screen] = rw; GU[O.screen + 1] = rh;
     device.queue.writeBuffer(gBuf, 0, GU);
     for (let l = 0; l < NL; l++) {
@@ -259,6 +354,7 @@ async function main() {
       device.queue.writeBuffer(lvBuf[l], 0, lvData);
     }
     const enc = device.createCommandEncoder();
+    if (stN) { const sp = enc.beginRenderPass(stampPass); sp.setPipeline(stampPipe); sp.setVertexBuffer(0, stBuf); sp.draw(6, stN); sp.end(); }
     const p = enc.beginRenderPass(mainPass);
     p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
     p.setBindGroup(0, bg0);
@@ -267,6 +363,7 @@ async function main() {
       p.setBindGroup(1, lvBG[l]);
       if (l === 0) { p.setIndexBuffer(tibF, 'uint32'); p.drawIndexed(tiFull.length); } else { if (l === 1) p.setIndexBuffer(tibR, 'uint32'); p.drawIndexed(tiRing.length); }
     }
+    p.setPipeline(objPipe); p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n);
     p.setPipeline(skyPipe); p.draw(3);
     p.end();
 
