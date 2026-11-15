@@ -9,6 +9,9 @@ from geo import SIZE, to_local
 
 HALF = SIZE / 2
 osm = json.load(open('raw/osm.json'))
+if os.path.exists('raw/osm_parking.json'):   # parking areas fetched separately (older osm.json files lack them)
+    have = {(e['type'], e['id']) for e in osm['elements']}
+    osm['elements'] += [e for e in json.load(open('raw/osm_parking.json'))['elements'] if (e['type'], e['id']) not in have]
 nodes, ways, rels = {}, {}, []
 for e in osm['elements']:
     if e['type'] == 'node':
@@ -116,7 +119,7 @@ for s in segs:
     for e in (s['n'][0], s['n'][-1]): deg[e] = deg.get(e, 0) + 1
     for m in s['n'][1:-1]: deg[m] = deg.get(m, 0) + 2
 def P(n): return nodes[n]
-def merge_pass(max_turn):
+def merge_pass(segs, max_turn, key='lit'):
     """join chain ends meeting at a node; at junctions pick the straightest pair below max_turn (radians)"""
     while True:
         ends = {}
@@ -128,7 +131,7 @@ def merge_pass(max_turn):
             for a in range(len(lst)):
                 for b in range(a + 1, len(lst)):
                     (i, ea), (j, eb) = lst[a], lst[b]
-                    if i == j or segs[i]['lit'] != segs[j]['lit']: continue
+                    if i == j or segs[i][key] != segs[j][key]: continue
                     pa = P(segs[i]['n'][1 if ea == 0 else -2]); pb = P(segs[j]['n'][1 if eb == 0 else -2]); c = P(nd)
                     v1 = (c[0] - pa[0], c[1] - pa[1]); v2 = (pb[0] - c[0], pb[1] - c[1])
                     l = math.hypot(*v1) * math.hypot(*v2)
@@ -139,8 +142,8 @@ def merge_pass(max_turn):
         if not best: return
         _, i, ea, j, eb = best
         an = segs[i]['n'] if ea == -1 else segs[i]['n'][::-1]; bn = segs[j]['n'] if eb == 0 else segs[j]['n'][::-1]
-        segs[i]['n'] = an + bn[1:]; segs[i]['name'] = segs[i]['name'] or segs[j]['name']; segs.pop(j)
-merge_pass(0.7)
+        segs[i]['n'] = an + bn[1:]; segs[i]['name'] = segs[i].get('name') or segs[j].get('name'); segs.pop(j)
+merge_pass(segs, 0.7)
 def plen(p): return sum(math.dist(p[i], p[i + 1]) for i in range(len(p) - 1))
 trails = []
 for s in segs:
@@ -158,6 +161,44 @@ tb = bytearray(); tmeta = []
 for p, s in trails:
     tmeta.append([len(p), 1 if s['lit'] else 0, s['name']])
     for x, z in p: tb += struct.pack('<hh', round(x * 8), round(z * 8))
+
+# ---------- plowed roads (the ones you navigate by) + surface parking ----------
+ROADS = ('Holmenkollveien', 'Voksenkollveien', 'Øvreseterveien', 'Tryvannsveien')
+RWID = {'secondary': 7.0, 'tertiary': 6.0, 'unclassified': 5.5, 'service': 4.5}
+ROAD_ZMAX = 1565          # Holmenkollveien stops a few hundred metres below the arena
+rsegs = []; tunnels = []
+for w in ways.values():
+    t = tags(w)
+    if t.get('name') in ROADS and t.get('highway') in RWID and len(w['nodes']) > 1:
+        rsegs.append({'n': list(w['nodes']), 'w': RWID[t['highway']]})
+        if t.get('tunnel') == 'yes': tunnels.append([round(v, 1) for q in pts(w) for v in q])
+merge_pass(rsegs, 0.9, 'w')
+rb = bytearray(); rmeta = []; rkm = 0
+for s in rsegs:
+    run = []
+    for x, z in [nodes[n] for n in s['n'] if n in nodes] + [(9e9, 0)]:
+        if abs(x) < 1700 and abs(z) < 1700 and z < ROAD_ZMAX: run.append((x, z)); continue
+        if len(run) > 1 and plen(run) > 25:
+            rmeta.append([len(run), round(s['w'] * 10)]); rkm += plen(run) / 1000
+            for a, b in run: rb += struct.pack('<hh', round(a * 8), round(b * 8))
+        run = []
+def simplify(p, tol):     # Douglas-Peucker on an open polyline
+    if len(p) < 3: return p
+    (ax, az), (bx, bz) = p[0], p[-1]; l = math.hypot(bx - ax, bz - az) or 1e-9
+    d = [abs((x - ax) * (bz - az) - (z - az) * (bx - ax)) / l for x, z in p[1:-1]]; k = max(range(len(d)), key=d.__getitem__)
+    return p if False else (simplify(p[:k + 2], tol)[:-1] + simplify(p[k + 1:], tol) if d[k] > tol else [p[0], p[-1]])
+def parea(p): return abs(sum(p[i][0] * p[i + 1][1] - p[i + 1][0] * p[i][1] for i in range(len(p) - 1))) / 2
+pk = bytearray(); pmeta = []; parks = []
+for o, inn in polys(lambda t: t.get('amenity') == 'parking' and not t.get('building') and t.get('parking', 'surface') in ('surface', 'lane', 'street_side')):
+    if o[0] != o[-1]: o = o + o[:1]
+    cx = sum(q[0] for q in o) / len(o); cz = sum(q[1] for q in o) / len(o)
+    if parea(o) < 150 or abs(cx) > 1650 or abs(cz) > 1650 or cz > ROAD_ZMAX + 60 or any(parea(o) == parea(q) and (cx, cz) == c for q, c in parks): continue
+    parks.append((o, (cx, cz)))
+    h = len(o) // 2; q = simplify(o[:h + 1], 0.6)[:-1] + simplify(o[h:], 0.6)[:-1]      # closed ring, without the repeated point
+    pmeta.append(len(q))
+    for a, b in q: pk += struct.pack('<hh', round(a * 8), round(b * 8))
+tr2 = Raster(TN, 4, 0); tr2.poly([(o, []) for o, _ in parks], 255)
+treeA = np.where(tr2.out() > 60, 0, treeA).astype(np.uint8)
 
 # ---------- buildings: minimum-area bounding rectangle ----------
 def mbr(p):
@@ -202,13 +243,13 @@ json.dump(lm, open('raw/landmarks.json', 'w'), indent=1, ensure_ascii=False)
 # ---------- pack ----------
 blobs = {}; body = bytearray()
 def add(name, b): blobs[name] = [len(body), len(b)]; body.extend(b)
-add('hgt', hgt); add('water', waterA.tobytes()); add('wet', wetA.tobytes()); add('tree', treeA.tobytes()); add('trails', bytes(tb)); add('bld', bytes(bb))
-meta = {'hn': HG, 'hstep': 8, 'hmin': hmin, 'n': N, 'tn': TN, 'trails': tmeta, 'nb': nb, 'blobs': blobs}
+add('hgt', hgt); add('water', waterA.tobytes()); add('wet', wetA.tobytes()); add('tree', treeA.tobytes()); add('trails', bytes(tb)); add('bld', bytes(bb)); add('roads', bytes(rb)); add('park', bytes(pk))
+meta = {'hn': HG, 'hstep': 8, 'hmin': hmin, 'n': N, 'tn': TN, 'trails': tmeta, 'nb': nb, 'roads': rmeta, 'tunnels': tunnels, 'park': pmeta, 'blobs': blobs}
 js = json.dumps(meta, ensure_ascii=False, separators=(',', ':')).encode()
 raw = struct.pack('<I', len(js)) + js + bytes(body)
 co = zlib.compressobj(9, zlib.DEFLATED, -15); z = co.compress(raw) + co.flush()
 os.makedirs('../../src/data', exist_ok=True); open('../../src/data/world.bin', 'wb').write(z)
-print('trails', len(trails), 'km', round(sum(plen(p) for p, _ in trails) / 1000, 1), 'lit km', round(sum(plen(p) for p, s in trails if s['lit']) / 1000, 1), 'buildings', nb)
+print('trails', len(trails), 'km', round(sum(plen(p) for p, _ in trails) / 1000, 1), 'lit km', round(sum(plen(p) for p, s in trails if s['lit']) / 1000, 1), 'buildings', nb, 'roads', len(rmeta), 'km', round(rkm, 2), 'tunnels', len(tunnels), 'parking', len(pmeta))
 for k, (o, l) in blobs.items(): print(f'  {k:7s} raw {l / 1024:8.1f} kB  deflated {len(zlib.compress(bytes(body[o:o + l]), 9)) / 1024:7.1f} kB')
 print('world.bin', round(len(z) / 1024, 1), 'kB; json', len(js))
 # preview
@@ -217,4 +258,8 @@ sh = np.asarray(Image.open('raw/dem.png').resize((N, N)))
 pv[..., 0] = sh // 2 + wetA // 3; pv[..., 1] = sh // 3 + g // 3; pv[..., 2] = sh // 2 + waterA // 2
 im = Image.fromarray(pv); d = ImageDraw.Draw(im)
 for p, s in trails: d.line([((x + HALF) / 2, (z + HALF) / 2) for x, z in p], fill=(255, 220, 60) if s['lit'] else (255, 90, 60), width=2)
+o = 0
+for n, w in rmeta:
+    d.line([((x / 8 + HALF) / 2, (z / 8 + HALF) / 2) for x, z in struct.iter_unpack('<hh', bytes(rb[o:o + n * 4]))], fill=(40, 40, 40), width=3); o += n * 4
+for p, _ in parks: d.polygon([((x + HALF) / 2, (z + HALF) / 2) for x, z in p], fill=(90, 90, 110))
 im.save('raw/preview.png')

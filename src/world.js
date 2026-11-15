@@ -163,6 +163,67 @@ export async function genWorld(tick, Q, startAt) {
   }
   for (let k = 0; k < HN * HN; k++) if (tD[k] < 12 && mat[k * 4] < 128) H[k] = lerp(H[k], tT[k], 1 - smooth(3.4, 10, tD[k]));
 
+  // ---- plowed roads + parking lots: mat.G holds the distance to the asphalt edge (0.667 = edge, 6 m ramp) ----
+  const portals = [], parks = [];
+  const gOf = (e) => 255 * clamp(1 - (e + 2) / 6, 0, 1);
+  { // parking: least-squares plane through the lot, at most a gentle slope
+    const b = blob('park'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let o = 0;
+    for (const n of meta.park) {
+      const px = new Float32Array(n), pz = new Float32Array(n); let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (let i = 0; i < n; i++, o += 4) { const x = px[i] = dv.getInt16(o, true) / 8, z = pz[i] = dv.getInt16(o + 2, true) / 8; if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+      const i0 = Math.max(1, Math.floor(w2t(x0 - 6))), i1 = Math.min(HN - 2, Math.ceil(w2t(x1 + 6))), j0 = Math.max(1, Math.floor(w2t(z0 - 6))), j1 = Math.min(HN - 2, Math.ceil(w2t(z1 + 6)));
+      const nw = i1 - i0 + 1, E = new Float32Array(nw * (j1 - j0 + 1)), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      let s1 = 0, sx = 0, sz = 0, sy = 0, sxx = 0, szz = 0, sxz = 0, sxy = 0, szy = 0, wet = 0;
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const x = (i + 0.5) * TEX - HALF, z = (j + 0.5) * TEX - HALF, k = j * HN + i; let d = 1e9, ins = false;
+        for (let a = 0, c = n - 1; a < n; c = a++) {
+          const ax = px[c], az = pz[c], vx = px[a] - ax, vz = pz[a] - az, u = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz + 1e-9), 0, 1);
+          d = Math.min(d, Math.hypot(x - ax - vx * u, z - az - vz * u));
+          if ((az > z) !== (pz[a] > z) && x < ax + vx * (z - az) / vz) ins = !ins;
+        }
+        E[(j - j0) * nw + i - i0] = ins ? -d : d;
+        if (ins) { const X = x - cx, Z = z - cz, y = H[k]; s1++; sx += X; sz += Z; sy += y; sxx += X * X; szz += Z * Z; sxz += X * Z; sxy += X * y; szy += Z * y; if (mat[k * 4] > 8) wet++; }
+      }
+      if (s1 < 12 || wet > s1 * 0.2) continue;
+      const mx = sx / s1, mz = sz / s1, my = sy / s1, a = sxx - sx * mx, c = szz - sz * mz, bb = sxz - sx * mz, u = sxy - sx * my, v = szy - sz * my, det = a * c - bb * bb || 1;
+      let gx = (u * c - v * bb) / det, gz = (v * a - u * bb) / det; const g = Math.hypot(gx, gz); if (g > 0.05) { gx *= 0.05 / g; gz *= 0.05 / g; }
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const k = j * HN + i, e = E[(j - j0) * nw + i - i0]; if (e > 5 || mat[k * 4] > 8) continue;
+        H[k] = lerp(my + gx * ((i + 0.5) * TEX - HALF - cx - mx) + gz * ((j + 0.5) * TEX - HALF - cz - mz), H[k], smooth(0, 5, e));
+        mat[k * 4 + 1] = Math.max(mat[k * 4 + 1], Math.min(204, gOf(e))); // capped: the shader reads < 0.82 as 'lot'
+      }
+      parks.push({ px, pz, x: cx + mx, z: cz + mz, area: s1 * TEX * TEX });
+    } }
+  { // roads: flat bed along a smoothed profile, sunk under the ski bridges (tunnels) with headwalls as props
+    const TUN = meta.tunnels, DEPTH = 5, b = blob('roads'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let o = 0;
+    const dTun = (x, z) => { let m = 1e9; for (const t of TUN) for (let i = 0; i + 3 < t.length; i += 2) { const ax = t[i], az = t[i + 1], vx = t[i + 2] - ax, vz = t[i + 3] - az, u = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz), 0, 1); m = Math.min(m, Math.hypot(x - ax - vx * u, z - az - vz * u)); } return m; };
+    const rE = new Float32Array(HN * HN).fill(99), rY = new Float32Array(HN * HN);
+    for (const [n, w10] of meta.roads) {
+      let pts = []; for (let i = 0; i < n; i++, o += 4) pts.push([dv.getInt16(o, true) / 8, dv.getInt16(o + 2, true) / 8]);
+      pts = polish(pts, 3); const m = pts.length, hw = w10 / 20, hs = new Float32Array(m), y = new Float32Array(m), dk = new Float32Array(m), cov = new Uint8Array(m);
+      for (let i = 0; i < m; i++) hs[i] = heightAt(pts[i][0], pts[i][1]);
+      for (let i = 0; i < m; i++) {
+        let s = 0, c = 0; for (let k = Math.max(0, i - 8); k <= Math.min(m - 1, i + 8); k++) { s += hs[k]; c++; }
+        const dt = dTun(pts[i][0], pts[i][1]); dk[i] = s / c; y[i] = dk[i] - DEPTH * (1 - smooth(8, 95, dt)); cov[i] = dt < 1 ? 2 : dt < 8 ? 1 : 0; // 1 = recess behind the portal face
+      }
+      for (let q = 0; q < m; q++) {
+        const cx = pts[q][0], cz = pts[q][1], R = hw + 18, i0 = Math.max(0, Math.floor(w2t(cx - R))), i1 = Math.min(HN - 1, Math.ceil(w2t(cx + R))), j0 = Math.max(0, Math.floor(w2t(cz - R))), j1 = Math.min(HN - 1, Math.ceil(w2t(cz + R)));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const k = j * HN + i, e = Math.hypot((i + 0.5) * TEX - HALF - cx, (j + 0.5) * TEX - HALF - cz) - hw;
+          if (e < rE[k]) { rE[k] = e; rY[k] = cov[q] === 2 ? -dk[q] : y[q]; } // negative: level deck on top of the tunnel
+        }
+        if (q && !cov[q] !== !cov[q - 1]) { const a = cov[q] ? q : q - 1, c = cov[q] ? q - 1 : q, dx = pts[a][0] - pts[c][0], dz = pts[a][1] - pts[c][1], l = Math.hypot(dx, dz); portals.push({ x: pts[a][0], z: pts[a][1], y: y[a], hw, dx: dx / l, dz: dz / l, top0: dk[a], top1: dk[clamp(a + (a - c) * 5, 0, m - 1)] }); }
+      }
+    }
+    for (let k = 0; k < HN * HN; k++) if (rY[k] < 0) { if (rE[k] < 17 && mat[k * 4] < 9) H[k] = lerp(-rY[k], H[k], clamp((rE[k] - 9) / 8, 0, 1)); }
+    else if (rE[k] < 10 && mat[k * 4] < 9) {
+      const e = rE[k], yT = rY[k];
+      H[k] = lerp(yT, H[k], clamp((e - 1) / Math.max(3, 1.6 * Math.abs(H[k] - yT)), 0, 1)); mat[k * 4 + 1] = Math.max(mat[k * 4 + 1], gOf(e)); // straight cut slope, gentle enough to stay snow-covered
+    }
+  }
+  const roadAt = (x, z) => mat[(clamp(Math.round(w2t(z)), 0, HN - 1) * HN + clamp(Math.round(w2t(x)), 0, HN - 1)) * 4 + 1] / 255;
+  await tick('Computing normals', 0.62);
+
   // ---- snow kickers on the biggest lake in reach (turbo mode playground), lips along the lake's long axis ----
   const kickers = [];
   { let L = null; for (const l of lakes) if (Math.abs(l.x) < PLAY - 150 && Math.abs(l.z) < PLAY - 150 && (!L || l.area > L.area)) L = l;
@@ -197,7 +258,7 @@ export async function genWorld(tick, Q, startAt) {
     for (let i = 8; i < t.n - 6; i += 17) {
       const x = t.pts[i * 2], z = t.pts[i * 2 + 1], tx = t.pts[i * 2 + 2] - x, tz = t.pts[i * 2 + 3] - z, l = Math.hypot(tx, tz) || 1;
       const px = x - tz / l * 5.3, pz = z + tx / l * 5.3;
-      if (Math.hypot(px - cabin.x, pz - cabin.z) < 15 || Math.abs(px) > PLAY + 200 || Math.abs(pz) > PLAY + 200 || W.lakeAt(px, pz) > 0.2) continue;
+      if (Math.hypot(px - cabin.x, pz - cabin.z) < 15 || Math.abs(px) > PLAY + 200 || Math.abs(pz) > PLAY + 200 || W.lakeAt(px, pz) > 0.2 || roadAt(px, pz) > 0.3) continue;
       lamps.push({ x: px, z: pz, y: heightAt(px, pz), yaw: Math.atan2(x - px, z - pz) });
     }
   }
@@ -228,7 +289,7 @@ export async function genWorld(tick, Q, startAt) {
           const hx = cx * 16 + a, hz = cz * 16 + b, r0 = hash2(hx, hz), x = x0 + (a + 0.15 + 0.7 * r0) * st, z = z0 + (b + 0.15 + 0.7 * hash2(hx + 7919, hz)) * st;
           const ti = clamp(Math.round(w2t(z)), 1, HN - 2) * HN + clamp(Math.round(w2t(x)), 1, HN - 2);
           const dn = dens(x, z);
-          if (dn < 0.04 || mat[ti * 4] > 8 || tD[ti] < 6.2) continue;
+          if (dn < 0.04 || mat[ti * 4] > 8 || tD[ti] < 6.2 || mat[ti * 4 + 1] > 40) continue;
           const y = heightAt(x, z), slope = Math.hypot(H[ti + 1] - H[ti - 1], H[ti + HN] - H[ti - HN]) / (2 * TEX);
           if (slope > 1.1) continue;
           { const dx = x - cabin.x, dz = z - cabin.z, fr = Math.cos(cabin.yaw) * dz + Math.sin(cabin.yaw) * dx; if (Math.hypot(dx, dz) < (fr > 0 ? 75 : 34)) continue; } // open view in front of the lodge
@@ -266,7 +327,7 @@ export async function genWorld(tick, Q, startAt) {
 
   Object.assign(W, {
     PLAY, MW, TREELINE, name: 'nordmarka',
-    mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM,
+    mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM, portals, parks, roadAt,
     trees: { data: td.subarray(0, tc * 8), count: tc, nearStart, nearCnt, nearY, farStart, farCnt, farY },
     start: { x: 0, z: 0, yaw: 0 },
   });

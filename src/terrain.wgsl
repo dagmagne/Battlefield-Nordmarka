@@ -3,6 +3,12 @@ struct LevelU { origin: vec2f, cell: f32, n: f32 };
 
 const SW = 4.6;      // groomed swath width (m)
 const NR = 96.0;     // corduroy ridges across the swath
+const ROADS = 0.0;   // main.js sets 1.0 for the real world: matTex.g is then the plowed-asphalt distance ramp (0.667 = edge, 6 m wide) instead of creek water
+const BANK = 0.55;   // snowbank height along plowed edges (m)
+fn roadOf(m: vec4f) -> f32 { return m.g * ROADS; }
+fn creekOf(m: vec4f) -> f32 { return m.g * (1.0 - ROADS); }
+// x = snow plowed away, y = snowbank profile just outside the edge
+fn plow(r: f32) -> vec2f { return vec2f(smoothstep(0.58, 0.68, r), smoothstep(0.22, 0.5, r) * (1.0 - smoothstep(0.56, 0.67, r))); }
 
 fn baseH(xz: vec2f) -> f32 {
   let half = G.world.x;
@@ -39,7 +45,7 @@ fn snowDetail(p: vec2f, dist: f32, mt: vec4f) -> vec3f {
     }
     if (f3 > 0.0) { let n3 = vnoise(p * 1.7 + 5.1); r += vec3f(n3.x - 0.5, n3.yz * 1.7) * (0.028 * f3); }
   }
-  return r * (1.0 - 0.7 * max(mt.r, mt.g));
+  return r * (1.0 - 0.7 * max(mt.r, creekOf(mt)));
 }
 
 struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f };
@@ -62,7 +68,8 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f };
       let mA = textureSampleLevel(maskA, linSmp, xz * G.world.w + 0.5, 0.0);
       press = pressOf(mA); berm = bermOf(mA);
     }
-    h += det.x * (1.0 - press) + 0.06 * berm * (1.0 - smoothstep(60.0, 120.0, dist));
+    let pl = plow(roadOf(mt));
+    h += det.x * (1.0 - max(press, pl.x)) + BANK * pl.y * (1.0 - smoothstep(150.0, 420.0, dist)) + 0.06 * berm * (1.0 - smoothstep(60.0, 120.0, dist));
   }
   var o: VOut;
   o.wp = vec3f(xz.x, h, xz.y);
@@ -158,6 +165,17 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
       S += gt / max(gtl, 1e-4) * (0.42 * sin(mB.g * 20.0 * 2.0 * PI) * imp * bf);
     }
   }
+  let rdv = roadOf(mt);
+  var plw = vec2f(0.0);
+  if (rdv > 0.01) {
+    let rw = rdv + (vn(p * 0.8) - 0.5) * 0.05;
+    plw = plow(rw);
+    let tx = G.world.y;
+    let gR = vec2f(roadOf(textureSampleLevel(matTex, linSmp, uvW + vec2f(tx, 0.0), 0.0)) - roadOf(textureSampleLevel(matTex, linSmp, uvW - vec2f(tx, 0.0), 0.0)),
+                   roadOf(textureSampleLevel(matTex, linSmp, uvW + vec2f(0.0, tx), 0.0)) - roadOf(textureSampleLevel(matTex, linSmp, uvW - vec2f(0.0, tx), 0.0))) * 0.5;
+    let dpl = (plow(rw + 0.01) - plow(rw - 0.01)) * 50.0;
+    Sd = Sd * (1.0 - plw.x) + gR * (BANK * dpl.y * (1.0 - smoothstep(150.0, 420.0, dxz)) - det.x * dpl.x);
+  }
   S += Sd;
   // fine grain
   let gfine = 1.0 - smoothstep(4.0, 14.0, dist);
@@ -218,7 +236,7 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
 
   // lake ice + open creek water
   let icy = mt.r * icePatch(p) * (1.0 - max(groomed, imp));
-  let water = smoothstep(0.55, 0.8, mt.g + (nB - 0.5) * 0.3) * (1.0 - groomed);
+  let water = smoothstep(0.55, 0.8, creekOf(mt) + (nB - 0.5) * 0.3) * (1.0 - groomed);
   let wet = max(icy, water);
   if (wet > 0.003) {
     let ni = normalize(vec3f((vn(p * 0.8) - 0.5) * 0.03, 1.0, (vn(p * 0.8 + 40.0) - 0.5) * 0.03) + vec3f(S0.x, 0.0, S0.y) * (-0.3));
@@ -233,6 +251,22 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
     var c2 = ic * (sun * saturate(dot(ni, L)) + ambient(ni) + ll) + skyBase(r) * fr * mix(0.8, 1.0, sh);
     c2 += sun * pow(saturate(dot(ni, Hh)), 400.0) * 6.0;
     col = mix(col, c2, wet);
+  }
+  // plowed asphalt with packed snow and ice left behind
+  if (rdv > 0.01) {
+    let asph = mix(plw.x, smoothstep(0.3, 0.9, rdv), smoothstep(120.0, 700.0, dist));
+    if (asph > 0.003) {
+      let q = vec2f(p.x * 0.8 + p.y * 0.6, p.y * 0.8 - p.x * 0.6);
+      let g1 = fbm3(q * 0.19 + 31.0); let g2 = fbm3(q * 1.7 + 7.0);
+      let lot = 1.0 - smoothstep(0.82, 0.95, rdv);   // parking lots (ramp capped at 0.8) and the outer metre of a road keep packed snow
+      let pk = smoothstep(0.42, 0.7, g1 * 0.7 + g2 * 0.3 + lot * 0.2) * mix(0.3, 0.85, lot);
+      var ra = mix(vec3f(0.04, 0.042, 0.047), vec3f(0.085, 0.085, 0.088), g2);
+      ra = mix(ra, vec3f(0.52, 0.56, 0.62), pk);
+      let nr = normalize(vec3f(nb.x + (g2 - 0.5) * 0.06, nb.y, nb.z + (vn(p * 3.3) - 0.5) * 0.06));
+      var c3 = ra * (sun * saturate(dot(nr, L)) + ambient(nr) * (1.0 - 0.4 * exp(-dot(gd2, gd2) * 0.12)) + ll);
+      c3 += (sun * pow(saturate(dot(nr, Hh)), 90.0) * 0.5 + skyBase(reflect(-v, nr)) * (0.02 + 0.5 * pow(1.0 - saturate(dot(nr, v)), 5.0)) * 0.5 * mix(0.6, 1.0, sh)) * (1.0 - pk);
+      col = mix(col, c3, asph);
+    }
   }
   return vec4f(applyFog(col, wp), 1.0);
 }

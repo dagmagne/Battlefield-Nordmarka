@@ -149,7 +149,7 @@ async function main() {
   for (let l = 0; l < NL; l++) { lvBuf[l] = device.createBuffer({ size: 16, usage: U.UNIFORM | U.COPY_DST }); lvBG[l] = device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: lvBuf[l] } }] }); }
   // beyond the map edge: the real world falls away to the city and fjord in the south and rises into the forest hills in the north
   const REAL = W.name !== 'fantasy';
-  const terrMod = mod(common + (REAL ? terrainW.replace('262.0', '(mix(440.0,30.0,smoothstep(-2600.0,3600.0,xz.y))+50.0*sin(xz.x*0.0011)*sin(xz.y*0.0013))') : terrainW), 'terrain');
+  const terrMod = mod(common + (REAL ? terrainW.replace(/ROADS\s*=\s*0\.0/, 'ROADS=1.0').replace('262.0', '(mix(440.0,30.0,smoothstep(-2600.0,3600.0,xz.y))+50.0*sin(xz.x*0.0011)*sin(xz.y*0.0013))') : terrainW), 'terrain');
   const terrPipe = device.createRenderPipeline({
     layout: lay01,
     vertex: { module: terrMod, entryPoint: 'vs', buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }] }] },

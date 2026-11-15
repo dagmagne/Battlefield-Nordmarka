@@ -17,6 +17,8 @@ q = f'''[out:json][timeout:120];
   way["highway"]({bb});
   way["railway"]({bb});
   way["building"]({bb});
+  way["amenity"="parking"]({bb});
+  relation["amenity"="parking"]({bb});
   way["power"="line"]({bb});
   way["aerialway"]({bb});
   way["leisure"~"pitch|stadium|sports_centre|park"]({bb});

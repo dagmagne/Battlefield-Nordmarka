@@ -48,6 +48,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   else if (m == 14u) { let r = length(uv); alb = mix(vec3f(0.03), vec3f(0.5, 0.5, 0.52), step(r, 0.72)); let a = atan2(uv.y, uv.x); alb *= 0.55 + 0.45 * step(0.3, abs(fract(a * 0.955 + 0.5) - 0.5) * 2.0 + step(r, 0.25)); spec = 0.2; }
   else if (m == 15u) { alb = mix(vec3f(0.07, 0.07, 0.075), vec3f(0.3, 0.035, 0.03), smoothstep(3.75, 3.9, uv.y)); alb *= 0.8 + 0.2 * step(0.5, fract(uv.x * 23.0)); alb = mix(alb, vec3f(0.92), smoothstep(3.95, 4.12, uv.y) * 0.6); }
   else if (m == 16u) { alb = vec3f(0.04); }
+  else if (m == 19u) { alb = vec3f(0.004); spec = 0.0; }
   else if (m == 18u) { // Norwegian flag
     let f = uv; let cx = abs(f.x - 0.36); let cy = abs(f.y - 0.5);
     alb = vec3f(0.62, 0.02, 0.04);
@@ -67,7 +68,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let sh = shadowSunS(wp, n, dist, 3) * terrainShadow(wp.xz, hAbove);
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.0) + lampLight(wp.xz, hAbove) * (0.5 + 0.5 * saturate(n.y + 0.6));
-  var col = alb * (sun * ndl + ambient(n) * (0.55 + 0.45 * saturate(hAbove * 0.5)) + ll) + emis;
+  var col = alb * (sun * ndl + ambient(n) * select(0.55 + 0.45 * saturate(hAbove * 0.5), 1.0, m == 2u && n.y > 0.7) + ll) + emis;
   let Hh = normalize(L + v);
   col += sun * spec * pow(saturate(dot(n, Hh)), gloss) * ndl * 4.0;
   if (refl > 0.0) {

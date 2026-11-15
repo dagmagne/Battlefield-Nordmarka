@@ -267,12 +267,26 @@ function chapel(b, W, C) {
   W.colliders.push(C.x, C.z, 5);
 }
 
+function portal(b, W, p) { // concrete headwall where a road dives under a ski bridge; local +z points into the tunnel
+  const yaw = Math.atan2(p.dx, p.dz), cs = Math.cos(yaw), sn = Math.sin(yaw), a = p.hw + 1, wd = a + 8.5, c = 4.3, z0 = -1.5, z1 = 8;
+  const t0 = Math.max(p.top0 - p.y, c + 0.7), t1 = t0 + (p.top1 - p.top0) * 0.95, T = Math.min(t0, t1) - 0.1, d = (t1 - t0) / 10; // deck height at the face / 10 m in
+  b.at(p.x, p.y, p.z, yaw);
+  b.set([0.17, 0.17, 0.168], MAT.stone);
+  b.box(-wd, -1.5, z0, -a, T, z1); b.box(a, -1.5, z0, wd, T, z1); b.box(-a, c, z0, a, T, z1); b.box(-wd, T, z0, wd, t0 + 1.1, z0 + 0.4);
+  b.set(DARK, MAT.void); b.quad([a, -0.5, 2.8], [-a, -0.5, 2.8], [-a, c, 2.8], [a, c, 2.8]);
+  b.set(SNOWC, MAT.snow);
+  const y0 = t0 + 0.55 + d * (z0 + 0.4), y1 = t0 + 0.55 + d * z1;   // clear of the soft-snow displacement on the deck
+  slab(b, [-wd, y1, z1], [wd, y1, z1], [wd, y0, z0 + 0.4], [-wd, y0, z0 + 0.4], Math.max(y0, y1) - T);
+  b.box(-wd - 0.05, t0 + 1.1, z0 - 0.05, wd + 0.05, t0 + 1.27, z0 + 0.45);
+  for (let x = -wd; x <= wd; x += 3) W.colliders.push(p.x + cs * x + sn * 4.6, p.z - sn * x + cs * 4.6, 2.6); // stops the groomer in the mouth and short of the edge on top
+}
+
 export function buildProps(W) {
   const b = new MB();
   W.colliders = [];
   const PLAY = W.PLAY;
   if (W.name === 'fantasy') { cabin(b, W.cabin, W); bridge(b, W.bridge); dam(b, W.dam); }
-  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump, 6.5); skiJump(b, W, W.lm.mid, 4.5); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel); }
+  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump, 6.5); skiJump(b, W, W.lm.mid, 4.5); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
   for (let i = 0; i < W.pylons.length; i++) { pylon(b, W.pylons[i]); if (i) wires(b, W.pylons[i - 1], W.pylons[i]); W.colliders.push(W.pylons[i].x + Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z - Math.sin(W.pylons[i].yaw) * 2.6, 0.5, W.pylons[i].x - Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z + Math.sin(W.pylons[i].yaw) * 2.6, 0.5); }
   for (const L of W.lamps) { lamp(b, L); W.colliders.push(L.x, L.z, 0.35); }
   for (const S of W.signs) { sign(b, S); W.colliders.push(S.x, S.z, 0.3); }
