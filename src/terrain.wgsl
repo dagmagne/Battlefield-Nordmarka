@@ -178,7 +178,8 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   var rock = smoothstep(0.74, 1.0, slope0 + (big - 0.5) * 0.45 + alpine * 0.08);
   rock = max(rock, alpine * smoothstep(0.7, 0.76, big * 0.75 + nB * 0.25) * smoothstep(0.22, 0.42, slope0));
   rock *= 1.0 - max(groomed, imp);
-  if (rock > 0.01) { let rn = vnoise(p * 1.9); let rn2 = vnoise(p * 6.3); S += (rn.yz * 1.9 * 0.22 + rn2.yz * 6.3 * 0.03) * rock; }
+  let rf = 1.0 - smoothstep(50.0, 220.0, dist);
+  if (rock > 0.01 && rf > 0.0) { let rn = vnoise(p * 1.9); let rn2 = vnoise(p * 6.3); S += (rn.yz * 1.9 * 0.22 + rn2.yz * 6.3 * 0.03) * rock * rf; }
   var n = normalize(vec3f(-S.x, 1.0, -S.y));
 
   let L = G.sunDir.xyz;
@@ -196,8 +197,8 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   // sedge tufts on bogs
   let tuft = mt.b * smoothstep(0.84, 0.93, vn(p * 6.0)) * smoothstep(0.5, 0.75, vn(p * 0.3 + 9.0)) * (1.0 - groomed) * (1.0 - smoothstep(80.0, 200.0, dist));
   alb = mix(alb, vec3f(0.5, 0.42, 0.26), tuft * 0.3);
-  let rcol = mix(vec3f(0.07, 0.075, 0.085), vec3f(0.17, 0.17, 0.175), fbm3(p * 0.33) ) * (0.8 + 0.4 * vn(p * 3.1));
-  let rsnow = smoothstep(0.3, 0.72, vn(vec2f((p.x + p.y) * 0.16, wp.y * 0.55)) * 0.5 + vn(p * 0.9) * 0.3 + vn(p * 4.3) * 0.2 + (n.y - 0.75) * 0.6);
+  let rcol = mix(vec3f(0.07, 0.075, 0.085), vec3f(0.17, 0.17, 0.175), fbm3(p * 0.33) ) * (0.8 + 0.4 * mix(0.5, vn(p * 3.1), rf));
+  let rsnow = smoothstep(0.34, 0.7, fbm3(p * 0.1 + 3.0) * 0.62 + vn(vec2f((p.x - p.y) * 0.045, wp.y * 0.22)) * 0.2 + mix(0.5, vn(p * 1.7), rf) * 0.18 + (n.y - 0.75) * 0.6);
   alb = mix(alb, mix(rcol, alb, rsnow * 0.75), rock);
   var snowy = 1.0 - rock * (1.0 - rsnow * 0.75);
 
