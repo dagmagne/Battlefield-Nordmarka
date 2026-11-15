@@ -28,20 +28,23 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       alpha = (1.0 - smoothstep(0.2, 0.3, e + 0.25 * tri(uv.x * 5.0 + seed * 9.0))) * step(0.12, uv.x);
       alb = mix(vec3f(0.2, 0.15, 0.16), vec3f(0.74, 0.74, 0.8), 0.5);
     } else {
+      var ux = uv.x; var skirt = false;
+      if (ux > 1.5) { ux -= 2.0; skirt = true; }
       // needle fringe
-      let fr = e + 0.26 * tri(uv.x * 9.0 + seed * 7.0) * smoothstep(0.25, 0.6, e) + 0.1 * tri(uv.x * 23.0 + seed * 3.0);
-      let aw = max(duv.y * 1.2, 0.04);
+      let fr = e + 0.26 * tri(ux * 9.0 + seed * 7.0) * smoothstep(0.25, 0.6, e) + 0.1 * tri(ux * 23.0 + seed * 3.0);
+      let aw = max(duv.y * 0.75, 0.012);
       alpha = 1.0 - smoothstep(0.95 - aw, 0.95 + aw, fr);
       var g = mix(vec3f(0.028, 0.062, 0.03), vec3f(0.05, 0.082, 0.035), step(0.5, sp));
       g *= 0.75 + 0.5 * seed;
       // needle rows: fine herringbone streaks along the branch
-      let nd = tri(uv.x * 26.0 + e * 5.0 + seed * 3.0);
-      g *= (0.65 + 0.55 * vn(vec2f(uv.x * 14.0 + seed * 40.0, uv.y * 5.0))) * (0.72 + 0.5 * nd * (1.0 - saturate(duv.x * 40.0)));
+      let nd = tri(ux * 26.0 + e * 5.0 + seed * 3.0);
+      g *= (0.65 + 0.55 * vn(vec2f(ux * 14.0 + seed * 40.0, uv.y * 5.0))) * (0.72 + 0.5 * nd * (1.0 - saturate(duv.x * 40.0)));
       // snow load on the top side, heavier along the branch axis
-      let sw = 0.78 - 0.3 * uv.x + (vn(vec2f(uv.x * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
-      snow = (1.0 - smoothstep(sw - 0.1, sw + 0.03, e)) * smoothstep(0.02, 0.12, uv.x);
+      let sw = 0.78 - 0.3 * ux + (vn(vec2f(ux * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
+      snow = (1.0 - smoothstep(sw - 0.1, sw + 0.03, e)) * smoothstep(0.02, 0.12, ux);
       if (under) { snow = 0.0; g *= 1.5; }
-      snow *= 0.82 + 0.18 * vn(vec2f(uv.x * 9.0 + seed * 5.0, uv.y * 3.0 + in.hy));
+      if (skirt) { snow = 0.0; g *= 1.9; }
+      snow *= 0.82 + 0.18 * vn(vec2f(ux * 9.0 + seed * 5.0, uv.y * 3.0 + in.hy));
       alb = g; trans = 1.0;
     }
   } else if (kind > 1.5 && kind < 2.5) { // birch twig spray: main twigs from the apex with alternating side shoots
@@ -83,7 +86,7 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   }
   if (G.lod2.z < 0.5) { if (alpha < 0.5) { discard; } alpha = 1.0; }
   if (alpha < 0.02) { discard; }
-  snow *= 0.7 + 0.3 * fract(seed * 5.3);
+  snow *= 0.66 + 0.34 * fract(seed * 5.3);
   alb = mix(alb, vec3f(0.93, 0.95, 0.99), snow);
   trans *= 1.0 - snow;
   let L = G.sunDir.xyz;

@@ -129,7 +129,8 @@ fn shadowCasc(wp: vec3f, ci: i32, soft: i32) -> f32 {
   var P = array<vec2f, 12>(vec2f(-0.326, -0.406), vec2f(-0.84, -0.074), vec2f(-0.696, 0.457), vec2f(-0.203, 0.621), vec2f(0.962, -0.195), vec2f(0.473, -0.48),
     vec2f(0.519, 0.767), vec2f(0.185, -0.893), vec2f(0.507, 0.064), vec2f(0.896, 0.412), vec2f(-0.322, -0.933), vec2f(-0.792, -0.598));
   let res = 1.0 / t; let tw = G.cascTex[ci];
-  let ang = ihash(vec2i(floor(wp.xz * 140.0))) * 6.2832;
+  var ang = ihash(vec2i(floor(wp.xz * 140.0))) * 6.2832;
+  if (soft == 3) { ang = 0.7; }
   let rc = cos(ang); let rs = sin(ang);
   let sr = clamp(0.55 / tw, 2.0, 10.0);
   var pen = 3.0;

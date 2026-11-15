@@ -21,14 +21,14 @@ class TB {
     for (let k = 0; k < n - 1; k++) for (let s = 0; s < sides; s++) { const q = base + k * (sides + 1) + s; this.i.push(q, q + sides + 1, q + 1, q + 1, q + sides + 1, q + sides + 2); }
   }
   // drooping spruce frond
-  frond(y0, phi, len, droop, w, aoB, seg = 4, ox = 0, oz = 0) {
+  frond(y0, phi, len, droop, w, aoB, uo = 0, seg = 4, ox = 0, oz = 0) {
     const dx = Math.cos(phi), dz = Math.sin(phi), tx = -dz, tz = dx, base = this.v.length / 10;
     for (let i = 0; i <= seg; i++) {
       const t = i / seg, r = len * (0.05 + 0.95 * t), y = y0 - len * droop * (1.5 * t - 0.8 * t * t), hw = w * Math.pow(Math.sin(Math.PI * Math.min(t * 0.88 + 0.12, 1)), 0.7);
       const ao = aoB * (0.4 + 0.6 * t), cx = ox + dx * r, cz = oz + dz * r, ny = 0.75, nr = 0.35 + 0.3 * t;
-      this.vert(cx - tx * hw, y - hw * 0.22, cz - tz * hw, dx * nr - tx * 0.55, ny, dz * nr - tz * 0.55, t, -1, 1, ao);
-      this.vert(cx, y + hw * 0.28, cz, dx * nr, ny + 0.2, dz * nr, t, 0, 1, ao);
-      this.vert(cx + tx * hw, y - hw * 0.22, cz + tz * hw, dx * nr + tx * 0.55, ny, dz * nr + tz * 0.55, t, 1, 1, ao);
+      this.vert(cx - tx * hw, y - hw * 0.22, cz - tz * hw, dx * nr - tx * 0.55, ny, dz * nr - tz * 0.55, t + uo, -1, 1, ao);
+      this.vert(cx, y + hw * 0.28, cz, dx * nr, ny + 0.2, dz * nr, t + uo, 0, 1, ao);
+      this.vert(cx + tx * hw, y - hw * 0.22, cz + tz * hw, dx * nr + tx * 0.55, ny, dz * nr + tz * 0.55, t + uo, 1, 1, ao);
     }
     for (let i = 0; i < seg; i++) { const q = base + i * 3; this.i.push(q, q + 1, q + 3, q + 1, q + 4, q + 3, q + 1, q + 2, q + 4, q + 2, q + 5, q + 4); }
   }
@@ -58,12 +58,14 @@ function spruce(lod) {
   const b = new TB();
   if (lod === 0) {
     b.tube([[0, 0, 0, 0.017], [0, 0.5, 0, 0.011], [0, 0.97, 0, 0.002]], 6, 0, 0.55, 0.8);
-    const K = 21;
+    const K = 19;
     for (let k = 0; k < K; k++) {
       const t = k / (K - 1), y = 0.09 + 0.87 * Math.pow(t, 0.95), len = 0.165 * Math.pow(1 - y, 0.72) + 0.012, nb = Math.round(8.6 - 4.2 * t);
       for (let j = 0; j < nb; j++) {
         const r = R(k * 17 + j), ph = (j + 0.6 * r) / nb * Math.PI * 2 + k * 2.4;
-        b.frond(y + (r - 0.5) * 0.025, ph, len * (0.78 + 0.44 * R(k * 31 + j + 5)), (0.8 - 0.5 * t) * (0.75 + 0.5 * R(k * 7 + j * 3)), len * 0.36, 0.62 + 0.38 * y);
+        const fl = len * (0.78 + 0.44 * R(k * 31 + j + 5)), fd = (0.8 - 0.5 * t) * (0.75 + 0.5 * R(k * 7 + j * 3)), fy = y + (r - 0.5) * 0.025;
+        b.frond(fy, ph, fl, fd, len * 0.36, 0.62 + 0.38 * y);
+        b.frond(fy - len * 0.045, ph + 0.05, fl * 1.04, fd * 1.3, len * 0.4, 0.5 + 0.3 * y, 2);
       }
     }
     b.tier(0, 0.955, 0, 0.022, 1.2, 5, 0.3, 1, 2.0);
@@ -94,7 +96,7 @@ function pine(lod) {
     b.tier(0, 0.95, 0, 0.055, 0.3, 6, 0.2, 1, 0.9);
   } else {
     b.tube([[0, 0, 0, 0.021], [0, 0.9, 0, 0.005]], 4, 0, 0.7, 1);
-    for (let i = 0; i < 5; i++) { const f = i / 4, y = 0.56 + 0.36 * f, ph = i * 2.4, ro = 0.085 * (1 - f * 0.85); b.tier(Math.cos(ph) * ro, y, Math.sin(ph) * ro, 0.125 * (1.1 - 0.4 * f), 0.3, 5, i, 0.75 + 0.25 * f, 0.6); }
+    for (let i = 0; i < 6; i++) { const f = i / 5, y = 0.44 + 0.48 * f, ph = i * 2.4, ro = 0.085 * (1 - f * 0.85); b.tier(Math.cos(ph) * ro, y, Math.sin(ph) * ro, 0.125 * (1.1 - 0.4 * f), 0.3, 5, i, 0.75 + 0.25 * f, 0.6); }
   }
   return b;
 }

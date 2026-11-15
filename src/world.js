@@ -331,7 +331,7 @@ export async function genWorld(tick, Q) {
           else {
             const bf = fbm(x * 0.008 + 90, z * 0.008 - 20, 2), pf = fbm(x * 0.005 - 30, z * 0.005 + 70, 2);
             let pb = 0.05 + smooth(0.12, 0.3, bf) * 0.8 + (1 - smooth(1.05, 1.3, ls)) * 0.5 + (1 - smooth(0.25, 0.6, af)) * 0.6 + bog * 0.5;
-            const pp = 0.04 + smooth(0.14, 0.3, pf) * 0.32 + bog * 0.4;
+            const pp = 0.03 + smooth(0.24, 0.36, pf) * 0.1 + bog * 0.4;
             if (r3 < pb) { sp = 2; ht = (6 + 9 * r2) * (0.3 + 0.7 * smooth(0.1, 0.7, af)); wd = 0.9 + 0.3 * r1 + (1 - af) * 0.5; }
             else if (r3 < pb + pp) { sp = 1; ht = (11 + 10 * r2) * (0.35 + 0.65 * smooth(0.2, 0.8, af)); wd = 0.9 + 0.3 * r1; }
             else { sp = 0; ht = (7 + 17 * r2 * Math.sqrt(r2)) * (0.22 + 0.78 * smooth(0.1, 0.85, af)); wd = 0.85 + 0.35 * r1 + (1 - af) * 0.4; }

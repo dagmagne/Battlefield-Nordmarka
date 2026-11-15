@@ -26,7 +26,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   }
   else if (m == 2u) { alb = vec3f(0.93, 0.95, 0.98); }
   else if (m == 3u) { alb *= 0.7 + 0.5 * fbm3(wp.xz * 1.3 + wp.y * 2.1); snowy = 1.0; }
-  else if (m == 4u) { spec = 0.5; gloss = 300.0; refl = 1.0; emis = vec3f(1.0, 0.7, 0.4) * 0.003 * night * isG; }
+  else if (m == 4u) { spec = 0.05; gloss = 300.0; refl = 1.0; emis = vec3f(1.0, 0.7, 0.4) * 0.003 * night * isG; }
   else if (m == 5u) { spec = 0.2; gloss = 40.0; snowy = 1.0 - isG; }
   else if (m == 6u) { emis = in.col * (0.03 + night) * 16.0; alb = vec3f(0.8); }
   else if (m == 7u) {
@@ -64,7 +64,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let L = G.sunDir.xyz;
   let ndl = saturate(dot(n, L));
   if (isG < 0.5) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }
-  let sh = shadowSunS(wp, n, dist, 2) * terrainShadow(wp.xz, hAbove);
+  let sh = shadowSunS(wp, n, dist, 3) * terrainShadow(wp.xz, hAbove);
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.0) + lampLight(wp.xz, hAbove) * (0.5 + 0.5 * saturate(n.y + 0.6));
   var col = alb * (sun * ndl + ambient(n) * (0.55 + 0.45 * saturate(hAbove * 0.5)) + ll) + emis;
