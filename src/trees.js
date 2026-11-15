@@ -33,14 +33,14 @@ class TB {
     for (let i = 0; i < seg; i++) { const q = base + i * 3; this.i.push(q, q + 1, q + 3, q + 1, q + 4, q + 3, q + 1, q + 2, q + 4, q + 2, q + 5, q + 4); }
   }
   // star-shaped cone skirt (one whorl of branches)
-  tier(cx, y, cz, len, droop, lobes, rot, aoB, rise = 0.5) {
-    const A = (u, v, ny = 1) => this.vert(cx, y + len * rise, cz, 0, ny, 0, u, v, 1, aoB * 0.45);
+  tier(cx, y, cz, len, droop, lobes, rot, aoB, rise = 0.5, uo = 4) {
+    const A = (u, v, ny = 1) => this.vert(cx, y + len * rise, cz, 0, ny, 0, u + uo, v, 1, aoB * 0.45);
     for (let j = 0; j < lobes; j++) {
       const a0 = rot + (j - 0.5) / lobes * Math.PI * 2, a1 = rot + j / lobes * Math.PI * 2, a2 = rot + (j + 0.5) / lobes * Math.PI * 2;
       const rn = len * 0.5, yt = y - len * droop, yn = y - len * droop * 0.25;
-      const ap = A(0, 0), n0 = this.vert(cx + Math.cos(a0) * rn, yn, cz + Math.sin(a0) * rn, Math.cos(a0) * 0.6, 0.7, Math.sin(a0) * 0.6, 0.6, -1, 1, aoB * 0.7);
-      const tp = this.vert(cx + Math.cos(a1) * len, yt, cz + Math.sin(a1) * len, Math.cos(a1) * 0.75, 0.6, Math.sin(a1) * 0.75, 1, 0, 1, aoB);
-      const n1 = this.vert(cx + Math.cos(a2) * rn, yn, cz + Math.sin(a2) * rn, Math.cos(a2) * 0.6, 0.7, Math.sin(a2) * 0.6, 0.6, 1, 1, aoB * 0.7);
+      const ap = A(0, 0), n0 = this.vert(cx + Math.cos(a0) * rn, yn, cz + Math.sin(a0) * rn, Math.cos(a0) * 0.6, 0.7, Math.sin(a0) * 0.6, 0.6 + uo, -1, 1, aoB * 0.7);
+      const tp = this.vert(cx + Math.cos(a1) * len, yt, cz + Math.sin(a1) * len, Math.cos(a1) * 0.75, 0.6, Math.sin(a1) * 0.75, 1 + uo, 0, 1, aoB);
+      const n1 = this.vert(cx + Math.cos(a2) * rn, yn, cz + Math.sin(a2) * rn, Math.cos(a2) * 0.6, 0.7, Math.sin(a2) * 0.6, 0.6 + uo, 1, 1, aoB * 0.7);
       this.i.push(ap, n0, tp, ap, tp, n1);
     }
   }

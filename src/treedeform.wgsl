@@ -1,10 +1,12 @@
-struct TU { r: vec4f }; // min dist, max dist, generic flag
+struct TU { r: vec4f, s: vec4f }; // s: x = snow extent on tier LODs, y = cross-fade band // min dist, max dist, generic flag
 @group(1) @binding(0) var<uniform> TR: TU;
-struct TDef { wp: vec3f, n: vec3f, keep: f32, hy: f32 };
+struct TDef { wp: vec3f, n: vec3f, keep: f32, hy: f32, fade: vec2f };
 fn treeDeform(pos: vec3f, nrm: vec3f, kind: f32, i0: vec4f, i1: vec4f, cam: vec3f) -> TDef {
   var o: TDef;
   let d = distance(cam, i0.xyz) * (0.85 + 0.3 * fract(i1.z * 7.31));
-  o.keep = f32(d >= TR.r.x && d < TR.r.y);
+  let bd = TR.s.y; let a0 = TR.r.x * (1.0 - bd); let a1 = TR.r.x * (1.0 + bd) + 1e-3; let b0 = TR.r.y * (1.0 - bd); let b1 = TR.r.y * (1.0 + bd);
+  o.keep = f32(d >= a0 && d < b1);
+  o.fade = vec2f(smoothstep(a0, TR.r.x + 1e-3, d), 1.0 - smoothstep(TR.r.y, b1, d));
   var p = pos;
   if (TR.r.z > 0.5) {
     let sp = i1.y;

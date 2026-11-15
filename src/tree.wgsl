@@ -1,4 +1,4 @@
-struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) @interpolate(flat) ks: vec4f, @location(4) ao: f32, @location(5) hy: f32 };
+struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) @interpolate(flat) ks: vec4f, @location(4) ao: f32, @location(5) hy: f32, @location(6) fade: vec2f };
 @vertex fn vs(@location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) uk: vec4f, @location(3) i0: vec4f, @location(4) i1: vec4f) -> TV {
   var sc = 1.0;
   if (G.lod2.w > 0.0) {
@@ -8,7 +8,7 @@ struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   }
   let d = treeDeform(pos * sc, nrm, uk.z, i0, i1, G.camPos.xyz);
   var o: TV;
-  o.wp = d.wp; o.n = d.n; o.uv = uk.xy; o.ks = vec4f(uk.z, i1.y, fract(i1.z), i0.w); o.ao = uk.w; o.hy = d.hy;
+  o.wp = d.wp; o.n = d.n; o.uv = uk.xy; o.ks = vec4f(uk.z, i1.y, fract(i1.z), i0.w); o.ao = uk.w; o.hy = d.hy; o.fade = d.fade;
   o.pos = mix(vec4f(0.0, 0.0, -1.0, 1.0), G.viewProj * vec4f(d.wp, 1.0), d.keep);
   return o;
 }
@@ -28,7 +28,8 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       alpha = (1.0 - smoothstep(0.2, 0.3, e + 0.25 * tri(uv.x * 5.0 + seed * 9.0))) * step(0.12, uv.x);
       alb = mix(vec3f(0.2, 0.15, 0.16), vec3f(0.74, 0.74, 0.8), 0.5);
     } else {
-      var ux = uv.x; var skirt = false;
+      var ux = uv.x; var skirt = false; var tier = false;
+      if (ux > 3.5) { ux -= 4.0; tier = true; }
       if (ux > 1.5) { ux -= 2.0; skirt = true; }
       // needle fringe
       let fr = e + 0.26 * tri(ux * 9.0 + seed * 7.0) * smoothstep(0.25, 0.6, e) + 0.1 * tri(ux * 23.0 + seed * 3.0);
@@ -42,6 +43,10 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       // snow load on the top side, heavier along the branch axis
       let sw = 0.78 - 0.3 * ux + (vn(vec2f(ux * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
       snow = (1.0 - smoothstep(sw - 0.1, sw + 0.03, e)) * smoothstep(0.02, 0.12, ux);
+      if (tier) { // cone-skirt LODs: snow cap on the inner part, green needle rim like the near model's skirts
+        let m = max(e * 0.9, ux) + (vn(vec2f(ux * 5.0 + seed * 31.0, e * 3.0 + floor(in.hy * 0.7))) - 0.5) * 0.22;
+        snow = (1.0 - smoothstep(TR.s.x - 0.05, TR.s.x + 0.05, m)) * smoothstep(0.03, 0.14, ux);
+      }
       if (under) { snow = 0.0; g *= 1.5; }
       if (skirt) { snow = 0.0; g *= 1.3; }
       g = mix(g, vec3f(dot(g, vec3f(0.333))), 0.3);
@@ -85,7 +90,8 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
     if (sp > 0.5 && sp < 1.5) { alb = mix(alb, vec3f(0.2, 0.12, 0.075) * (0.6 + 0.6 * b), smoothstep(0.6, 0.85, uv.y) * (1.0 - TR.r.z * 0.8)); }
     snow = smoothstep(0.75, 0.9, vn(vec2f(uv.x * 3.0 + seed, wp.y * 0.8)) + n.x * 0.2) * 0.7;
   }
-  if (G.lod2.z < 0.5) { if (alpha < 0.5) { discard; } alpha = 1.0; }
+  alpha *= in.fade.x * in.fade.y;
+  if (G.lod2.z < 1.5) { if (alpha < 0.5) { discard; } alpha = 1.0; }
   if (alpha < 0.02) { discard; }
   snow *= 0.66 + 0.34 * fract(seed * 5.3);
   alb = mix(alb, vec3f(0.93, 0.95, 0.99), snow);
@@ -97,10 +103,11 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   // distant trees: approximate neighbour shadowing by height in the canopy
   sh *= mix(1.0, saturate(0.25 + in.hy / max(in.ks.w, 1.0) * 1.2), smoothstep(G.casc.z * 0.6, G.casc.z, dist) * (1.0 - G.misc.w) * 1.4);
   if (kind < 0.5 && sp < 0.5) { sh *= 0.12 + 0.88 * smoothstep(0.16, 0.06, in.hy / max(in.ks.w, 1.0)); }
+  sh *= TR.s.z; // far LODs: stand-in for the self-shadowing their simple shapes lack
   let sun = G.sunCol.rgb * sh;
   let dif = saturate((ndl + 0.35) / 1.35);
   let ll = localLights(wp, n, 0.4) + lampLight(wp.xz, in.hy);
-  var amb = ambient(n) * ao;
+  var amb = ambient(n) * ao * mix(TR.s.z, 1.0, 0.4);
   if (under) { amb = (ambient(n) * 0.5 + ambient(vec3f(0.0, 1.0, 0.0)) * 0.3) * ao; }
   var col = alb * (sun * dif + amb + ll);
   col += alb * sun * trans * pow(saturate(dot(v, -L)), 2.0) * 1.6;

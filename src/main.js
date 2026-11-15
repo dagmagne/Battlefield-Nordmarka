@@ -202,8 +202,9 @@ async function main() {
   });
   const treeShMod = mod(shadowW + treeDefW + shTreeW, 'treeshadow');
   const treeShPipe = device.createRenderPipeline({ layout: layS, vertex: { module: treeShMod, entryPoint: 'vs', buffers: treeBufs }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
-  const LOD = [42 * Q.lodMul, 200 * Q.lodMul, 850 * Q.lodMul];
-  const lodBG = [[0, LOD[0], 0], [LOD[0], LOD[1], 0], [LOD[1], LOD[2], 1], [LOD[2], 1e9, 1]].map((r) => device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: mkBuf(new Float32Array([r[0], r[1], r[2], 1]), U.UNIFORM) } }] }));
+  const LK = Q.lodMul * (+qs.get("lod") || 1), LOD = [37 * LK, 180 * LK, 850 * LK];
+  const BAND = 0.07, SNOWX = (qs.get('sx') || '1,0.74,0.56,0.4,1,1,0.85,0.52').split(',').map(Number);
+  const lodBG = [[0, LOD[0], 0], [LOD[0], LOD[1], 0], [LOD[1], LOD[2], 1], [LOD[2], 1e9, 1]].map((r, i) => device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: mkBuf(new Float32Array([r[0], r[1], r[2], 1, SNOWX[i], BAND, SNOWX[i + 4], 0]), U.UNIFORM) } }] }));
   const camPlanes = new Float32Array(20);
   function planesFrom(out, m, n) {
     for (let i = 0; i < 4; i++) { const a = i >> 1, sg = i & 1 ? -1 : 1; for (let k = 0; k < 4; k++) out[i * 4 + k] = m[k * 4 + 3] + sg * m[k * 4 + a]; }
@@ -217,11 +218,11 @@ async function main() {
   let draws = 0;
   function drawTrees(p, pl, np, maxLod) {
     p.setVertexBuffer(0, treeVB); p.setVertexBuffer(1, treeInst); p.setIndexBuffer(treeIB, 'uint32');
-    const ccx = Math.floor((cam.x + HALF) / NEAR), ccz = Math.floor((cam.z + HALF) / NEAR), rad = Math.ceil(LOD[1] / 0.85 / NEAR) + 1;
+    const ccx = Math.floor((cam.x + HALF) / NEAR), ccz = Math.floor((cam.z + HALF) / NEAR), rad = Math.ceil(LOD[1] / 0.85 * (1 + BAND) / NEAR) + 1;
     const i0 = Math.max(0, ccx - rad), i1 = Math.min(NCN - 1, ccx + rad), j0 = Math.max(0, ccz - rad), j1 = Math.min(NCN - 1, ccz + rad);
     for (let l = 0; l < 2; l++) {
       p.setBindGroup(1, lodBG[l]);
-      const lo = l ? LOD[0] / 1.15 : -1, hi = LOD[l] / 0.85;
+      const lo = l ? LOD[0] / 1.15 * (1 - BAND) : -1, hi = LOD[l] / 0.85 * (1 + BAND);
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
         const nc = j * NCN + i, y0 = TT.nearY[nc * 2], y1 = TT.nearY[nc * 2 + 1]; if (y1 < y0) continue;
         const x0 = i * NEAR - HALF, z0 = j * NEAR - HALF, dh = Math.hypot(x0 + 16 - cam.x, z0 + 16 - cam.z);
@@ -235,7 +236,7 @@ async function main() {
     }
     for (let l = 2; l < maxLod; l++) {
       p.setBindGroup(1, lodBG[l]);
-      const lo = LOD[l - 1] / 1.15, hi = l === 2 ? LOD[2] / 0.85 : 1e9, P = TP[4 + l];
+      const lo = LOD[l - 1] / 1.15 * (1 - BAND), hi = l === 2 ? LOD[2] / 0.85 * (1 + BAND) : 1e9, P = TP[4 + l];
       for (let fc = 0; fc < FCN * FCN; fc++) {
         const c = TT.farCnt[fc]; if (!c) continue;
         const x0 = (fc % FCN) * FAR - HALF, z0 = ((fc / FCN) | 0) * FAR - HALF, y0 = TT.farY[fc * 2], y1 = TT.farY[fc * 2 + 1];
@@ -465,7 +466,7 @@ async function main() {
   if (qs.has('debug')) api.debug(1);
   GU[O.world] = HALF; GU[O.world + 1] = 1 / WS; GU[O.world + 2] = 1024; GU[O.world + 3] = 1 / 2048;
   GU[O.screen + 2] = TEXM; GU[O.screen + 3] = Q.mask;
-  GU[O.casc + 3] = 1 / Q.shadow; GU[O.lod2 + 2] = Q.msaa > 1 ? 1 : 0;
+  GU[O.casc + 3] = 1 / Q.shadow; GU[O.lod2 + 2] = Q.msaa;
   const auto = qs.has('auto') ? { i: 14 } : null;
   if (auto) { const t = W.trails[0]; veh.x = t.pts[auto.i * 2]; veh.z = t.pts[auto.i * 2 + 1]; veh.y = W.heightAt(veh.x, veh.z); }
   R.auto = auto;
