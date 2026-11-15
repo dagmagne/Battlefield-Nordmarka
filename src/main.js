@@ -246,6 +246,8 @@ async function main() {
       }
     }
   }
+  // far cascades are refreshed on alternating frames (static world; halves shadow cost)
+  const skipCasc = (c) => c > 0 && R.frame > 6 && !R.manual && ((R.frame + c) & 1) === 1;
   const lview = new Float32Array(16), lproj = new Float32Array(16), lvp = new Float32Array(16);
   function updateCascades(aspect, fovy) {
     const Lx = GU[O.sunDir], Ly = GU[O.sunDir + 1], Lz = GU[O.sunDir + 2];
@@ -254,6 +256,7 @@ async function main() {
     const fx = -view[2], fy = -view[6], fz = -view[10], th = Math.tan(fovy / 2), k2 = 1 + th * th * (1 + aspect * aspect);
     let n = 0.25;
     for (let c = 0; c < NC; c++) {
+      if (skipCasc(c)) { n = SPLITS[c] * 0.88; continue; }
       const f = SPLITS[c], d = Math.min(f, (n + f) / 2 * k2), r = Math.sqrt((f - d) * (f - d) + f * f * (k2 - 1)) * 1.02, D = 520;
       const cx = cam.x + fx * d, cy = cam.y + fy * d, cz = cam.z + fz * d, tex = 2 * r / Q.shadow;
       const sx = Math.round((cx * rx + cz * rz) / tex) * tex, sy = Math.round((cx * ux + cy * uy + cz * uz) / tex) * tex, sz = cx * Lx + cy * Ly + cz * Lz;
@@ -603,6 +606,7 @@ async function main() {
     }
     if (stN) { const sp = enc.beginRenderPass(stampPass); sp.setPipeline(stampPipe); sp.setVertexBuffer(0, stBuf); sp.draw(6, stN); sp.end(); }
     for (let c = 0; c < NC; c++) {
+      if (skipCasc(c)) continue;
       const sp = enc.beginRenderPass(shPass[c]);
       sp.setBindGroup(0, shBG[c]);
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
