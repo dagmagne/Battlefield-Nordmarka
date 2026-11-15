@@ -115,20 +115,32 @@ deg = {}
 for s in segs:
     for e in (s['n'][0], s['n'][-1]): deg[e] = deg.get(e, 0) + 1
     for m in s['n'][1:-1]: deg[m] = deg.get(m, 0) + 2
-merged = True
-while merged:
-    merged = False
-    for i, a in enumerate(segs):
-        for j, b in enumerate(segs):
-            if i == j or a['lit'] != b['lit']: continue
-            for ea in (0, -1):
-                for eb in (0, -1):
-                    if a['n'][ea] == b['n'][eb] and deg[a['n'][ea]] == 2 and a['n'][0 if ea else -1] != b['n'][0 if eb else -1]:
-                        an = a['n'] if ea == -1 else a['n'][::-1]; bn = b['n'] if eb == 0 else b['n'][::-1]
-                        a['n'] = an + bn[1:]; a['name'] = a['name'] or b['name']; segs.pop(j); merged = True; break
-                if merged: break
-            if merged: break
-        if merged: break
+def P(n): return nodes[n]
+def merge_pass(max_turn):
+    """join chain ends meeting at a node; at junctions pick the straightest pair below max_turn (radians)"""
+    while True:
+        ends = {}
+        for i, s in enumerate(segs):
+            if s['n'][0] == s['n'][-1]: continue
+            for e in (0, -1): ends.setdefault(s['n'][e], []).append((i, e))
+        best = None
+        for nd, lst in ends.items():
+            for a in range(len(lst)):
+                for b in range(a + 1, len(lst)):
+                    (i, ea), (j, eb) = lst[a], lst[b]
+                    if i == j or segs[i]['lit'] != segs[j]['lit']: continue
+                    pa = P(segs[i]['n'][1 if ea == 0 else -2]); pb = P(segs[j]['n'][1 if eb == 0 else -2]); c = P(nd)
+                    v1 = (c[0] - pa[0], c[1] - pa[1]); v2 = (pb[0] - c[0], pb[1] - c[1])
+                    l = math.hypot(*v1) * math.hypot(*v2)
+                    if l < 1e-6: continue
+                    turn = math.acos(max(-1, min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / l)))
+                    if len(lst) == 2: turn *= 0.3                      # plain continuation: almost always join
+                    if turn < max_turn and (best is None or turn < best[0]): best = (turn, i, ea, j, eb)
+        if not best: return
+        _, i, ea, j, eb = best
+        an = segs[i]['n'] if ea == -1 else segs[i]['n'][::-1]; bn = segs[j]['n'] if eb == 0 else segs[j]['n'][::-1]
+        segs[i]['n'] = an + bn[1:]; segs[i]['name'] = segs[i]['name'] or segs[j]['name']; segs.pop(j)
+merge_pass(0.7)
 def plen(p): return sum(math.dist(p[i], p[i + 1]) for i in range(len(p) - 1))
 trails = []
 for s in segs:

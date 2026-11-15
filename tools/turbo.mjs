@@ -12,7 +12,7 @@ page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) c
 await page.goto('http://localhost:8080/index.html?nohint&drs=0&tod=2&turbo');
 await page.waitForFunction('window.__ready===true', null, { timeout: 90000 });
 const ks = await page.evaluate('JSON.stringify(__W.kickers)'); console.log('kickers', ks);
-await page.evaluate(`(()=>{const k=__W.kickers.slice().sort((a,b)=>a.x-b.x)[0]; __tp(k.x-90,k.z,-Math.PI/2); __chase(0.5,0.15,14); __R.force=[1,0]; __inp.fast=true; const p=__ui.poll; __ui.poll=(f)=>{p(f); __inp.fast=true;};})()`);
+await page.evaluate(`(()=>{const k=__W.kickers[0]; __tp(k.x+Math.sin(k.yaw)*90,k.z+Math.cos(k.yaw)*90,k.yaw); __chase(0.5,0.15,14); __R.force=[1,0]; __inp.fast=true; const p=__ui.poll; __ui.poll=(f)=>{p(f); __inp.fast=true;};})()`);
 const step = (n, dt = 1 / 60) => page.evaluate(([n, dt]) => window.__step(dt, n), [n, dt]);
 const st = () => page.evaluate('[__veh.x.toFixed(1), __veh.y.toFixed(2), (__veh.v*3.6).toFixed(0), __veh.air, __veh.airT.toFixed(2), __veh.pitch.toFixed(2)].join(" ")');
 const shot = async (name) => { await page.waitForTimeout(40); await page.screenshot({ path: `${out}/${name}.png` }); };

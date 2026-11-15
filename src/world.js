@@ -95,27 +95,27 @@ export async function genWorld(tick, Q) {
   W.lakeAt = (x, z) => waterM[clamp(Math.round(w2t(z)), 0, HN - 1) * HN + clamp(Math.round(w2t(x)), 0, HN - 1)] / 255;
   const dens = (x, z) => treeM[clamp(((z + HALF) / WS * TN) | 0, 0, TN - 1) * TN + clamp(((x + HALF) / WS * TN) | 0, 0, TN - 1)] / 255;
 
-  const flatten = (cx, cz, r0, r1, y) => {
+  const flatten = (cx, cz, r0, r1, y, k_ = 1) => {
     const i0 = Math.max(0, Math.floor(w2t(cx - r1))), i1 = Math.min(HN - 1, Math.ceil(w2t(cx + r1))), j0 = Math.max(0, Math.floor(w2t(cz - r1))), j1 = Math.min(HN - 1, Math.ceil(w2t(cz + r1)));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const d = Math.hypot((i + 0.5) * TEX - HALF - cx, (j + 0.5) * TEX - HALF - cz), k = j * HN + i;
-      if (mat[k * 4] < 128) H[k] = lerp(y, H[k], smooth(r0, r1, d));
+      if (mat[k * 4] < 128) H[k] = lerp(H[k], y, k_ * (1 - smooth(r0, r1, d)));
     }
   };
   // ---- Frognerseteren (the lit timber lodge) ----
   const cabin = { x: LM.frogner.x, z: LM.frogner.z, yaw: LM.frogner.yaw, col: [0.13, 0.085, 0.05] };
   cabin.y = heightAt(cabin.x, cabin.z) + 0.3;
-  flatten(cabin.x, cabin.z, 22, 40, cabin.y);
+  flatten(cabin.x, cabin.z, 30, 55, cabin.y);
 
   // ---- buildings: rotated rectangles on levelled pads ----
   const buildings = [];
   { const b = blob('bld'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
     for (let i = 0; i < meta.nb; i++) {
       const o = i * 12, B = { x: dv.getInt16(o, true) / 8, z: dv.getInt16(o + 2, true) / 8, w: dv.getUint16(o + 4, true) / 8, d: dv.getUint16(o + 6, true) / 8, yaw: dv.getInt16(o + 8, true) / 1e4, kind: b[o + 10], lv: b[o + 11] / 10 };
-      if (Math.hypot(B.x - cabin.x, B.z - cabin.z) < 45 || Math.hypot(B.x - LM.chapel.x, B.z - LM.chapel.z) < 22 || W.lakeAt(B.x, B.z) > 0.3) continue;
+      if (Math.hypot(B.x - cabin.x, B.z - cabin.z) < 50 || Math.hypot(B.x - LM.chapel.x, B.z - LM.chapel.z) < 22 || W.lakeAt(B.x, B.z) > 0.3) continue;
       if (B.w * B.d > 2600) continue; // arena stands, hotel complexes: not box-shaped
       B.y = heightAt(B.x, B.z); const r = Math.hypot(B.w, B.d) / 2;
-      flatten(B.x, B.z, r * 0.75, r * 0.75 + 11, B.y); buildings.push(B);
+      flatten(B.x, B.z, r * 0.7, r * 0.7 + 12, B.y, 0.75); buildings.push(B);
     } }
   await tick('Laying trails', 0.5);
 
@@ -142,9 +142,6 @@ export async function genWorld(tick, Q) {
       const f = new Float32Array(pts.length * 2); pts.forEach((p, i) => { f[i * 2] = p[0]; f[i * 2 + 1] = p[1]; });
       trails.push({ name, lit: !!lit, pts: f, n: pts.length });
     } }
-  { // the drive / start trail: the lit trail passing closest to Frognerseteren
-    let bi = 0, bd = 1e9; trails.forEach((t, i) => { if (!t.lit || t.n < 200) return; for (let q = 0; q < t.n; q += 4) { const d = Math.hypot(t.pts[q * 2] - cabin.x, t.pts[q * 2 + 1] - cabin.z); if (d < bd) { bd = d; bi = i; } } });
-    const t = trails.splice(bi, 1)[0]; trails.unshift(t); }
   await tick('Carving trails', 0.58);
 
   // ---- carve trails into the heightmap ----
@@ -233,10 +230,10 @@ export async function genWorld(tick, Q) {
           if (dn < 0.04 || mat[ti * 4] > 8 || tD[ti] < 6.2) continue;
           const y = heightAt(x, z), slope = Math.hypot(H[ti + 1] - H[ti - 1], H[ti + HN] - H[ti - HN]) / (2 * TEX);
           if (slope > 1.1) continue;
-          if (Math.hypot(x - cabin.x, z - cabin.z) < 30) continue;
+          { const dx = x - cabin.x, dz = z - cabin.z, fr = Math.cos(cabin.yaw) * dz + Math.sin(cabin.yaw) * dx; if (Math.hypot(dx, dz) < (fr > 0 ? 75 : 34)) continue; } // open view in front of the lodge
           const bog = mat[ti * 4 + 2] / 255, r1 = hash2(hx, hz + 104729), r2 = hash2(hx + 31337, hz + 17), r3 = hash2(hx - 999, hz + 5);
           const fo = 0.6 + 0.9 * fbm(x * 0.006 + 40, z * 0.006, 2);
-          let p = (0.35 + 0.65 * smooth(0.18, 0.5, fo)) * dn * (inner ? 0.86 : 0.95) * smooth(6.2, 9, tD[ti]);
+          let p = (0.35 + 0.65 * smooth(0.18, 0.5, fo)) * dn * (inner ? 0.5 : 0.62) * smooth(6.2, 9, tD[ti]);
           let sp = 0, ht = 0, wd = 1;
           if (bog > 0.5) { p = 0.05; sp = 1; ht = 1.6 + 2.6 * r2; wd = 1.5; }
           else {

@@ -164,7 +164,7 @@ function house(b, B, i, W) {
   const flat = k === 3 && (B.w > 34 || r > 0.6), rise = flat ? 0 : Math.min(hd * (k === 1 ? 0.6 : 0.8), 4.8);
   const col = k === 1 ? HCOL[3] : k === 3 ? HCOL[r < 0.5 ? 0 : 5] : HCOL[(r * 9) | 0];
   b.at(B.x, B.y, B.z, -B.yaw);
-  b.set(col, MAT.paint); b.box(-hw, -2.5, -hd, hw, wall, hd);
+  b.set(col, MAT.paint); b.box(-hw, -5, -hd, hw, wall, hd);
   if (flat) { b.set(SNOWC, MAT.snow); b.box(-hw - 0.2, wall, -hd - 0.2, hw + 0.2, wall + 0.4, hd + 0.2); }
   else {
     for (const s of [-1, 1]) { const a = b.vert(s * hw, wall, s * hd, s, 0, 0), d = b.vert(s * hw, wall, -s * hd, s, 0, 0), e = b.vert(s * hw, wall + rise, 0, s, 0, 0); b.tri(a, d, e); }
@@ -181,6 +181,42 @@ function house(b, B, i, W) {
   }
   const n = Math.max(1, Math.round(B.w / B.d)), c = Math.cos(B.yaw), sn = Math.sin(B.yaw);
   for (let q = 0; q < n; q++) { const t = ((q + 0.5) / n - 0.5) * B.w; W.colliders.push(B.x + c * t, B.z + sn * t, Math.max(0.5, hd * 0.95 - 0.9)); }
+}
+// Frognerseteren: dark dragon-style timber lodge — long hall, steep snow roofs, cross wing, veranda.
+function lodge(b, c, W) {
+  const TIM = [0.115, 0.075, 0.045], TRIM = [0.2, 0.13, 0.07], cs = Math.cos(c.yaw), sn = Math.sin(c.yaw);
+  const wpos = (lx, lz) => [c.x + cs * lx + sn * lz, c.z - sn * lx + cs * lz];
+  const wing = (lx, lz, yaw, hw, hd, y0, wall, rise, wins) => {
+    const p = wpos(lx, lz); b.at(p[0], c.y, p[1], c.yaw + yaw);
+    b.set(TIM, MAT.paint); b.box(-hw, y0, -hd, hw, wall, hd);
+    for (const s of [-1, 1]) { const a = b.vert(s * hw, wall, s * hd, s, 0, 0), d = b.vert(s * hw, wall, -s * hd, s, 0, 0), e = b.vert(s * hw, wall + rise, 0, s, 0, 0); b.tri(a, d, e); }
+    b.set(TRIM, MAT.paint); b.box(-hw - 0.9, wall - 0.25, -hd - 0.9, hw + 0.9, wall, hd + 0.9);
+    b.set(SNOWC, MAT.snow); gable(b, hw + 0.5, hd + 0.3, wall + 0.25, rise, 0.9);
+    b.set(TIM, MAT.paint); for (const s of [-1, 1]) b.cyl(s * (hw + 1.2), wall + rise + 0.2, 0, s * (hw + 2.6), wall + rise + 2.0, 0, 0.2, 0.03, 4); // dragon heads
+    b.set([1, 0.74, 0.4], MAT.window);
+    for (let f = 0; f < 2; f++) for (let q = 0; q < wins; q++) for (const s of [-1, 1]) {
+      const x = ((q + 0.5) / wins - 0.5) * 2 * (hw - 1), y = 1.9 + f * 2.9, z = s * (hd + 0.04);
+      b.quad([x - s * 0.6, y, z], [x + s * 0.6, y, z], [x + s * 0.6, y + 1.5, z], [x - s * 0.6, y + 1.5, z]);
+    }
+    for (const s of [-1, 1]) b.quad([s * (hw + 0.04), 2, s * 1.2], [s * (hw + 0.04), 2, -s * 1.2], [s * (hw + 0.04), 3.6, -s * 1.2], [s * (hw + 0.04), 3.6, s * 1.2]);
+  };
+  b.at(c.x, c.y, c.z, c.yaw);
+  b.set(STONE, MAT.stone); b.box(-17, -4, -7, 17, 0.7, 7); b.box(-6.5, -4, 6, 6.5, 0.7, 14.5);
+  wing(0, 0, 0, 16, 6, 0.7, 7.0, 5.6, 9);
+  wing(0, 9.5, Math.PI / 2, 8, 5.2, 0.7, 7.0, 5.0, 3);
+  wing(-11.5, -8, Math.PI / 2, 4.5, 3.6, 0.7, 4.6, 3.4, 2);
+  b.at(c.x, c.y, c.z, c.yaw);
+  b.set(WOOD, MAT.wood); b.box(6.5, 0.2, 6, 16.5, 0.75, 10.5); b.box(-16.5, 0.2, 6, -6.5, 0.75, 10.5);
+  for (let q = 0; q <= 5; q++) for (const s of [-1, 1]) b.box(s * (6.5 + q * 2) - 0.08, 0.75, 10.3, s * (6.5 + q * 2) + 0.08, 1.75, 10.46);
+  for (const s of [-1, 1]) b.box(s * 11.5 - 5, 1.7, 10.3, s * 11.5 + 5, 1.82, 10.46);
+  b.set(SNOWC, MAT.snow); for (const s of [-1, 1]) b.box(s * 11.5 - 5, 0.75, 6.2, s * 11.5 + 5, 0.95, 10.3);
+  b.set(STONE, MAT.stone); b.box(9.2, 9, -1.6, 10.8, 14.6, 0); b.box(-10.8, 9, 0, -9.4, 14.2, 1.4);
+  b.set(SNOWC, MAT.snow); b.box(9.1, 14.6, -1.7, 10.9, 14.8, 0.1); b.box(-10.9, 14.2, -0.1, -9.3, 14.4, 1.5);
+  const ch = wpos(10, -0.8); c.chimney = [ch[0], c.y + 14.8, ch[1]];
+  b.set(WHITE, MAT.paint); b.cyl(21, -0.5, 13, 21, 11.5, 13, 0.08, 0.04, 8);
+  b.set(WHITE, MAT.flag); b.quad([21.05, 9.6, 13], [23, 9.3, 13.5], [23, 10.7, 13.5], [21.05, 11, 13], [0, 1, 1, 1, 1, 0, 0, 0]);
+  b.quad([23, 9.3, 13.5], [21.05, 9.6, 13], [21.05, 11, 13], [23, 10.7, 13.5], [1, 1, 0, 1, 0, 0, 1, 0]);
+  for (const [lx, lz, r] of [[-11, 0, 5.2], [-3.7, 0, 5.2], [3.7, 0, 5.2], [11, 0, 5.2], [0, 9.5, 5], [-11.5, -8, 3]]) { const q = wpos(lx, lz); W.colliders.push(q[0], q[1], r); }
 }
 // Ski jump: cantilevered inrun from the tower top down to the take-off; the landing hill is real terrain.
 function skiJump(b, W, J, wd) {
@@ -235,7 +271,7 @@ function chapel(b, W, C) {
 export function buildProps(W) {
   const b = new MB();
   W.colliders = [];
-  cabin(b, W.cabin, W);
+  lodge(b, W.cabin, W);
   W.buildings.forEach((B, i) => house(b, B, i, W));
   skiJump(b, W, W.lm.jump, 6.5); skiJump(b, W, W.lm.mid, 4.5); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel);
   for (let i = 0; i < W.pylons.length; i++) { pylon(b, W.pylons[i]); if (i) wires(b, W.pylons[i - 1], W.pylons[i]); W.colliders.push(W.pylons[i].x + Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z - Math.sin(W.pylons[i].yaw) * 2.6, 0.5, W.pylons[i].x - Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z + Math.sin(W.pylons[i].yaw) * 2.6, 0.5); }
