@@ -38,14 +38,15 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       g *= 0.75 + 0.5 * seed;
       // needle rows: fine herringbone streaks along the branch
       let nd = tri(ux * 26.0 + e * 5.0 + seed * 3.0);
-      g *= (0.65 + 0.55 * vn(vec2f(ux * 14.0 + seed * 40.0, uv.y * 5.0))) * (0.72 + 0.5 * nd * (1.0 - saturate(duv.x * 40.0)));
+      g *= (0.65 + 0.55 * vn(vec2f(ux * 14.0 + seed * 40.0, uv.y * 5.0))) * (0.86 + 0.24 * nd * (1.0 - saturate(duv.x * 110.0)));
       // snow load on the top side, heavier along the branch axis
       let sw = 0.78 - 0.3 * ux + (vn(vec2f(ux * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
       snow = (1.0 - smoothstep(sw - 0.1, sw + 0.03, e)) * smoothstep(0.02, 0.12, ux);
       if (under) { snow = 0.0; g *= 1.5; }
-      if (skirt) { snow = 0.0; g *= 1.9; }
+      if (skirt) { snow = 0.0; g *= 1.3; }
+      g = mix(g, vec3f(dot(g, vec3f(0.333))), 0.3);
       snow *= 0.82 + 0.18 * vn(vec2f(ux * 9.0 + seed * 5.0, uv.y * 3.0 + in.hy));
-      alb = g; trans = 1.0;
+      alb = g; trans = 0.45;
     }
   } else if (kind > 1.5 && kind < 2.5) { // birch twig spray: main twigs from the apex with alternating side shoots
     let y = uv.y; let px = max(duv.x, duv.y);

@@ -19,7 +19,7 @@ fn pressOf(m: vec4f) -> f32 { return max(smoothstep(0.1, 0.34, m.r), m.b * 0.85)
 fn bermOf(m: vec4f) -> f32 { return smoothstep(0.02, 0.1, m.r) * (1.0 - smoothstep(0.1, 0.28, m.r)); }
 fn icePatch(p: vec2f) -> f32 {
   let q = vec2f(p.x * 0.6 + p.y * 0.8, p.y * 0.6 - p.x * 0.8) * vec2f(0.016, 0.03);
-  return smoothstep(0.6, 0.66, fbm3(q) + 0.1 * vn(p * 0.21));
+  return smoothstep(0.6, 0.64, fbm3(q) + 0.1 * vn(p * 0.21) + 0.035 * vn(p * 1.1) + 0.02 * vn(p * 3.7));
 }
 // soft-snow displacement above the packed base: x = height, yz = gradient
 fn snowDetail(p: vec2f, dist: f32, mt: vec4f) -> vec3f {
@@ -222,12 +222,12 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   if (wet > 0.003) {
     let ni = normalize(vec3f((vn(p * 0.8) - 0.5) * 0.03, 1.0, (vn(p * 0.8 + 40.0) - 0.5) * 0.03) + vec3f(S0.x, 0.0, S0.y) * (-0.3));
     let r = reflect(-v, ni);
-    let fr = 0.03 + 0.97 * pow(1.0 - saturate(dot(ni, v)), 5.0);
+    let fr = 0.05 + 0.95 * pow(1.0 - saturate(dot(ni, v)), 4.0);
     let cr = abs(vn(p * 0.35 + 11.0) - 0.5); let cr2 = abs(vn(p * 1.3 + 5.0) - 0.5);
-    let cw = 0.25 + 1.5 * vn(p * 0.11 + 2.0);
+    let cw = (0.25 + 1.5 * vn(p * 0.11 + 2.0)) * (1.0 + dist * 0.03);
     let crack = (1.0 - smoothstep(0.0, 0.012 * cw, cr)) * 0.7 * smoothstep(0.3, 0.6, vn(p * 0.05 + 8.0)) + (1.0 - smoothstep(0.0, 0.015 * cw, cr2)) * 0.2 * smoothstep(0.4, 0.7, vn(p * 0.09));
-    var ic = mix(vec3f(0.015, 0.07, 0.11), vec3f(0.05, 0.16, 0.2), vn(p * 0.06 + 3.0));
-    ic = mix(ic, vec3f(0.55, 0.7, 0.78), crack * (1.0 - smoothstep(40.0, 140.0, dist)) + 0.1 * vn(p * 9.0));
+    var ic = mix(vec3f(0.03, 0.13, 0.2), vec3f(0.09, 0.27, 0.34), vn(p * 0.06 + 3.0));
+    ic = mix(ic, vec3f(0.55, 0.7, 0.78), crack * (1.0 - smoothstep(80.0, 500.0, dist)) + 0.1 * vn(p * 9.0));
     ic = mix(ic, vec3f(0.006, 0.012, 0.018), water);
     var c2 = ic * (sun * saturate(dot(ni, L)) + ambient(ni) + ll) + skyBase(r) * fr * mix(0.8, 1.0, sh);
     c2 += sun * pow(saturate(dot(ni, Hh)), 400.0) * 6.0;

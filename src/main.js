@@ -365,7 +365,7 @@ async function main() {
     em.exh += dt * (5 + 26 * Math.abs(veh.throttle));
     while (em.exh >= 1) { em.exh--; loc(0.98, 3.1, -0.03); parts.emit(tmp3[0], tmp3[1], tmp3[2], (rnd() - 0.5) * 0.4 + fwdX * veh.v * 0.5, 1.8 + rnd() * 1.2, (rnd() - 0.5) * 0.4 + fwdZ * veh.v * 0.5, 1.1 + rnd() * 0.8, 0.1, 0.7, 1, 0.3, 0.31, 0.34, 0.16 + 0.14 * Math.abs(veh.throttle)); }
     em.smoke += dt * 11;
-    while (em.smoke >= 1) { em.smoke--; const ch = W.cabin.chimney; parts.emit(ch[0] + (rnd() - 0.5) * 0.3, ch[1], ch[2] + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3, 1.3 + rnd() * 0.6, (rnd() - 0.5) * 0.3, 8 + rnd() * 5, 0.38, 0.5, 1, 0.85, 0.85, 0.88, 0.6); }
+    while (em.smoke >= 1) { em.smoke--; const ch = W.cabin.chimney; parts.emit(ch[0] + (rnd() - 0.5) * 0.3, ch[1], ch[2] + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3, 1.3 + rnd() * 0.6, (rnd() - 0.5) * 0.3, 8 + rnd() * 5, 0.3 + rnd() * 0.25, 0.45, 1, 0.8, 0.8, 0.84, 0.42); }
   }
 
   // ---------- post ----------

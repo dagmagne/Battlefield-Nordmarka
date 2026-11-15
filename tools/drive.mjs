@@ -17,7 +17,7 @@ const shot = async (name) => { await page.waitForTimeout(60); await page.screens
 if (video) {
   await step(60);
   for (let i = 0; i < 300; i++) { if (i === 150) await page.evaluate('__tod(2)'); await step(2); await shot('v' + String(i).padStart(4, '0')); }
-  execSync(`ffmpeg -y -loglevel error -framerate 30 -i ${out}/v%04d.png -c:v libx264 -pix_fmt yuv420p -crf 18 ${out}/drive.mp4 && rm ${out}/v*.png`);
+  execSync(`ffmpeg -y -loglevel error -framerate 30 -i ${out}/v%04d.png -vf scale=1728:1116 -c:v libx264 -pix_fmt yuv420p -crf 18 ${out}/drive.mp4 && rm ${out}/v*.png`);
 } else {
   await step(240);
   for (let i = 0; i < 6; i++) { await step(1); await shot('consecutive-a' + i); }
