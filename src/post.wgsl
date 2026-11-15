@@ -1,4 +1,5 @@
-struct PU { a: vec4f, b: vec4f }; // a: xy = uv scale, zw = src texel ; b: x = exposure, y = bloom, z = time, w = mode
+struct PU { a: vec4f, b: vec4f, c: vec4f, d: vec4f }; // c: xy = gun marker (ndc), z = reload 0..1, w = hud mode (1 commander, 2 sight) ; d: x = hit marker, y = gun ready, z = sight blend, w = damage flash
+// // a: xy = uv scale, zw = src texel ; b: x = exposure, y = bloom, z = time, w = mode
 @group(0) @binding(0) var<uniform> U: PU;
 @group(0) @binding(1) var src: texture_2d<f32>;
 @group(0) @binding(2) var smp: sampler;
@@ -55,5 +56,37 @@ fn tonemap(x: vec3f) -> vec3f { // ACES fit (Narkowicz), slightly softened
   let n = fract(sin(dot(in.pos.xy + fract(U.b.z) * 61.0, vec2f(12.9898, 78.233))) * 43758.5453);
   let n2 = fract(sin(dot(in.pos.xy + 31.7, vec2f(39.346, 11.135))) * 24634.6345);
   c += (n + n2 - 1.0) / 255.0;
+  // ---- sight overlays (drawn here so the HUD never touches the DOM per frame) ----
+  let res = 1.0 / U.a.zw; let px = (in.uv - 0.5) * res; let s = res.y / 1100.0;
+  c = mix(c, vec3f(0.75, 0.04, 0.02), U.d.w * smoothstep(0.25, 0.75, length(q)) * 0.55);
+  if (U.c.w > 0.5) {
+    let ax = abs(px.x) / s; let ay = abs(px.y) / s; let sb = U.d.z;
+    // optics: round field stop and a faint green tint
+    let rr = length(px) / (res.y * 0.47);
+    c = mix(c, c * vec3f(0.86, 1.0, 0.88), sb * 0.5);
+    c *= 1.0 - sb * smoothstep(0.985, 1.0, rr);
+    var m = 0.0; var o = 0.0;
+    let gap = mix(7.0, 14.0, sb); let len = mix(20.0, 150.0, sb);
+    let lh = step(ay, 0.8) * step(gap, ax) * step(ax, len); let lv = step(ax, 0.8) * step(gap, ay) * step(ay, len);
+    m = max(lh, lv);
+    o = max(step(ay, 2.0) * step(gap - 1.2, ax) * step(ax, len + 1.2), step(ax, 2.0) * step(gap - 1.2, ay) * step(ay, len + 1.2));
+    m = max(m, step(length(px) / s, 1.3)); o = max(o, step(length(px) / s, 2.6));
+    // range stadia below the cross in the sight
+    let st = step(0.5, sb) * step(0.0, px.y) * step(abs(fract(ay / 24.0) - 0.5), 0.5) * step(abs(ay - round(ay / 24.0) * 24.0), 0.7) * step(ax, 10.0 + 4.0 * round(ay / 24.0)) * step(20.0, ay) * step(ay, 130.0);
+    m = max(m, st);
+    // hit marker
+    let hx = abs(ax - ay); let hm = step(hx, 1.2) * step(9.0, ax) * step(ax, 19.0) * step(0.01, U.d.x);
+    var col = vec3f(0.95, 1.0, 0.95);
+    c = mix(c, vec3f(0.0), o * 0.45); c = mix(c, col, m * 0.95);
+    c = mix(c, vec3f(1.0, 0.25, 0.15), hm);
+    // gun marker: where the round would land now; ring fills clockwise while loading
+    let g = (in.uv - (U.c.xy * vec2f(0.5, -0.5) + 0.5)) * res / s; let gd = length(g);
+    let ring = 1.0 - smoothstep(0.9, 1.9, abs(gd - 11.0));
+    let ang = atan2(g.x, -g.y) / 6.2831853 + 0.5;
+    let arc = (1.0 - smoothstep(1.2, 2.2, abs(gd - 16.0))) * step(ang, U.c.z) * step(U.c.z, 0.999);
+    let gc = mix(vec3f(1.0, 0.62, 0.1), vec3f(0.35, 1.0, 0.45), U.d.y * step(0.999, U.c.z));
+    c = mix(c, vec3f(0.0), (1.0 - smoothstep(1.9, 3.2, abs(gd - 11.0))) * 0.35);
+    c = mix(c, gc, ring); c = mix(c, vec3f(1.0, 0.8, 0.3), arc);
+  }
   return vec4f(c, 1.0);
 }

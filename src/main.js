@@ -16,7 +16,7 @@ import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
-import { buildLeopard, tankParts, LEO, TRK } from './tank.js';
+import { buildLeopard, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { Particles } from './particles.js';
@@ -40,8 +40,10 @@ const O = { viewProj: 0, invViewProj: 16, shadowMat: 32, camPos: 80, sunDir: 84,
 const GU = new Float32Array(188);
 
 const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, gpuMs: 0, ft: 16.7, ftMax: 0, fovK: 1 };
-const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, orbYaw: 0, orbPitch: 0.2, dist: 14, baseYaw: 0, cabYaw: 0, cabPitch: -0.08, idle: 9 };
-const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, tillDown: true, tillPos: 1, setDown: true, setPos: 1, bladePos: 1, dist: 0, trL: 0, trR: 0, yawRate: 0, turbo: false, vYaw: 0, slip: 0, air: false, vy: 0, airT: 0, airX: 0, airZ: 0, airH: 0, hop: false, pitchV: 0, gPrev: 0, shake: 0, land: 0, tillWas: true, setWas: true, turYaw: 0, gunPitch: 0, recoil: 0 };
+const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, dist: 13, zoom: 0, fovNow: 1, sightK: 0 };
+// where the player is aiming: world yaw/pitch of the sight line, the point it hits, and the gun's own state
+const aim = { yaw: 0, pitch: 0, x: 0, y: 0, z: 0, range: 800, dx: 0, dy: 0, dz: -1, sx: 9, sy: 9, ready: 0, err: 1, mx: 0, my: 0, mz: 0, gx: 0, gy: 0, gz: -1 };
+const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, dist: 0, trL: 0, trR: 0, yawRate: 0, air: false, vy: 0, airT: 0, gPrev: 0, shake: 0, land: 0, turYaw: 0, gunPitch: 0, recoil: 0, dp: 0, dr: 0, dpV: 0, drV: 0, acc: 0, road: 0, hp: 100, dead: false, immob: 0 };
 const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16), ivp = new Float32Array(16);
 let seed = 12345; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 8) / 16777216; };
 
@@ -293,7 +295,7 @@ async function main() {
   });
   const stampPass = { colorAttachments: [{ view: maskA.createView(), loadOp: 'load', storeOp: 'store' }, { view: maskB.createView(), loadOp: 'load', storeOp: 'store' }] };
   const stData = new Float32Array(48), stBuf = device.createBuffer({ size: 192, usage: U.VERTEX | U.COPY_DST });
-  const stPrev = new Float32Array(12), stCur = new Float32Array(12), stS = new Float32Array(3); let stN = 0, stInit = false, tillWas = false;
+  const stPrev = new Float32Array(12), stCur = new Float32Array(12), stS = new Float32Array(3); let stN = 0, stInit = false;
   const TEXM = MW / Q.mask;
   { let n = 0; for (const t of W.trails) n += t.n - 1;
     const d = new Float32Array(n * 16); let o = 0;
@@ -316,19 +318,15 @@ async function main() {
   function updateStamps() {
     stampPts(stCur); stN = 0;
     if (!stInit) { stPrev.set(stCur); stInit = true; }
-    const till = false;
-    if (till && !tillWas) { stPrev[0] = stCur[0]; stPrev[1] = stCur[1]; stPrev[2] = stCur[2]; stPrev[3] = stCur[3]; }
-    tillWas = till;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 1; k < 3; k++) {
       const i = k * 4, mv = Math.hypot(stCur[i] - stPrev[i], stCur[i + 1] - stPrev[i + 1]) + Math.hypot(stCur[i + 2] - stPrev[i + 2], stCur[i + 3] - stPrev[i + 3]);
       if (mv < 0.07) continue;
-      if (!(veh.air && veh.y - veh.gPrev > 0.12) && (k > 0 || till)) {
+      if (!(veh.air && veh.y - veh.gPrev > 0.12)) {
         const o = stN * 16, d = stData;
         d[o] = stPrev[i]; d[o + 1] = stPrev[i + 1]; d[o + 2] = stPrev[i + 2]; d[o + 3] = stPrev[i + 3];
         d[o + 4] = stCur[i]; d[o + 5] = stCur[i + 1]; d[o + 6] = stCur[i + 2]; d[o + 7] = stCur[i + 3];
         d[o + 8] = stS[k]; d[o + 9] = veh.dist;
-        if (k === 0) { d[o + 10] = 0; d[o + 11] = 1; d[o + 12] = 1; d[o + 13] = veh.setPos > 0.9 ? 1 : 0; d[o + 14] = 0; }
-        else { d[o + 10] = k === 1 ? 0.3 / 4.6 : 3.2 / 4.6; d[o + 11] = k === 1 ? 1.4 / 4.6 : 4.3 / 4.6; d[o + 12] = 0; d[o + 13] = 0; d[o + 14] = 1; }
+        d[o + 10] = k === 1 ? 0.3 / 4.6 : 3.2 / 4.6; d[o + 11] = k === 1 ? 1.4 / 4.6 : 4.3 / 4.6; d[o + 12] = 0; d[o + 13] = 0; d[o + 14] = 1;
         d[o + 15] = TEXM; stN++;
       }
       stS[k] = veh.dist;
@@ -365,10 +363,10 @@ async function main() {
       while (em.kick >= 1) { em.kick--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (TRK.x + (rnd() - 0.5) * 0.6), 0.15, veh.v > 0 ? 3.25 : -3.25);
         parts.emit(tmp3[0], tmp3[1], tmp3[2], s * dir * (0.5 + rnd()) + c * (rnd() - 0.5), 0.6 + rnd() * 1.6, c * dir * (0.5 + rnd()) - s * (rnd() - 0.5), 0.3 + rnd() * 0.4, 0.007 + rnd() * 0.012, 0, 0, 1, 1, 1, 0.9); }
     }
-    if (veh.turbo && !veh.air && sp > 8) { // powder roost tail behind the tracks
-      em.roost += dt * (sp - 6) * (5 + veh.slip * 10);
-      while (em.roost >= 1) { em.roost--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (1.45 + (rnd() - 0.5) * 0.9), 0.25, 2.3 + rnd() * 0.5);
-        parts.emit(tmp3[0], tmp3[1], tmp3[2], -fwdX * sp * (0.1 + rnd() * 0.25) + c * sd * (0.5 + rnd() * 1.5 + veh.slip * 6), 1.2 + rnd() * 2.6, -fwdZ * sp * (0.1 + rnd() * 0.25) - s * sd * (0.5 + rnd() * 1.5 + veh.slip * 6), 1.0 + rnd() * 0.9, 0.4 + rnd() * 0.5, 1.2, 1, 1.25, 1.25, 1.28, 0.2); }
+    if (!veh.air && sp > 7) { // powder roost tail behind the tracks
+      em.roost += dt * (sp - 5) * 5;
+      while (em.roost >= 1) { em.roost--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (TRK.x + (rnd() - 0.5) * 0.6), 0.25, 3.2 + rnd() * 0.5);
+        parts.emit(tmp3[0], tmp3[1], tmp3[2], -fwdX * sp * (0.1 + rnd() * 0.25) + c * sd * (0.5 + rnd() * 1.5), 1.0 + rnd() * 2.2, -fwdZ * sp * (0.1 + rnd() * 0.25) - s * sd * (0.5 + rnd() * 1.5), 1.0 + rnd() * 0.9, 0.4 + rnd() * 0.5, 1.2, 1, 1.25, 1.25, 1.28, 0.2); }
     }
     if (veh.land > 2) { // touchdown burst
       const n = Math.min(160, veh.land * 14);
@@ -392,7 +390,7 @@ async function main() {
   const upPipe = mkPost('fsUp', HDR, { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'one', dstFactor: 'zero' } });
   const NB = Q.name === 'low' ? 4 : 6;
   const pU = [], pUData = [];
-  for (let i = 0; i < NB * 2 + 1; i++) { pU[i] = device.createBuffer({ size: 32, usage: U.UNIFORM | U.COPY_DST }); pUData[i] = new Float32Array(8); }
+  for (let i = 0; i < NB * 2 + 1; i++) { pU[i] = device.createBuffer({ size: 64, usage: U.UNIFORM | U.COPY_DST }); pUData[i] = new Float32Array(16); }
   const black = device.createTexture({ size: [1, 1], format: HDR, usage: TB }).createView();
 
   // ---------- GPU timing ----------
@@ -446,25 +444,17 @@ async function main() {
 
   // ---------- UI ----------
   const TODN = ['Midday', 'Golden hour', 'Blue hour', 'Night'];
-  const CAMT = ['Chase camera', 'Cab view', 'Orbit camera', 'Free-fly camera'];
+  const CAMT = ['Commander view', 'Gunner sight', '', 'Free-fly camera'];
   let ui = null;
   function setCam(m) {
     if (m === 3 && cam.mode !== 3) { cam.prevMode = cam.mode; cam.yaw = Math.atan2(view[2], view[10]); cam.pitch = Math.asin(clamp(-view[6], -1, 1)); }
-    if (m !== 3 && document.pointerLockElement) document.exitPointerLock();
-    if (m === 2 && cam.mode === 0) cam.orbYaw += cam.baseYaw;
-    if (m === 0) cam.orbYaw = 0;
-    cam.mode = m; ui.toast(CAMT[m] + (m === 3 && !isTouch ? ' — click to look' : ''));
+    cam.mode = m; R.snap = true; ui.toast(CAMT[m] + (m === 3 && !isTouch ? ' — click to look' : ''));
   }
   const api = {
-    tiller() { if (veh.turbo) { if (!veh.air) veh.hop = true; return; } veh.tillDown = !veh.tillDown; ui.toast(veh.tillDown ? 'Tiller down' : 'Tiller up'); },
-    turbo(v) {
-      veh.turbo = v === undefined ? !veh.turbo : !!v; veh.vYaw = veh.yaw; veh.gPrev = veh.y; veh.vy = 0; veh.air = false;
-      if (veh.turbo) { veh.tillWas = veh.tillDown; veh.setWas = veh.setDown; veh.tillDown = veh.setDown = false; } else { veh.tillDown = veh.tillWas; veh.setDown = veh.setWas; }
-      document.body.classList.toggle('turbo', veh.turbo);
-      ui.toast(veh.turbo ? 'TURBO — Shift boost · Space jump · kickers on the lake' : 'Turbo off');
-    },
-    setter() { veh.setDown = !veh.setDown; ui.toast(veh.setDown ? 'Track-setter down' : 'Track-setter up'); },
-    cam() { setCam((cam.mode + 1) % (isTouch ? 4 : 3)); },
+    cam() { setCam(cam.mode === 0 ? 1 : 0); },
+    ammo(i) { if (R.game) R.game.ammo(i); },
+    smoke() { if (R.game) R.game.smoke(); },
+    restart() { if (R.game) R.game.restart(); },
     fly() { setCam(cam.mode === 3 ? cam.prevMode : 3); },
     isFly: () => cam.mode === 3,
     snow(v) { R.snow = v === undefined ? 1 - R.snow : v; ui.toast(R.snow ? 'Snowfall on' : 'Snowfall off'); },
@@ -477,13 +467,13 @@ async function main() {
   ui = initUI(api, isTouch);
 
   // ---------- state ----------
-  veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z); cam.baseYaw = veh.yaw;
-  if (qs.get('veh')) { const q = qs.get('veh').split(',').map(Number); veh.x = q[0]; veh.z = q[1]; veh.yaw = q[2] || 0; veh.y = W.heightAt(veh.x, veh.z); cam.baseYaw = veh.yaw; }
+  veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z);
+  if (qs.get('veh')) { const q = qs.get('veh').split(',').map(Number); veh.x = q[0]; veh.z = q[1]; veh.yaw = q[2] || 0; veh.y = W.heightAt(veh.x, veh.z); }
   if (qs.get('cam')) R.pose = qs.get('cam').split(',').map(Number);
   setTod(clamp((+qs.get('tod') || 1) - 1, 0, 3), true);
   if (qs.has('snow')) R.snow = 1;
   if (qs.has('debug')) api.debug(1);
-  veh.vYaw = veh.yaw; veh.gPrev = veh.y; if (qs.has('turbo')) api.turbo(1);
+  veh.gPrev = veh.y; aim.yaw = veh.yaw;
   GU[O.world] = HALF; GU[O.world + 1] = 1 / WS; GU[O.world + 2] = MW / 2; GU[O.world + 3] = 1 / MW;
   GU[O.screen + 2] = TEXM; GU[O.screen + 3] = Q.mask;
   GU[O.casc + 3] = 1 / Q.shadow; GU[O.lod2 + 2] = Q.msaa;
@@ -511,103 +501,123 @@ async function main() {
       let d = Math.atan2(-(t.pts[i * 2] - veh.x), -(t.pts[i * 2 + 1] - veh.z)) - veh.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
       st = clamp(d * 2.5, -1, 1); th = 1 - 0.4 * Math.abs(st);
     }
-    veh.throttle = th; veh.steer += (st - veh.steer) * Math.min(1, dt * (veh.turbo ? 8 : 5));
+    if (veh.dead || veh.immob > 0) { th = 0; if (veh.dead) st = 0; }
+    veh.throttle = th; veh.steer += (st - veh.steer) * Math.min(1, dt * 6);
     fwdX = -Math.sin(veh.yaw); fwdZ = -Math.cos(veh.yaw);
-    const sp = Math.abs(veh.v);
-    if (!veh.turbo) {
-      const vmax = (th >= 0 ? 6.2 : 3.2) * (veh.tillPos > 0.5 ? 0.92 : 1);
-      const climb = Math.sin(veh.pitch) * (veh.v >= 0 ? 1 : -1);
-      const target = th * vmax * (1 - 0.8 * clamp(climb / 0.5, 0, 1));
-      veh.v += (target - veh.v) * Math.min(1, dt * 1.5) - 9.8 * Math.sin(veh.pitch) * 0.1 * dt;
-      if (th === 0 && Math.abs(veh.v) < 0.25) veh.v *= 1 - Math.min(1, dt * 6);
-      veh.yawRate = veh.steer * lerp(0.95, 0.55, Math.min(1, sp / 6)) * (veh.v < -0.2 ? -1 : 1);
-      veh.vYaw = veh.yaw + veh.yawRate * dt;
-    } else { // arcade: momentum, full slope gravity, boost, drift, no traction in the air
-      const boost = inp.fast && th > 0, vmax = boost ? 38 : 25;
-      if (!veh.air) {
-        if (th > 0) veh.v += th * (boost ? 10 : 6.5) * (veh.v < 0 ? 2 : 1 - clamp(veh.v / vmax, 0, 1) ** 2) * dt;
-        else if (th < 0) veh.v = veh.v > 0.3 ? Math.max(0, veh.v + th * 16 * dt) : Math.max(-8, veh.v + th * 5 * dt);
-        veh.v -= (9.8 * Math.sin(veh.pitch) + veh.v * (th === 0 ? 0.3 : 0.05) + (veh.v > vmax ? (veh.v - vmax) * 0.8 : 0)) * dt;
-        if (th === 0 && sp < 0.3) veh.v *= 1 - Math.min(1, dt * 6);
-      }
-      veh.yawRate = veh.steer * (veh.air ? 0.35 : lerp(1.15, 0.62, Math.min(1, sp / 30))) * (veh.v < -0.2 ? -1 : 1);
-      let dy = veh.yaw + veh.yawRate * dt - veh.vYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-      const grip = veh.air ? 0 : lerp(14, 2.6, clamp((sp - 6) / 26, 0, 1)) * (boost ? 0.8 : 1);
-      veh.vYaw += dy * Math.min(1, dt * grip); veh.slip = Math.abs(Math.sin(dy));
-      if (!veh.air) veh.v *= 1 - veh.slip * 0.5 * dt;
+    const sp = Math.abs(veh.v), v0 = veh.v;
+    // plowed roads are fast, deep snow is slower (real world: mat G holds the distance to the asphalt edge)
+    { const mi = clamp(Math.round((veh.x + HALF) / WS * HN), 0, HN - 1), mj = clamp(Math.round((veh.z + HALF) / WS * HN), 0, HN - 1); veh.road += ((REAL && W.mat[(mj * HN + mi) * 4 + 1] > 165 ? 1 : 0) - veh.road) * Math.min(1, dt * 3); }
+    const vmax = lerp(13.5, 19, veh.road);
+    if (!veh.air) {
+      const g = 9.8 * Math.sin(veh.pitch) * 0.75;
+      if (th > 0) veh.v += th * 4.8 * (veh.v < 0 ? 2 : 1 - clamp(veh.v / vmax, 0, 1) ** 2) * dt;
+      else if (th < 0) veh.v = veh.v > 0.3 ? Math.max(0, veh.v + th * 9 * dt) : Math.max(-8.6, veh.v + th * 3.4 * dt);
+      veh.v -= (g + veh.v * 0.05 + (veh.v > vmax ? (veh.v - vmax) * 0.8 : 0)) * dt;
+      if (th === 0) { const br = 6.5 * dt; veh.v = Math.abs(veh.v) <= br ? 0 : veh.v - Math.sign(veh.v) * br; } // brakes hold on slopes
+      veh.v *= 1 - Math.abs(veh.steer) * 0.22 * dt;
     }
+    veh.yawRate = veh.steer * (veh.air ? 0.2 : lerp(0.72, 0.4, Math.min(1, sp / 15))) * (veh.v < -0.2 ? -1 : 1) * (veh.immob > 0 ? 0.25 : 1);
     veh.yaw += veh.yawRate * dt;
     veh.dist += veh.v * dt; veh.trL += (veh.v + veh.yawRate * TRK.x) * dt; veh.trR += (veh.v - veh.yawRate * TRK.x) * dt;
-    veh.tillPos = clamp(veh.tillPos + (veh.tillDown ? dt : -dt) * 1.3, 0, 1); veh.setPos = clamp(veh.setPos + (veh.setDown ? dt : -dt) * 1.6, 0, 1);
-    const mx = -Math.sin(veh.vYaw), mz = -Math.cos(veh.vYaw);
-    veh.x = clamp(veh.x + mx * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + mz * veh.v * dt, -PLAY, PLAY);
-    if (!veh.turbo) veh.vYaw = veh.yaw;
     fwdX = -Math.sin(veh.yaw); fwdZ = -Math.cos(veh.yaw);
-    const v0 = Math.abs(veh.v); collide();
-    if (veh.turbo && v0 > 6 && Math.abs(veh.v) < v0 * 0.9) { veh.shake = Math.max(veh.shake, Math.min(1, v0 / 22)); veh.v *= 0.55; }
+    veh.x = clamp(veh.x + fwdX * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + fwdZ * veh.v * dt, -PLAY, PLAY);
+    const vc = Math.abs(veh.v); collide();
+    if (vc > 5 && Math.abs(veh.v) < vc * 0.9) { veh.shake = Math.max(veh.shake, Math.min(1, vc / 18)); veh.v *= 0.5; }
     const rx = -fwdZ, rz = fwdX, hl = LEO.hl, hw = LEO.hw, h = W.heightAt, fx = fwdX, fz = fwdZ;
     const a = h(veh.x + fx * hl + rx * hw, veh.z + fz * hl + rz * hw), b = h(veh.x + fx * hl - rx * hw, veh.z + fz * hl - rz * hw), c = h(veh.x - fx * hl + rx * hw, veh.z - fz * hl + rz * hw), d = h(veh.x - fx * hl - rx * hw, veh.z - fz * hl - rz * hw);
-    const gY = (a + b + c + d) / 4 + 0.03, gV = clamp((gY - veh.gPrev) / dt, -40, 40); veh.gPrev = gY;
-    const bob = Math.sin(R.time * 31) * 0.004 * Math.min(1, sp) + Math.sin(veh.dist * 2.1) * 0.012;
+    const gY = (a + b + c + d) / 4 + 0.02, gV = clamp((gY - veh.gPrev) / dt, -40, 40); veh.gPrev = gY;
     veh.shake *= 1 - Math.min(1, dt * 3.5);
-    if (!veh.turbo) {
-      const k = Math.min(1, dt * 6);
-      veh.pitch += (Math.atan2((a + b - c - d) / 2, hl * 2) - veh.pitch) * k; veh.roll += (Math.atan2((a + c - b - d) / 2, hw * 2) - veh.roll) * k;
-      veh.y += (gY + bob - veh.y) * Math.min(1, dt * 12); veh.air = false; veh.vy = 0;
-      return;
-    }
+    // suspension: the hull squats under acceleration, dives under braking and rocks from recoil and hits
+    veh.acc += ((veh.v - v0) / dt - veh.acc) * Math.min(1, dt * 5);
+    veh.dpV += (-70 * (veh.dp - clamp(veh.acc * 0.006, -0.05, 0.05)) - 7 * veh.dpV) * dt; veh.dp += veh.dpV * dt;
+    veh.drV += (-70 * veh.dr - 7 * veh.drV) * dt; veh.dr += veh.drV * dt;
     const G = 10.5;
     if (!veh.air) {
       const ball = veh.y + veh.vy * dt - 0.5 * G * dt * dt;
-      if (veh.hop || (gY < ball - 0.04 && sp > 4)) { // leave the ground: crest, kicker lip or hop
-        veh.air = true; veh.airT = 0; veh.airX = veh.x; veh.airZ = veh.z; veh.airH = 0;
-        if (veh.hop) { veh.vy = Math.max(veh.vy, 0) + 6.5; veh.y += 0.05; } else { veh.y = ball; if (veh.vy > 1.5) veh.vy *= 1.25; }
-        veh.pitchV = 0;
-      } else { veh.vy = gV; veh.y = gY; }
-      veh.hop = false;
+      if (gY < ball - 0.05 && sp > 6) { veh.air = true; veh.airT = 0; veh.y = ball; } // crest: leave the ground
+      else { veh.vy = gV; veh.y = gY; }
     }
     if (veh.air) {
-      veh.vy -= G * dt; veh.y += veh.vy * dt; veh.airT += dt; veh.airH = Math.max(veh.airH, veh.y - gY);
-      veh.pitch += (clamp(Math.atan2(veh.vy, Math.max(sp, 3)) * 0.6, -0.55, 0.5) - veh.pitch) * Math.min(1, dt * 1.4);
+      veh.vy -= G * dt; veh.y += veh.vy * dt; veh.airT += dt;
+      veh.pitch += (clamp(Math.atan2(veh.vy, Math.max(sp, 3)) * 0.5, -0.4, 0.3) - veh.pitch) * Math.min(1, dt * 1.2);
       veh.roll *= 1 - Math.min(1, dt * 1.2);
       if (veh.y <= gY) { // touchdown
         const imp = Math.max(0, gV - veh.vy);
-        veh.air = false; veh.y = gY; veh.vy = gV; veh.land = imp;
+        veh.air = false; veh.y = gY; veh.vy = gV; veh.land = imp; veh.dpV -= Math.min(0.6, imp * 0.05);
         veh.shake = Math.max(veh.shake, Math.min(1.3, imp / 9)); veh.v *= 1 - Math.min(0.3, imp * 0.012);
-        if (veh.airT > 0.7) { const dd = Math.hypot(veh.x - veh.airX, veh.z - veh.airZ); ui.toast(`AIR ${veh.airT.toFixed(1)} s · ${dd.toFixed(0)} m · ${veh.airH.toFixed(1)} m high`); }
       }
     }
     if (!veh.air) {
-      const k = Math.min(1, dt * 14);
-      veh.pitch += (Math.atan2((a + b - c - d) / 2, hl * 2) - veh.pitch) * k; veh.roll += (Math.atan2((a + c - b - d) / 2, hw * 2) + veh.yawRate * sp * 0.006 - veh.roll) * k;
+      const k = Math.min(1, dt * 10);
+      veh.pitch += (Math.atan2((a + b - c - d) / 2, hl * 2) - veh.pitch) * k; veh.roll += (Math.atan2((a + c - b - d) / 2, hw * 2) - veh.roll) * k;
     }
   }
+  // sight line -> aim point (terrain ray march), then slew turret and gun towards the ballistic solution
+  const AMMO_V = 1650;
+  function updateAim(dt) {
+    if (cam.mode !== 3 && !R.pose && !veh.dead) {
+      const sens = (isTouch ? 0.006 : 0.0028) * cam.fovNow;
+      aim.yaw -= inp.lookX * sens; aim.pitch = clamp(aim.pitch - inp.lookY * sens, -0.5, 0.75);
+    }
+    const cp = Math.cos(aim.pitch), dx = -Math.sin(aim.yaw) * cp, dy = Math.sin(aim.pitch), dz = -Math.cos(aim.yaw) * cp;
+    aim.dx = dx; aim.dy = dy; aim.dz = dz;
+    const ox = R.frame < 3 ? veh.x : cam.x, oy = R.frame < 3 ? veh.y + 4 : cam.y, oz = R.frame < 3 ? veh.z : cam.z;
+    let t = 8, tp = 8, hit = false;
+    while (t < 3500) { if (oy + dy * t < W.heightAt(ox + dx * t, oz + dz * t)) { hit = true; break; } tp = t; t += Math.max(2, t * 0.035); }
+    if (hit) for (let i = 0; i < 7; i++) { const m = (t + tp) / 2; if (oy + dy * m < W.heightAt(ox + dx * m, oz + dz * m)) t = m; else tp = m; }
+    t = R.aimHit ? R.aimHit(ox, oy, oz, dx, dy, dz, t) : t;
+    aim.x = ox + dx * t; aim.y = oy + dy * t; aim.z = oz + dz * t;
+    // ballistic solution from the trunnion (the fire control computer adds the superelevation)
+    const B = hullM, tx = B[4] * LEO.gy + B[8] * LEO.gz + B[12], ty = B[5] * LEO.gy + B[9] * LEO.gz + B[13], tz = B[6] * LEO.gy + B[10] * LEO.gz + B[14];
+    const ex = aim.x - tx, ey = aim.y - ty, ez = aim.z - tz, hd = Math.max(1, Math.hypot(ex, ez)), v2 = R.shellV * R.shellV, g = 9.81;
+    aim.range = Math.hypot(hd, ey);
+    const disc = v2 * v2 - g * (g * hd * hd + 2 * ey * v2), el = disc > 0 ? Math.atan2(v2 - Math.sqrt(disc), g * hd) : 0.6, ce = Math.cos(el);
+    const wx = ex / hd * ce, wy = Math.sin(el), wz = ez / hd * ce;
+    const lx = B[0] * wx + B[1] * wy + B[2] * wz, ly = B[4] * wx + B[5] * wy + B[6] * wz, lz = B[8] * wx + B[9] * wy + B[10] * wz;
+    let dyaw = Math.atan2(-lx, -lz) - veh.turYaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+    const dpt = clamp(Math.asin(clamp(ly, -1, 1)), -0.157, 0.35) - veh.gunPitch;
+    if (!veh.dead) { veh.turYaw += clamp(dyaw, -0.75 * dt, 0.75 * dt); veh.gunPitch += clamp(dpt, -0.45 * dt, 0.45 * dt); }
+    aim.err = Math.hypot(dyaw, dpt); aim.ready = aim.err < 0.0035 ? 1 : 0;
+    veh.recoil *= 1 - Math.min(1, dt * 4.5);
+  }
+  const hullM = new Float32Array(16); hullM[0] = hullM[5] = hullM[10] = hullM[15] = 1; R.shellV = AMMO_V;
+  // after the part matrices are current: muzzle position, bore direction and where the round would land (screen space)
+  function updateGun() {
+    const M = gunMat(), gy = LEO.gy, mz = LEO.mz;
+    aim.mx = M[4] * gy + M[8] * mz + M[12]; aim.my = M[5] * gy + M[9] * mz + M[13]; aim.mz = M[6] * gy + M[10] * mz + M[14];
+    const l = 1 / Math.hypot(M[8], M[9], M[10]); aim.gx = -M[8] * l; aim.gy = -M[9] * l; aim.gz = -M[10] * l;
+  }
+  function gunMarker() {
+    const hd = Math.hypot(aim.x - aim.mx, aim.z - aim.mz), ch = Math.max(0.05, Math.hypot(aim.gx, aim.gz)), t = hd / (R.shellV * ch);
+    const px = aim.mx + aim.gx * R.shellV * t, py = aim.my + aim.gy * R.shellV * t - 4.905 * t * t, pz = aim.mz + aim.gz * R.shellV * t;
+    const w = vp[3] * px + vp[7] * py + vp[11] * pz + vp[15];
+    if (w > 0.1) { aim.sx = (vp[0] * px + vp[4] * py + vp[8] * pz + vp[12]) / w; aim.sy = (vp[1] * px + vp[5] * py + vp[9] * pz + vp[13]) / w; } else { aim.sx = 9; aim.sy = 9; }
+  }
   function updateCamera(dt, BM) {
-    const sens = isTouch ? 0.006 : 0.0045;
+    const sens = isTouch ? 0.006 : 0.0045, sight = cam.mode === 1 || (inp.sight && cam.mode === 0);
+    if (sight && cam.mode === 0) cam.mode = 1; else if (cam.mode === 1 && cam.held && !inp.sight) cam.mode = 0;
+    cam.held = inp.sight;
     if (cam.mode === 3) {
       cam.yaw -= inp.lookX * sens * 0.7; cam.pitch = clamp(cam.pitch - inp.lookY * sens * 0.7, -1.5, 1.5);
       const cp = Math.cos(cam.pitch), fx = -Math.sin(cam.yaw) * cp, fy = Math.sin(cam.pitch), fz = -Math.cos(cam.yaw) * cp, sp = (inp.fast ? 70 : 14) * dt;
       cam.x = clamp(cam.x + (fx * inp.mvZ + Math.cos(cam.yaw) * inp.mvX) * sp, -1950, 1950); cam.z = clamp(cam.z + (fz * inp.mvZ - Math.sin(cam.yaw) * inp.mvX) * sp, -1950, 1950);
       cam.y = clamp(cam.y + (fy * inp.mvZ + inp.mvY) * sp, W.heightAt(cam.x, cam.z) + 0.7, 1500);
       lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
-    } else if (cam.mode === 1) {
-      cam.cabYaw = clamp(cam.cabYaw - inp.lookX * sens, -2.7, 2.7); cam.cabPitch = clamp(cam.cabPitch - inp.lookY * sens, -0.8, 0.6);
-      const cp = Math.cos(cam.cabPitch), lx = -Math.sin(cam.cabYaw) * cp, ly = Math.sin(cam.cabPitch), lz = -Math.cos(cam.cabYaw) * cp, ex = 0, ey = 2.08, ez = -1.75;
-      cam.x = BM[0] * ex + BM[4] * ey + BM[8] * ez + BM[12]; cam.y = BM[1] * ex + BM[5] * ey + BM[9] * ez + BM[13]; cam.z = BM[2] * ex + BM[6] * ey + BM[10] * ez + BM[14];
-      lookAt(view, cam.x, cam.y, cam.z, cam.x + BM[0] * lx + BM[4] * ly + BM[8] * lz, cam.y + BM[1] * lx + BM[5] * ly + BM[9] * lz, cam.z + BM[2] * lx + BM[6] * ly + BM[10] * lz, BM[4], BM[5], BM[6]);
-    } else {
-      cam.orbYaw -= inp.lookX * sens; cam.orbPitch = clamp(cam.orbPitch + inp.lookY * sens, -0.12, 1.35); cam.dist = clamp(cam.dist * Math.exp(inp.zoom), 6, 70);
-      let d = veh.yaw - cam.baseYaw; d = Math.atan2(Math.sin(d), Math.cos(d)); cam.baseYaw += d * Math.min(1, dt * 2.6);
-      if (cam.mode === 0) { cam.idle = inp.drag || inp.lookX || inp.lookY ? 0 : cam.idle + dt; if (cam.idle > 3 && Math.abs(veh.v) > 0.6) { cam.orbYaw = Math.atan2(Math.sin(cam.orbYaw), Math.cos(cam.orbYaw)); cam.orbYaw *= 1 - Math.min(1, dt * 1.2); } }
-      const yaw = (cam.mode === 0 ? cam.baseYaw : 0) + cam.orbYaw, cp = Math.cos(cam.orbPitch);
-      const tx = veh.x + fwdX * 1.2, ty = veh.y + 2.1, tz = veh.z + fwdZ * 1.2, cd = cam.dist * (veh.turbo ? 1 + 0.5 * clamp(Math.abs(veh.v) / 30, 0, 1) : 1);
-      const ex = tx + Math.sin(yaw) * cp * cd, ez = tz + Math.cos(yaw) * cp * cd;
-      const ey = Math.max(ty + Math.sin(cam.orbPitch) * cd, W.heightAt(ex, ez) + 1.1);
-      const k = R.frame < 3 || R.snap ? 1 : Math.min(1, dt * 9); R.snap = false;
+    } else if (cam.mode === 1) { // gunner sight: stabilised view along the sight line from the EMES 15 head
+      const T = turMat(), ex = 0.9, ey = 2.52, ez = -2.0;
+      if (inp.zoom) cam.zoom = inp.zoom < 0 ? 1 : 0;
+      cam.x = T[0] * ex + T[4] * ey + T[8] * ez + T[12]; cam.y = T[1] * ex + T[5] * ey + T[9] * ez + T[13]; cam.z = T[2] * ex + T[6] * ey + T[10] * ez + T[14];
+      const sk = veh.shake * veh.shake * 0.05, t = R.time;
+      lookAt(view, cam.x, cam.y, cam.z, cam.x + aim.dx + Math.sin(t * 37) * sk, cam.y + aim.dy + Math.sin(t * 43 + 1) * sk, cam.z + aim.dz, 0, 1, 0);
+    } else { // commander view: behind and above the turret, looking along the sight line
+      cam.dist = clamp(cam.dist * Math.exp(inp.zoom), 7, 45);
+      const cd = cam.dist, tx = veh.x, ty = veh.y + 2.6 + cd * 0.1, tz = veh.z;
+      const ex = tx - aim.dx * cd, ez = tz - aim.dz * cd, ey = Math.max(ty - aim.dy * cd * 0.6, W.heightAt(ex, ez) + 1.0);
+      const k = R.frame < 3 || R.snap ? 1 : Math.min(1, dt * 14); R.snap = false;
       cam.x += (ex - cam.x) * k; cam.y += (ey - cam.y) * k; cam.z += (ez - cam.z) * k;
       cam.y = Math.max(cam.y, W.heightAt(cam.x, cam.z) + 0.8);
       const sk = veh.shake * veh.shake * 0.35, t = R.time;
-      lookAt(view, cam.x + Math.sin(t * 37) * sk, cam.y + Math.sin(t * 43 + 1) * sk, cam.z + Math.sin(t * 29 + 2) * sk, tx, ty, tz, 0, 1, 0);
+      lookAt(view, cam.x + Math.sin(t * 37) * sk, cam.y + Math.sin(t * 43 + 1) * sk, cam.z + Math.sin(t * 29 + 2) * sk, cam.x + aim.dx, cam.y + aim.dy, cam.z + aim.dz, 0, 1, 0);
     }
     inp.lookX = inp.lookY = inp.zoom = 0;
     if (R.pose) { const q = R.pose; cam.x = q[0]; cam.y = q[1]; cam.z = q[2]; const cp = Math.cos(q[4]); lookAt(view, q[0], q[1], q[2], q[0] - Math.sin(q[3]) * cp, q[1] + Math.sin(q[4]), q[2] - Math.cos(q[3]) * cp, 0, 1, 0); }
@@ -637,21 +647,25 @@ async function main() {
     R.time += dt; R.frame++;
     if (updateTod(dt)) tshDirty = 2;
     ui.poll(cam.mode === 3);
+    updateAim(dt);
     simulate(dt);
-    const BM = tankParts(groomer.d, veh, LEO);
+    const BM = tankParts(groomer.d, veh, LEO); hullM.set(BM);
+    updateGun();
     updateCamera(dt, BM);
+    if (R.simOnly) return; // logic-only step for scripted tests (window.__sim)
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
     const rw = Math.max(8, Math.round(R.w * R.scale)), rh = Math.max(8, Math.round(R.h * R.scale));
-    R.fovK += ((veh.turbo && cam.mode !== 3 ? 1 + 0.22 * clamp((Math.abs(veh.v) - 8) / 28, 0, 1) : 1) - R.fovK) * Math.min(1, dt * 2);
-    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * (cam.mode === 1 ? 1.15 : 1) * R.fovK;
-    perspRZ(proj, fovy, rw / rh, cam.mode === 1 ? 0.12 : 0.25);
+    cam.sightK += ((cam.mode === 1 && !R.pose ? 1 : 0) - cam.sightK) * Math.min(1, dt * 12);
+    cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
+    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * cam.fovNow;
+    perspRZ(proj, fovy, rw / rh, 0.25);
     mul(vp, proj, view); invert(ivp, vp);
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
     GU[O.camPos] = cam.x; GU[O.camPos + 1] = cam.y; GU[O.camPos + 2] = cam.z; GU[O.camPos + 3] = R.time;
     writeTod(GU, O);
-    GU[O.groom] = veh.x; GU[O.groom + 1] = veh.y; GU[O.groom + 2] = veh.z; GU[O.lod2] = Q.casc === 3 ? 1 : 0; GU[O.lod2 + 3] = (cam.mode === 0 || cam.mode === 2) && !R.pose ? 1.5 : 0;
-    GU[O.misc + 1] = R.snowAmt; GU[O.screen] = rw; GU[O.screen + 1] = rh; GU[O.groom + 3] = cam.mode === 1 && !R.pose ? 1 : 0;
+    GU[O.groom] = veh.x; GU[O.groom + 1] = veh.y; GU[O.groom + 2] = veh.z; GU[O.lod2] = Q.casc === 3 ? 1 : 0; GU[O.lod2 + 3] = cam.mode === 0 && !R.pose ? 1.5 : 0;
+    GU[O.misc + 1] = R.snowAmt; GU[O.screen] = rw; GU[O.screen + 1] = rh; GU[O.groom + 3] = 0; gunMarker();
     if (R.snowAmt > 0.01) { const k = 1 - 0.55 * R.snowAmt; GU[O.sunCol] *= k; GU[O.sunCol + 1] *= k; GU[O.sunCol + 2] *= k; GU[O.fogCol + 3] *= 1 + 5 * R.snowAmt; GU[O.skyHor + 3] = Math.min(1.6, GU[O.skyHor + 3] + R.snowAmt); }
     updateCascades(rw / rh, fovy);
     planesFrom(camPlanes, vp, 5); draws = 0;
@@ -691,7 +705,8 @@ async function main() {
     const p = enc.beginRenderPass(mainPass);
     p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
     p.setBindGroup(0, bg0);
-    p.setPipeline(objPipe); p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n);
+    p.setPipeline(objPipe);
+    if (cam.mode !== 1 || R.pose) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
     if (!NP) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
     p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4);
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
@@ -719,6 +734,8 @@ async function main() {
       const bp = enc.beginRenderPass(bloomPass[NB + i]); bp.setPipeline(upPipe); bp.setBindGroup(0, upBG[i]); bp.draw(3); bp.end();
     }
     const fu = pUData[NB * 2]; fu[0] = sx; fu[1] = sy; fu[2] = 1 / R.w; fu[3] = 1 / R.h; fu[4] = expo; fu[5] = 0.1; fu[6] = R.manual ? 0.37 : R.time; fu[7] = R.scale < 0.99 ? 1 : 0;
+    const hudOn = cam.mode !== 3 && !R.pose && !R.nohud;
+    fu[8] = aim.sx; fu[9] = aim.sy; fu[10] = R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
     device.queue.writeBuffer(pU[NB * 2], 0, fu);
     finalPass.colorAttachments[0].view = ctx.getCurrentTexture().createView();
     const fp = enc.beginRenderPass(finalPass); fp.setPipeline(finalPipe); fp.setBindGroup(0, finalBG); fp.draw(3); fp.end();
@@ -728,7 +745,7 @@ async function main() {
     if (ri >= 0) { ts.busy[ri] = true; ts.rb[ri].mapAsync(GPUMapMode.READ).then(ts.cb[ri]); }
 
     drs(raw); if (raw * 1000 > R.ftMax) R.ftMax = raw * 1000;
-    ui.hud(Math.min(199, Math.round(Math.abs(veh.v) * 3.6)), veh.tillDown ? 1 : 0, veh.setDown ? 1 : 0, cam.mode);
+    ui.hud(Math.min(199, Math.round(Math.abs(veh.v) * 3.6)), cam.mode, Math.round(aim.range / 10) * 10);
     if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}`); R.ftMax = 0; }
     if (perf && !perf.done) {
       perf.t += raw; if (perf.t > 2 && perf.n < 20000) perf.dt[perf.n++] = raw * 1000;
@@ -748,17 +765,19 @@ async function main() {
   }
   window.__waitFrames = (n) => new Promise((r) => { if (R.manual) return r(); waitN = n; waiters.push(r); });
   window.__step = (dt, n = 1) => { R.manual = true; for (let i = 0; i < n; i++) tickFrame(dt, dt); return device.queue.onSubmittedWorkDone(); };
+  window.__sim = (dt, n = 1) => { R.manual = true; R.simOnly = true; for (let i = 0; i < n; i++) tickFrame(dt, dt); R.simOnly = false; };
   window.__info = () => `tier=${Q.name} ${R.w}x${R.h} scale=${R.scale.toFixed(2)} trees=${W.trees.count} draws=${draws} gpu=${R.gpuMs.toFixed(2)}ms ft=${R.ft.toFixed(2)}`;
   window.__pose = (q, tod) => { R.pose = q; if (tod) { setTod(tod - 1, true); tshDirty = 1; } };
   window.__look = (ex, eh, ez, tx, th, tz) => { const ey = W.heightAt(ex, ez) + eh, ty = W.heightAt(tx, tz) + th, dx = tx - ex, dy = ty - ey, dz = tz - ez; R.pose = [ex, ey, ez, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))]; };
-  window.__chase = (yaw, pitch, dist) => { R.pose = null; cam.mode = 0; cam.orbYaw = yaw; cam.orbPitch = pitch; cam.dist = dist; cam.idle = -1e9; R.snap = true; };
+  window.__chase = (yaw, pitch, dist) => { R.pose = null; const cp = Math.cos(pitch), ty = veh.y + 1.6; R.pose = [veh.x + Math.sin(veh.yaw + yaw) * cp * dist, ty + Math.sin(pitch) * dist, veh.z + Math.cos(veh.yaw + yaw) * cp * dist, veh.yaw + yaw, -pitch]; };
+  window.__aim = (yaw, pitch, mode) => { R.pose = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
-  window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = veh.vYaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; cam.baseYaw = yaw; stInit = false; R.snap = true; };
-  Object.assign(window, { __R: R, __W: W, __cam: cam, __veh: veh, __inp: inp, __api: api, __ui: ui });
+  window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; stInit = false; R.snap = true; };
+  Object.assign(window, { __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none';
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();
-  if (qs.has('nohud')) $('ui').style.display = 'none';
+  if (qs.has('nohud')) { $('ui').style.display = 'none'; R.nohud = true; }
   requestAnimationFrame(frame);
   window.__ready = true;
 }

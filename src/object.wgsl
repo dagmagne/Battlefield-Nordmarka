@@ -13,10 +13,8 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   var alb = in.col; var spec = 0.04; var gloss = 24.0; var emis = vec3f(0.0); var snowy = 0.0; var refl = 0.0;
   let m = in.mat; let uv = in.uv; let isG = OB.tr.w;
   let night = G.misc.x;
-  if (m == 4u && isG > 0.5 && G.groom.w > 0.5) { discard; }
   if (m == 0u) { spec = 0.14; gloss = 70.0; refl = 0.16; }
-  if (isG > 0.5 && G.groom.w > 0.5 && in.lp.z < -0.15 && in.lp.y > 1.4 && m != 10u && m != 11u) { alb = vec3f(0.035, 0.036, 0.04); refl = 0.0; spec = 0.05; }
-  else if (m == 1u || m == 17u) { // boards: vertical (1) or horizontal cladding (17)
+  if (m == 1u || m == 17u) { // boards: vertical (1) or horizontal cladding (17)
     var q = uv; if (m == 17u) { q = uv.yx; }
     let bw = 0.15; let bi = floor(q.x / bw); let bf = fract(q.x / bw);
     let g = vn(vec2f(q.x * 9.0, q.y * 0.9 + bi * 7.0)) * 0.6 + vn(vec2f(q.x * 40.0, q.y * 2.0 + bi * 3.0)) * 0.4;

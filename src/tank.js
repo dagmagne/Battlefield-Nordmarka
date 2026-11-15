@@ -172,10 +172,10 @@ export function buildLeopard() {
 // part matrices: 0 hull, 1 turret (yaw about the ring), 2 gun (pitch about the trunnion, recoil along the bore)
 const T1 = new Float32Array(16), T2 = new Float32Array(16), T3 = new Float32Array(16), BM = new Float32Array(16), TM = new Float32Array(16), GM = new Float32Array(16);
 export function tankParts(out, t, K) { // out: Float32Array(16*8), t: {x,y,z,yaw,pitch,roll,turYaw,gunPitch,recoil}
-  trs(BM, t.x, t.y, t.z, t.yaw, t.pitch, t.roll);
+  trs(BM, t.x, t.y, t.z, t.yaw, t.pitch + t.dp, t.roll + t.dr);
   trs(T1, 0, K.ty, K.tz, t.turYaw, 0, 0); identity(T2); T2[13] = -K.ty; T2[14] = -K.tz; mul(T3, T1, T2); mul(TM, BM, T3);
   trs(T1, 0, K.gy, K.gz, 0, t.gunPitch, 0); identity(T2); T2[13] = -K.gy; T2[14] = -K.gz + t.recoil; mul(T3, T1, T2); mul(GM, TM, T3);
   out.set(BM, 0); out.set(TM, 16); out.set(GM, 32);
   return BM;
 }
-export const gunMat = () => GM;
+export const gunMat = () => GM, turMat = () => TM;
