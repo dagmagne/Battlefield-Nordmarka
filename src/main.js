@@ -147,14 +147,16 @@ async function main() {
   const tibF = mkBuf(tiFull, U.INDEX), tibR = mkBuf(tiRing, U.INDEX);
   const lvBuf = [], lvBG = [], lvData = new Float32Array(4);
   for (let l = 0; l < NL; l++) { lvBuf[l] = device.createBuffer({ size: 16, usage: U.UNIFORM | U.COPY_DST }); lvBG[l] = device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: lvBuf[l] } }] }); }
-  const terrMod = mod(common + terrainW, 'terrain');
+  // beyond the map edge: the real world falls away to the city and fjord in the south and rises into the forest hills in the north
+  const REAL = W.name !== 'fantasy';
+  const terrMod = mod(common + (REAL ? terrainW.replace('262.0', '(mix(440.0,30.0,smoothstep(-2600.0,3600.0,xz.y))+50.0*sin(xz.x*0.0011)*sin(xz.y*0.0013))') : terrainW), 'terrain');
   const terrPipe = device.createRenderPipeline({
     layout: lay01,
     vertex: { module: terrMod, entryPoint: 'vs', buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }] }] },
     fragment: { module: terrMod, entryPoint: 'fs', targets: [{ format: HDR }] },
     primitive: { cullMode: 'back', frontFace: 'ccw' }, depthStencil: depthGE, multisample: msState,
   });
-  const skyMod = mod(common + skyW, 'sky');
+  const skyMod = mod(common + (REAL ? skyW.replace('255.0', '15.0') : skyW), 'sky');
   const skyPipe = device.createRenderPipeline({
     layout: lay0, vertex: { module: skyMod, entryPoint: 'vs' }, fragment: { module: skyMod, entryPoint: 'fs', targets: [{ format: HDR }] },
     depthStencil: { format: DF, depthWriteEnabled: false, depthCompare: 'equal' }, multisample: msState,
@@ -175,7 +177,7 @@ async function main() {
   };
   const groomer = mkObj(buildGroomer());
   const props = mkObj(buildProps(W));
-  const NP = qs.has('np'); console.log('props tris', props.n / 3);
+  const NP = qs.has('np');
 
   // ---------- terrain shadow bake ----------
   const tshMod = mod(tshW, 'tshadow');

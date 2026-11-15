@@ -1,16 +1,22 @@
 # groomerweb
 
-Real-time WebGPU winter scene: drive a snow groomer through a procedural, Nordmarka-like forest with three mountains, lakes, a creek, trails, lamps, a cabin and a dam. No engines (no Three.js/Babylon), no asset files: every mesh, texture and sound is procedural. The deliverable is a single self-contained `index.html`.
+Real-time WebGPU winter scene: drive a snow groomer through Nordmarka. No engines (no Three.js/Babylon). The deliverable is a single self-contained `index.html`.
+
+There are two worlds, chosen on the start screen (or with `?w=`):
+- **Real Nordmarka** (`?w=holmenkollen` or `?w=frogner`; same world, two start points). A 4×4 km window (origin 59.9753 N, 10.6800 E, x = east, z = south) with about 3×3 km drivable: Holmenkollbakken, Midtstubakken, Frognerseteren, Tryvannstårnet, Holmenkollen kapell, Øvresetertjern, real ski trails and about 3800 houses. The macro shape comes from map data; everything else is procedural.
+- **Fantasi** (`?w=fantasi`): the original fully procedural world (three mountains, lakes, creek, dam, bridge) in `src/fantasy.js`.
+
+Scripted runs with `?nohint` and no `?w` default to Frognerseteren.
 
 ## Priorities (in order)
 1. **Visual quality.** This is a desktop showcase.
 2. **Smooth frame pacing.** The target is a steady 60 fps at native Retina on a MacBook Pro M2 Max in the latest Chrome.
-3. **Small bundle.** Currently about 132 kB (about 50 kB gzip). Report the size after changes.
+3. **Small bundle.** Currently about 596 kB (about 390 kB gzip), of which the embedded map data is about 334 kB before base64. Report the size after changes.
 
 The Mac is the only target platform. Mobile is out of scope for now: don't test, verify or tune for phones or touch, and don't spend effort on mobile-specific changes. The existing touch and phone code (`?touch`, `phone.sh`) can stay, but it is not maintained.
 
 ## Hard rules
-- WebGPU only, and everything procedural. No external texture, model or audio files.
+- WebGPU only. No external texture, model or audio files. The one exception is the map data blob `src/data/world.bin`, which the build embeds as base64; all meshes, textures and detail are still procedural.
 - **No per-frame JS allocations** in the frame loop. Use preallocated typed arrays and no closures, arrays or objects per frame. Allocating on rare events (toasts, key presses) is fine.
 - If WebGPU is unavailable, show a friendly message instead of a blank page.
 - Never leave `index.html` broken. Rebuild after every meaningful change.
@@ -28,18 +34,21 @@ The Mac is the only target platform. Mobile is out of scope for now: don't test,
 - **Grooming mask:** maskA is `rgba8` (groomed, track, imprint) and maskB is `rg16float` (lateral u, longitudinal phase). Both are stamped by instanced quads (`stamp.wgsl`), and the shader derives corduroy, classic tracks and berms from them.
 - **Trees (`trees.js`, `tree.wgsl`, `treedeform.wgsl`):** about 207k instances on the high tier, 3 species and 4 LODs (37/180/850 m × `lodMul`), with a two-phase cross-fade. Snow load must look the same on every LOD (see "Lessons").
 - **Shadows:** 3 cascades (the far ones update on alternate frames), PCSS on cascade 0, plus a baked heightfield shadow that is re-baked when the time of day changes.
-- **`world.js`:** world generation (heightmap, lakes, bogs, creek, A*-routed trails, carving, snow kickers on the big lake, tree placement, props).
+- **`world.js`:** the real world. It inflates `src/data/world.bin` (8 m height grid, water / wetland / tree-density rasters, trail polylines, building rectangles), upsamples the heights bicubically to the 2 m heightmap and adds noise detail, flattens lakes, carves trails, levels building pads, places kickers on Øvresetertjern and plants trees steered by the density raster. Landmark positions are in `LM`.
+- **`fantasy.js`:** the original procedural world generator. Both generators return the same `W` shape (including `W.PLAY`, `W.MW`, `W.TREELINE`, `W.name`, `W.startI`), and `main.js` / `props.js` branch on `W.name` where they differ.
+- **`props.js`:** static set pieces in one mesh. Real world: houses from building rectangles, the Frognerseteren lodge, ski jumps, Tryvannstårnet, the chapel. Fantasy world: cabin, bridge, dam, pylons, signs.
+- **Map data pipeline (`tools/geo/`, Python, run by hand):** `fetch_dem.py` (public Terrarium terrain tiles, which use Kartverket's 10 m model for Norway), `fetch_osm.py` (Overpass), then `prep.py` writes `src/data/world.bin` and `raw/landmarks.json` / `raw/preview.png`. `geo.py` holds the origin and window size. `raw/` is git-ignored. Data credits: © Kartverket (CC BY 4.0), © OpenStreetMap contributors (ODbL).
 - **`tod.js`:** four time-of-day presets (keys 1–4), interpolated into the global uniforms.
 - **Turbo mode (X):** arcade physics with momentum, slope gravity, drift, Shift boost and Space to hop. Jumps are ballistic, with touchdown shake and a powder burst, and stamps pause while airborne. Normal mode must keep its original slow groomer behaviour.
 
 ## Test hooks
-- **URL parameters:** `nohint nohud drs=0 tod=1..4 q=<tier> perf debug auto turbo veh=x,z,yaw cam=x,y,z,yaw,pitch lod=<mul> sx=<snow extents>`.
+- **URL parameters:** `w=holmenkollen|frogner|fantasi np` (`np` skips the props mesh) `nohint nohud drs=0 tod=1..4 q=<tier> perf debug auto turbo veh=x,z,yaw cam=x,y,z,yaw,pitch lod=<mul> sx=<snow extents>`.
 - **`window` globals:** `__ready __step(dt,n) __pose __look __chase __tod __tp(x,z,yaw) __info __waitFrames`, plus `__R __W __cam __veh __inp __api __ui`. `__step` switches to manual, deterministic stepping, and `__R.force=[throttle,steer]` scripts the input.
 
 ## Verification workflow (always do this, don't just reason about the code)
 All tools drive a **headed** Chrome with the GPU enabled through playwright-core, at 1728×1117 and DPR 2 (MacBook Retina).
 - `tools/shot.mjs`: single screenshot. `tools/multi.mjs`: a batch of shots in one session.
-- `tools/poses.mjs` with `tools/scenes.mjs`: the 6 fixed verification scenes. Render these after visual changes.
+- `tools/poses.mjs` with `tools/scenes.mjs`: the 8 fixed verification scenes (real world). Render these after visual changes. The fantasy world has no scene set any more; check it by loading `?w=fantasi`.
 - `tools/drive.mjs outdir [--video]`: scripted drive with consecutive frames (shimmer check), sparse frames and an optional mp4.
 - `tools/turbo.mjs outdir [--video]`: boosts over the lake kickers and logs airtime and height.
 - `tools/perf.mjs`: a 60 s drive that prints frame-time and GPU-timestamp stats (avg/p50/p99/max, hitches). The in-app overlay is the backquote key or `?debug`.
@@ -60,6 +69,7 @@ For larger visual milestones, run a **critic subagent that sees only the renders
 4. **Examples of follow-ups:**
    - The tree LOD "pop" (heavy snow at a distance, little up close) was fixed with consistent snow extent on all LODs, shading for the far LODs, and a two-phase cross-fade.
    - Turbo mode (driving fast, drifting and jumping) added kickers on the lake and ballistic physics.
+   - Real Nordmarka (phase 1): map data pipeline, real terrain, lakes, trails, houses and landmarks, then a start screen to choose between the real world (two start points) and the fantasy world. Phase 2 (not started) is streaming trees and a larger world north to Kikut.
 5. When a usage limit interrupts the work, resume where it stopped without redoing finished work.
 
 ## Lessons / gotchas
@@ -68,4 +78,7 @@ For larger visual milestones, run a **critic subagent that sees only the renders
 - Tree LODs have to match in mean colour and snow distribution. Simple cones with full snow cover read as white blobs and pop when they switch. Check with `tools/lodcmp.sh`.
 - Wide LOD fade bands and extra skirt geometry cost about 35% GPU time. Keep the band at about 7%.
 - Lake material (`mat` R) also blocks tree placement (`> 8`), so terrain edits on lakes have to keep R ≥ 9.
+- The grooming mask covers `W.MW` metres (3200 real, 2048 fantasy) at 4096 texels; `stamp.wgsl` has the half-size as the literal `1600.0`, which `main.js` replaces per world. The far-terrain height (`262.0` in `terrain.wgsl`) and far ground plane (`255.0` in `sky.wgsl`) are replaced the same way for the real world.
+- The real world's tree count is capped (`cap` in `world.js`). If the cap is hit, the southern rows silently get no trees; check `__info()` (about 362k on high).
+- Spotlight indexing (`mds`) and other apps can push GPU times to 100+ ms. Check `uptime` before trusting a perf number.
 - The mp4 height has to be even for ffmpeg (`-vf scale=1728:1116`).
