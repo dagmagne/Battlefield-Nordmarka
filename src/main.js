@@ -354,7 +354,7 @@ async function main() {
       while (em.spray >= 1) { em.spray--; loc((rnd() - 0.5) * SWATH, 0.12 + rnd() * 0.25, 3.5 + rnd() * 0.6);
         const bk = (0.3 + rnd() * 1.8) * dir, lat = (rnd() - 0.5) * 1.2, vy = 0.6 + rnd() * 2.0;
         if (rnd() < 0.7) parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.3 + rnd() * 0.45, 0.007 + rnd() * 0.013, 0, 0, 1, 1, 1, 0.9);
-        else parts.emit(tmp3[0], tmp3[1] + 0.15, tmp3[2], s * bk * 0.6, 0.25 + rnd() * 0.5, c * bk * 0.6, 1.2 + rnd() * 1.0, 0.25 + rnd() * 0.18, 0.9, 1, 1.25, 1.25, 1.25, 0.16); }
+        else { loc((rnd() - 0.5) * SWATH * 0.9, 0.15 + rnd() * 0.15, 4.2 + rnd() * 0.4); parts.emit(tmp3[0], tmp3[1], tmp3[2], s * (0.6 + bk * 0.5) * dir, 0.2 + rnd() * 0.35, c * (0.6 + bk * 0.5) * dir, 0.7 + rnd() * 0.6, 0.16 + rnd() * 0.1, 0.4, 1, 1.2, 1.2, 1.2, 0.11); } }
     }
     if (sp > 0.5) {
       em.kick += dt * sp * 14;

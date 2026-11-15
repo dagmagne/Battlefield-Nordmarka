@@ -35,8 +35,8 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     emis = vec3f(1.0, 0.62, 0.26) * mull * glow * (0.06 + night * 2.6);
     alb = mix(vec3f(0.85), vec3f(0.03, 0.04, 0.06), mull); spec = 0.3 * mull; gloss = 200.0; refl = 0.5 * mull;
   }
-  else if (m == 8u) { spec = 0.4; gloss = 30.0; alb = mix(alb, vec3f(0.93), 0.25 * smoothstep(0.4, 0.8, vn(vec2f(in.lp.x * 3.0, uv.x * 2.0)))); }
-  else if (m == 9u) { alb = mix(vec3f(0.025), vec3f(0.9), smoothstep(0.55, 0.9, vn(vec2f(in.lp.x * 3.0, uv.y * 1.3))) * 0.35); }
+  else if (m == 8u) { spec = 0.4; gloss = 30.0; alb = mix(alb, vec3f(0.93), 0.12); }
+  else if (m == 9u) { alb = vec3f(0.028, 0.028, 0.03); }
   else if (m == 10u) { emis = in.col * (0.35 + 7.5 * night); }
   else if (m == 11u) { emis = in.col * (0.6 + 8.0 * pow(saturate(dot(n, G.l2d.xyz)), 3.0)) * (0.5 + 0.5 * night); }
   else if (m == 12u) { alb = mix(vec3f(0.11, 0.11, 0.12), vec3f(0.27, 0.25, 0.22), fbm3(wp.xz * 0.9 + wp.y * 1.7)); alb *= 0.7 + 0.6 * vn(wp.xz * 7.0 + wp.y * 5.0); snowy = 1.3; }

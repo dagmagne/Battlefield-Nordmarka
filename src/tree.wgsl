@@ -95,6 +95,7 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   var sh = shadowSun(wp, n, dist) * terrainShadow(wp.xz, in.hy);
   // distant trees: approximate neighbour shadowing by height in the canopy
   sh *= mix(1.0, saturate(0.25 + in.hy / max(in.ks.w, 1.0) * 1.2), smoothstep(G.casc.z * 0.6, G.casc.z, dist) * (1.0 - G.misc.w) * 1.4);
+  if (kind < 0.5 && sp < 0.5) { sh *= 0.12 + 0.88 * smoothstep(0.16, 0.06, in.hy / max(in.ks.w, 1.0)); }
   let sun = G.sunCol.rgb * sh;
   let dif = saturate((ndl + 0.35) / 1.35);
   let ll = localLights(wp, n, 0.4) + lampLight(wp.xz, in.hy);

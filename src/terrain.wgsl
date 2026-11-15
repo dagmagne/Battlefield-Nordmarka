@@ -120,7 +120,7 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
       let gu = vec2f((w4.y * (bx1.r - mB.r) + w4.x * (mB.r - bx0.r)) / (w4.x + w4.y), (w4.w * (bz1.r - mB.r) + w4.z * (mB.r - bz0.r)) / (w4.z + w4.w)) / tm;
       let gl = length(gu);
       let inc = length(vec2f(bx1.r + bx0.r - 2.0 * mB.r, bz1.r + bz0.r - 2.0 * mB.r)) / tm * SW;
-      let valid = smoothstep(0.45, 0.8, gl * SW) * (1.0 - smoothstep(1.35, 1.9, gl * SW)) * (1.0 - smoothstep(0.06, 0.2, inc));
+      let valid = smoothstep(0.45, 0.8, gl * SW) * (1.0 - smoothstep(1.35, 1.9, gl * SW)) * (1.0 - smoothstep(0.3, 0.7, inc));
       let lat = gu / max(gl, 1e-4);
       let u = mB.r;
       groomed = smoothstep(0.2, 0.35, mA.r);
