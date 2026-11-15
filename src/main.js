@@ -203,7 +203,7 @@ async function main() {
   const treeShMod = mod(shadowW + treeDefW + shTreeW, 'treeshadow');
   const treeShPipe = device.createRenderPipeline({ layout: layS, vertex: { module: treeShMod, entryPoint: 'vs', buffers: treeBufs }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
   const LK = Q.lodMul * (+qs.get("lod") || 1), LOD = [37 * LK, 180 * LK, 850 * LK];
-  const BAND = 0.07, SNOWX = (qs.get('sx') || '1,0.74,0.56,0.4,1,1,0.85,0.52').split(',').map(Number);
+  const BAND = 0.07, SNOWX = (qs.get('sx') || '1,0.69,0.56,0.4,1,1,0.85,0.52').split(',').map(Number);
   const lodBG = [[0, LOD[0], 0], [LOD[0], LOD[1], 0], [LOD[1], LOD[2], 1], [LOD[2], 1e9, 1]].map((r, i) => device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: mkBuf(new Float32Array([r[0], r[1], r[2], 1, SNOWX[i], BAND, SNOWX[i + 4], 0]), U.UNIFORM) } }] }));
   const camPlanes = new Float32Array(20);
   function planesFrom(out, m, n) {
