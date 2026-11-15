@@ -4,7 +4,7 @@ struct Def { wp: vec3f, n: vec3f, lp: vec3f };
 fn objDeform(pos: vec3f, nrm: vec3f, cm: vec4f, up: vec4f) -> Def {
   var lp = pos; var ln = nrm;
   if (cm.w > 7.5 && cm.w < 8.5) {
-    let A = 1.75; let R = 0.42; let yc = 0.45; let Lr = PI * R; let L = 4.0 * A + 2.0 * Lr;
+    let A = 2.95; let R = 0.4; let yc = 0.42; let Lr = PI * R; let L = 4.0 * A + 2.0 * Lr;
     var off = OB.tr.x; if (up.y > 0.0) { off = OB.tr.y; }
     var s = up.x + off; s = s - floor(s / L) * L;
     var c: vec2f; var t: vec2f; var o: vec2f; // (y,z) centre, tangent, outward

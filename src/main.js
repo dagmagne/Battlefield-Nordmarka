@@ -16,7 +16,7 @@ import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
-import { buildGroomer, groomerParts, SWATH, TILL_Z } from './groomer.js';
+import { buildLeopard, tankParts, LEO, TRK } from './tank.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { Particles } from './particles.js';
@@ -41,7 +41,7 @@ const GU = new Float32Array(188);
 
 const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, gpuMs: 0, ft: 16.7, ftMax: 0, fovK: 1 };
 const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, orbYaw: 0, orbPitch: 0.2, dist: 14, baseYaw: 0, cabYaw: 0, cabPitch: -0.08, idle: 9 };
-const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, tillDown: true, tillPos: 1, setDown: true, setPos: 1, bladePos: 1, dist: 0, trL: 0, trR: 0, yawRate: 0, turbo: false, vYaw: 0, slip: 0, air: false, vy: 0, airT: 0, airX: 0, airZ: 0, airH: 0, hop: false, pitchV: 0, gPrev: 0, shake: 0, land: 0, tillWas: true, setWas: true };
+const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, tillDown: true, tillPos: 1, setDown: true, setPos: 1, bladePos: 1, dist: 0, trL: 0, trR: 0, yawRate: 0, turbo: false, vYaw: 0, slip: 0, air: false, vy: 0, airT: 0, airX: 0, airZ: 0, airH: 0, hop: false, pitchV: 0, gPrev: 0, shake: 0, land: 0, tillWas: true, setWas: true, turYaw: 0, gunPitch: 0, recoil: 0 };
 const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16), ivp = new Float32Array(16);
 let seed = 12345; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 8) / 16777216; };
 
@@ -175,7 +175,7 @@ async function main() {
     device.queue.writeBuffer(u, 0, d);
     return { vb: mkBuf(mesh.v, U.VERTEX), ib: mkBuf(mesh.i, U.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
-  const groomer = mkObj(buildGroomer());
+  const groomer = mkObj(buildLeopard());
   const props = mkObj(buildProps(W));
   const NP = qs.has('np');
 
@@ -298,7 +298,7 @@ async function main() {
   { let n = 0; for (const t of W.trails) n += t.n - 1;
     const d = new Float32Array(n * 16); let o = 0;
     for (const t of W.trails) {
-      const P = t.pts, hw = SWATH / 2; let px0, pz0, px1, pz1, s = 0;
+      const P = t.pts, hw = 2.3; let px0, pz0, px1, pz1, s = 0;
       for (let i = 0; i < t.n; i++) {
         const a = Math.max(0, i - 1), b = Math.min(t.n - 1, i + 1); let tx = P[b * 2] - P[a * 2], tz = P[b * 2 + 1] - P[a * 2 + 1]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
         const lx = P[i * 2] + tz * hw, lz = P[i * 2 + 1] - tx * hw, rx = P[i * 2] - tz * hw, rz = P[i * 2 + 1] + tx * hw;
@@ -312,11 +312,11 @@ async function main() {
     const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw);
     for (let i = 0; i < 6; i++) { const lx = SP[i * 2], lz = SP[i * 2 + 1]; out[i * 2] = veh.x + c * lx + s * lz; out[i * 2 + 1] = veh.z - s * lx + c * lz; }
   }
-  const SP = new Float32Array([-SWATH / 2, TILL_Z, SWATH / 2, TILL_Z, -2.0, 1.3, -0.9, 1.3, 0.9, 1.3, 2.0, 1.3]);
+  const TX0 = TRK.x - TRK.w / 2, TX1 = TRK.x + TRK.w / 2, SP = new Float32Array([-2.3, 3.2, 2.3, 3.2, -TX1, 2.2, -TX0, 2.2, TX0, 2.2, TX1, 2.2]);
   function updateStamps() {
     stampPts(stCur); stN = 0;
     if (!stInit) { stPrev.set(stCur); stInit = true; }
-    const till = veh.tillPos > 0.97;
+    const till = false;
     if (till && !tillWas) { stPrev[0] = stCur[0]; stPrev[1] = stCur[1]; stPrev[2] = stCur[2]; stPrev[3] = stCur[3]; }
     tillWas = till;
     for (let k = 0; k < 3; k++) {
@@ -360,18 +360,10 @@ async function main() {
   function emitParticles(dt, BM) {
     eBM = BM;
     const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw), sp = Math.abs(veh.v), dir = veh.v >= 0 ? 1 : -1;
-    if (veh.tillPos > 0.9 && sp > 0.3 && !veh.air) {
-      em.spray += dt * sp * 80;
-      while (em.spray >= 1) { em.spray--; loc((rnd() - 0.5) * SWATH, 0.12 + rnd() * 0.25, 3.5 + rnd() * 0.6);
-        const bk = (0.3 + rnd() * 1.8) * dir, lat = (rnd() - 0.5) * 1.2, vy = 0.6 + rnd() * 2.0;
-        if (rnd() < 0.7) parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.3 + rnd() * 0.45, 0.007 + rnd() * 0.013, 0, 0, 1, 1, 1, 0.9);
-        else { loc((rnd() - 0.5) * SWATH * 0.9, 0.15 + rnd() * 0.15, 4.2 + rnd() * 0.4); parts.emit(tmp3[0], tmp3[1], tmp3[2], s * (0.6 + bk * 0.5) * dir, 0.2 + rnd() * 0.35, c * (0.6 + bk * 0.5) * dir, 0.7 + rnd() * 0.6, 0.16 + rnd() * 0.1, 0.4, 1, 1.2, 1.2, 1.2, 0.11); } }
-    }
     if (sp > 0.5 && !veh.air) {
       em.kick += dt * sp * 14;
-      while (em.kick >= 1) { em.kick--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (0.95 + rnd() * 1.0), 0.15, veh.v > 0 ? 2.2 : -2.2);
+      while (em.kick >= 1) { em.kick--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (TRK.x + (rnd() - 0.5) * 0.6), 0.15, veh.v > 0 ? 3.25 : -3.25);
         parts.emit(tmp3[0], tmp3[1], tmp3[2], s * dir * (0.5 + rnd()) + c * (rnd() - 0.5), 0.6 + rnd() * 1.6, c * dir * (0.5 + rnd()) - s * (rnd() - 0.5), 0.3 + rnd() * 0.4, 0.007 + rnd() * 0.012, 0, 0, 1, 1, 1, 0.9); }
-      if (veh.v > 0.5 && rnd() < dt * sp * 3) { const sd = rnd() < 0.5 ? -1 : 1; loc(sd * 2.45, 0.3 + rnd() * 0.5, -3.7); parts.emit(tmp3[0], tmp3[1], tmp3[2], -s * sp * 0.6 + c * sd * 1.2, 0.5 + rnd(), -c * sp * 0.6 - s * sd * 1.2, 0.4 + rnd() * 0.4, 0.008 + rnd() * 0.014, 0, 0, 1, 1, 1, 0.9); }
     }
     if (veh.turbo && !veh.air && sp > 8) { // powder roost tail behind the tracks
       em.roost += dt * (sp - 6) * (5 + veh.slip * 10);
@@ -385,7 +377,7 @@ async function main() {
     }
     veh.land = 0;
     em.exh += dt * (5 + 26 * Math.abs(veh.throttle));
-    while (em.exh >= 1) { em.exh--; loc(0.98, 3.1, -0.03); parts.emit(tmp3[0], tmp3[1], tmp3[2], (rnd() - 0.5) * 0.4 + fwdX * veh.v * 0.5, 1.8 + rnd() * 1.2, (rnd() - 0.5) * 0.4 + fwdZ * veh.v * 0.5, 1.1 + rnd() * 0.8, 0.1, 0.7, 1, 0.3, 0.31, 0.34, 0.16 + 0.14 * Math.abs(veh.throttle)); }
+    while (em.exh >= 1) { em.exh--; loc(rnd() < 0.5 ? -1.12 : 1.12, 1.2, 3.95); parts.emit(tmp3[0], tmp3[1], tmp3[2], (rnd() - 0.5) * 0.4 - fwdX * (1.5 - veh.v * 0.5), 0.6 + rnd() * 0.9, (rnd() - 0.5) * 0.4 - fwdZ * (1.5 - veh.v * 0.5), 1.1 + rnd() * 0.8, 0.1, 0.7, 1, 0.3, 0.31, 0.34, 0.16 + 0.14 * Math.abs(veh.throttle)); }
     em.smoke += dt * 11;
     while (em.smoke >= 1) { em.smoke--; const ch = W.cabin.chimney; parts.emit(ch[0] + (rnd() - 0.5) * 0.3, ch[1], ch[2] + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3, 1.3 + rnd() * 0.6, (rnd() - 0.5) * 0.3, 8 + rnd() * 5, 0.3 + rnd() * 0.25, 0.45, 1, 0.8, 0.8, 0.84, 0.42); }
   }
@@ -501,12 +493,12 @@ async function main() {
 
   function collide() {
     const C = W.colliders;
-    for (let i = 0; i < C.length; i += 3) { const dx = veh.x - C[i], dz = veh.z - C[i + 1], rr = C[i + 2] + 1.9, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = (rr - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
+    for (let i = 0; i < C.length; i += 3) { const dx = veh.x - C[i], dz = veh.z - C[i + 1], rr = C[i + 2] + LEO.rad, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = (rr - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
     const cx = Math.floor((veh.x + HALF) / NEAR), cz = Math.floor((veh.z + HALF) / NEAR), T = TT.data;
     for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) {
       if (i < 0 || j < 0 || i >= NCN || j >= NCN) continue;
       const nc = j * NCN + i, st = TT.nearStart[nc], n = TT.nearCnt[nc * 3] + TT.nearCnt[nc * 3 + 1] + TT.nearCnt[nc * 3 + 2];
-      for (let k = st; k < st + n; k++) { const h = T[k * 8 + 3]; if (h < 3.5) continue; const dx = veh.x - T[k * 8], dz = veh.z - T[k * 8 + 2], rr = 1.75 + h * 0.012, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), q = (rr - d) / d; veh.x += dx * q; veh.z += dz * q; veh.v *= 0.88; } }
+      for (let k = st; k < st + n; k++) { const h = T[k * 8 + 3]; if (h < 3.5) continue; const dx = veh.x - T[k * 8], dz = veh.z - T[k * 8 + 2], rr = LEO.rad - 0.4 + h * 0.012, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), q = (rr - d) / d; veh.x += dx * q; veh.z += dz * q; veh.v *= 0.88; } }
     }
   }
   function simulate(dt) {
@@ -545,7 +537,7 @@ async function main() {
       if (!veh.air) veh.v *= 1 - veh.slip * 0.5 * dt;
     }
     veh.yaw += veh.yawRate * dt;
-    veh.dist += veh.v * dt; veh.trL += (veh.v + veh.yawRate * 1.45) * dt; veh.trR += (veh.v - veh.yawRate * 1.45) * dt;
+    veh.dist += veh.v * dt; veh.trL += (veh.v + veh.yawRate * TRK.x) * dt; veh.trR += (veh.v - veh.yawRate * TRK.x) * dt;
     veh.tillPos = clamp(veh.tillPos + (veh.tillDown ? dt : -dt) * 1.3, 0, 1); veh.setPos = clamp(veh.setPos + (veh.setDown ? dt : -dt) * 1.6, 0, 1);
     const mx = -Math.sin(veh.vYaw), mz = -Math.cos(veh.vYaw);
     veh.x = clamp(veh.x + mx * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + mz * veh.v * dt, -PLAY, PLAY);
@@ -553,7 +545,7 @@ async function main() {
     fwdX = -Math.sin(veh.yaw); fwdZ = -Math.cos(veh.yaw);
     const v0 = Math.abs(veh.v); collide();
     if (veh.turbo && v0 > 6 && Math.abs(veh.v) < v0 * 0.9) { veh.shake = Math.max(veh.shake, Math.min(1, v0 / 22)); veh.v *= 0.55; }
-    const rx = -fwdZ, rz = fwdX, hl = 1.9, hw = 1.3, h = W.heightAt, fx = fwdX, fz = fwdZ;
+    const rx = -fwdZ, rz = fwdX, hl = LEO.hl, hw = LEO.hw, h = W.heightAt, fx = fwdX, fz = fwdZ;
     const a = h(veh.x + fx * hl + rx * hw, veh.z + fz * hl + rz * hw), b = h(veh.x + fx * hl - rx * hw, veh.z + fz * hl - rz * hw), c = h(veh.x - fx * hl + rx * hw, veh.z - fz * hl + rz * hw), d = h(veh.x - fx * hl - rx * hw, veh.z - fz * hl - rz * hw);
     const gY = (a + b + c + d) / 4 + 0.03, gV = clamp((gY - veh.gPrev) / dt, -40, 40); veh.gPrev = gY;
     const bob = Math.sin(R.time * 31) * 0.004 * Math.min(1, sp) + Math.sin(veh.dist * 2.1) * 0.012;
@@ -646,7 +638,7 @@ async function main() {
     if (updateTod(dt)) tshDirty = 2;
     ui.poll(cam.mode === 3);
     simulate(dt);
-    const BM = groomerParts(groomer.d, veh);
+    const BM = tankParts(groomer.d, veh, LEO);
     updateCamera(dt, BM);
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
@@ -667,10 +659,10 @@ async function main() {
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[131] = 1;
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
-    setLight(O.l0p, BM, 0, 2.7, -2.15, 0, -0.2, -1, 90, Math.cos(0.98), Math.cos(0.2), 1.25 * nt, 1.18 * nt, 1.0 * nt);
-    setLight(O.l1p, BM, 0, 2.65, -0.2, 0, -0.5, 1, 32, Math.cos(1.1), Math.cos(0.5), 0.5 * nt, 0.48 * nt, 0.42 * nt);
+    setLight(O.l0p, BM, 0, 1.5, -2.9, 0, -0.14, -1, 90, Math.cos(0.98), Math.cos(0.2), 1.25 * nt, 1.18 * nt, 1.0 * nt);
+    setLight(O.l1p, BM, 0, 1.4, 3.9, 0, -0.5, 1, 14, Math.cos(1.1), Math.cos(0.5), 0.25 * nt, 0.03 * nt, 0.02 * nt);
     { const a = R.time * 5.5, o = O.l2p; GU[o] = BM[0] * 0.6 + BM[4] * 2.75 + BM[8] * -1.1 + BM[12]; GU[o + 1] = BM[1] * 0.6 + BM[5] * 2.75 + BM[9] * -1.1 + BM[13]; GU[o + 2] = BM[2] * 0.6 + BM[6] * 2.75 + BM[10] * -1.1 + BM[14]; GU[o + 3] = 26;
-      GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 0.8 * nt; GU[o + 9] = 0.3 * nt; GU[o + 10] = 0.03 * nt; }
+      GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 0; GU[o + 9] = 0; GU[o + 10] = 0; }
     device.queue.writeBuffer(gBuf, 0, GU);
     for (let l = 0; l < NL; l++) {
       const c = lvCell(l);

@@ -45,10 +45,18 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     let ink = step(0.3, rf) * step(rf, 0.7) * step(0.12, f.x) * step(f.x, 0.5 + 0.35 * ihash(vec2i(i32(row), i32(in.col.r * 91.0)))) * step(0.35, vn(vec2f(f.x * 46.0, row * 9.0 + in.col.g * 50.0)));
     alb = mix(alb, vec3f(0.92), ink); snowy = 1.0;
   }
-  else if (m == 14u) { let r = length(uv); alb = mix(vec3f(0.03), vec3f(0.5, 0.5, 0.52), step(r, 0.72)); let a = atan2(uv.y, uv.x); alb *= 0.55 + 0.45 * step(0.3, abs(fract(a * 0.955 + 0.5) - 0.5) * 2.0 + step(r, 0.25)); spec = 0.2; }
+  else if (m == 14u) { let r = length(uv); alb = mix(vec3f(0.03), in.col, step(r, 0.78)); let a = atan2(uv.y, uv.x); alb *= 0.55 + 0.45 * step(0.3, abs(fract(a * 0.955 + 0.5) - 0.5) * 2.0 + step(r, 0.25)); spec = 0.2; }
   else if (m == 15u) { alb = mix(vec3f(0.07, 0.07, 0.075), vec3f(0.3, 0.035, 0.03), smoothstep(3.75, 3.9, uv.y)); alb *= 0.8 + 0.2 * step(0.5, fract(uv.x * 23.0)); alb = mix(alb, vec3f(0.92), smoothstep(3.95, 4.12, uv.y) * 0.6); }
   else if (m == 16u) { alb = vec3f(0.04); }
   else if (m == 19u) { alb = vec3f(0.004); spec = 0.0; }
+  else if (m == 20u) { // vehicle paint with whitewash winter camouflage (pattern fixed to the part)
+    let q = in.lp * 0.55;
+    let w = fbm3(q.xz * 1.7 + q.y * 2.3 + in.col.g * 40.0) + 0.25 * (vn(in.lp.xz * 9.0 + in.lp.y * 7.0) - 0.5);
+    alb = mix(alb, vec3f(0.74, 0.76, 0.76), smoothstep(0.55, 0.6, w) * 0.9);
+    alb *= 0.82 + 0.3 * vn(in.lp.xz * 3.1 + in.lp.y * 5.3);
+    alb = mix(alb, vec3f(0.6, 0.62, 0.64), 0.22 * smoothstep(0.9, 0.2, in.lp.y) * vn(in.lp.xz * 5.0 + 2.0)); // snow dust low on the hull
+    spec = 0.07; gloss = 18.0;
+  }
   else if (m == 18u) { // Norwegian flag
     let f = uv; let cx = abs(f.x - 0.36); let cy = abs(f.y - 0.5);
     alb = vec3f(0.62, 0.02, 0.04);
