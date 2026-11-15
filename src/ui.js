@@ -100,16 +100,42 @@ export function initUI(api, isTouch) {
     $('mI').textContent = s.info;
   }
 
+  // ---- gamepad (standard mapping: DualShock/DualSense over Bluetooth) ----
+  // Only polled while a pad is connected; buttons are edge-detected through a preallocated array.
+  let padN = 0; const pb = new Uint8Array(20);
+  addEventListener('gamepadconnected', () => { padN++; });
+  addEventListener('gamepaddisconnected', () => { padN = Math.max(0, padN - 1); });
+  const dz = (v) => { const a = Math.abs(v); return a < 0.15 ? 0 : Math.sign(v) * (a - 0.15) / 0.85; };
+  let gTh = 0, gSt = 0, gX = 0, gZ = 0, gY = 0, gFast = false;
+  const pollPad = () => {
+    gTh = gSt = gX = gZ = gY = 0; gFast = false;
+    if (!padN || !navigator.getGamepads) return;
+    const gl = navigator.getGamepads();
+    let g = null; for (let i = 0; i < gl.length; i++) if (gl[i] && gl[i].connected) { g = gl[i]; break; }
+    if (!g) return;
+    const b = g.buttons, ax = g.axes, n = Math.min(b.length, 16);
+    const press = (i) => { const d = i < n && b[i].pressed; const e = d && !pb[i]; pb[i] = d ? 1 : 0; return e; };
+    const bv = (i) => (i < n ? b[i].value : 0);
+    if (modalOpen()) { if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; return; }
+    if (press(0)) api.tiller(); if (press(1)) api.setter(); if (press(2)) api.turbo(); if (press(3)) api.cam();
+    if (press(4)) api.fly(); if (press(9)) showMenu(true); if (press(8)) api.debug();
+    if (press(12)) api.snow(); if (press(15)) api.tod((api.state().tod + 1) & 3); if (press(14)) api.tod((api.state().tod + 3) & 3);
+    const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0), tr = bv(7) - bv(6);
+    gTh = Math.max(-1, Math.min(1, tr - ly)); gSt = -lx; gX = lx; gZ = -ly; gY = tr; gFast = bv(5) > 0.5;
+    inp.lookX += rx * 9; inp.lookY += ry * 9;
+  };
+
   // ---- per-frame poll (no allocation) ----
   let lSpd = -1, lT = -1, lS = -1, lC = -1;
   U.poll = (fly) => {
+    pollPad();
     const k = (c) => (keys.has(c) ? 1 : 0);
     const f = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown'), r = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
     let jxx = jx, jyy = jy; const jl = Math.hypot(jxx, jyy);
     if (jl < 0.14) { jxx = 0; jyy = 0; } else { const g = (jl - 0.14) / 0.86 / jl; jxx *= g; jyy *= g; }
-    if (fly) { inp.mvZ = f - jyy; inp.mvX = r + jxx; inp.mvY = k('KeyE') - k('KeyQ') + inp.holdY; inp.th = 0; inp.st = 0; }
-    else { inp.th = Math.max(-1, Math.min(1, f - jyy)); inp.st = Math.max(-1, Math.min(1, -r - jxx * 1.15)); inp.mvX = inp.mvZ = inp.mvY = 0; }
-    inp.fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
+    if (fly) { inp.mvZ = f - jyy + gZ; inp.mvX = r + jxx + gX; inp.mvY = k('KeyE') - k('KeyQ') + inp.holdY + gY; inp.th = 0; inp.st = 0; }
+    else { inp.th = Math.max(-1, Math.min(1, f - jyy + gTh)); inp.st = Math.max(-1, Math.min(1, -r - jxx * 1.15 + gSt)); inp.mvX = inp.mvZ = inp.mvY = 0; }
+    inp.fast = gFast || keys.has('ShiftLeft') || keys.has('ShiftRight');
   };
   U.hud = (kmh, till, set, camMode) => {
     if (kmh !== lSpd) { lSpd = kmh; $('spd').textContent = SPD[kmh] || '199'; }
