@@ -15,6 +15,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let night = G.misc.x;
   if (m == 4u && isG > 0.5 && G.groom.w > 0.5) { discard; }
   if (m == 0u) { spec = 0.14; gloss = 70.0; refl = 0.16; }
+  if (isG > 0.5 && G.groom.w > 0.5 && in.lp.z < -0.15 && in.lp.y > 1.4 && m != 10u && m != 11u) { alb = vec3f(0.035, 0.036, 0.04); refl = 0.0; spec = 0.05; }
   else if (m == 1u || m == 17u) { // boards: vertical (1) or horizontal cladding (17)
     var q = uv; if (m == 17u) { q = uv.yx; }
     let bw = 0.15; let bi = floor(q.x / bw); let bf = fract(q.x / bw);
@@ -34,8 +35,8 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     emis = vec3f(1.0, 0.62, 0.26) * mull * glow * (0.06 + night * 2.6);
     alb = mix(vec3f(0.85), vec3f(0.03, 0.04, 0.06), mull); spec = 0.3 * mull; gloss = 200.0; refl = 0.5 * mull;
   }
-  else if (m == 8u) { spec = 0.4; gloss = 30.0; alb = mix(alb, vec3f(0.93), smoothstep(0.3, 0.7, vn(vec2f(in.lp.x * 7.0, uv.x * 9.0)))); }
-  else if (m == 9u) { alb = mix(vec3f(0.025), vec3f(0.9), smoothstep(0.35, 0.75, vn(vec2f(in.lp.x * 6.0, uv.y * 2.5)))* 0.75); }
+  else if (m == 8u) { spec = 0.4; gloss = 30.0; alb = mix(alb, vec3f(0.93), 0.25 * smoothstep(0.4, 0.8, vn(vec2f(in.lp.x * 3.0, uv.x * 2.0)))); }
+  else if (m == 9u) { alb = mix(vec3f(0.025), vec3f(0.9), smoothstep(0.55, 0.9, vn(vec2f(in.lp.x * 3.0, uv.y * 1.3))) * 0.35); }
   else if (m == 10u) { emis = in.col * (0.35 + 7.5 * night); }
   else if (m == 11u) { emis = in.col * (0.6 + 8.0 * pow(saturate(dot(n, G.l2d.xyz)), 3.0)) * (0.5 + 0.5 * night); }
   else if (m == 12u) { alb = mix(vec3f(0.11, 0.11, 0.12), vec3f(0.27, 0.25, 0.22), fbm3(wp.xz * 0.9 + wp.y * 1.7)); alb *= 0.7 + 0.6 * vn(wp.xz * 7.0 + wp.y * 5.0); snowy = 1.3; }
@@ -63,7 +64,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let L = G.sunDir.xyz;
   let ndl = saturate(dot(n, L));
   if (isG < 0.5) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }
-  let sh = shadowSun(wp, n, dist) * terrainShadow(wp.xz, hAbove);
+  let sh = shadowSunS(wp, n, dist, 2) * terrainShadow(wp.xz, hAbove);
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.0) + lampLight(wp.xz, hAbove) * (0.5 + 0.5 * saturate(n.y + 0.6));
   var col = alb * (sun * ndl + ambient(n) * (0.55 + 0.45 * saturate(hAbove * 0.5)) + ll) + emis;

@@ -1,6 +1,11 @@
 struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) @interpolate(flat) ks: vec4f, @location(4) ao: f32, @location(5) hy: f32 };
 @vertex fn vs(@location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) uk: vec4f, @location(3) i0: vec4f, @location(4) i1: vec4f) -> TV {
-  let d = treeDeform(pos, nrm, uk.z, i0, i1, G.camPos.xyz);
+  var sc = 1.0;
+  if (G.lod2.w > 0.0) {
+    let a = G.camPos.xz; let ab = G.groom.xz - a; let t = dot(i0.xz - a, ab) / dot(ab, ab);
+    if (t > 0.0 && t < 0.9) { sc = smoothstep(1.2, 3.2, length(i0.xz - a - ab * t) + 4.0 * max(t - 0.75, 0.0)); }
+  }
+  let d = treeDeform(pos * sc, nrm, uk.z, i0, i1, G.camPos.xyz);
   var o: TV;
   o.wp = d.wp; o.n = d.n; o.uv = uk.xy; o.ks = vec4f(uk.z, i1.y, fract(i1.z), i0.w); o.ao = uk.w; o.hy = d.hy;
   o.pos = mix(vec4f(0.0, 0.0, -1.0, 1.0), G.viewProj * vec4f(d.wp, 1.0), d.keep);
@@ -34,7 +39,7 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       // snow load on the top side, heavier along the branch axis
       let sw = 0.78 - 0.3 * uv.x + (vn(vec2f(uv.x * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
       snow = (1.0 - smoothstep(sw - 0.1, sw + 0.03, e)) * smoothstep(0.02, 0.12, uv.x);
-      if (under) { snow = 0.0; g *= 0.8; }
+      if (under) { snow = 0.0; g *= 1.5; }
       snow *= 0.82 + 0.18 * vn(vec2f(uv.x * 9.0 + seed * 5.0, uv.y * 3.0 + in.hy));
       alb = g; trans = 1.0;
     }
@@ -72,12 +77,12 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   } else { // conifer bark
     let b = vn(vec2f(uv.x * 12.0, wp.y * 2.5 + seed * 5.0));
     alb = mix(vec3f(0.09, 0.07, 0.06), vec3f(0.2, 0.16, 0.13), b);
-    if (sp > 0.5 && sp < 1.5) { alb = mix(alb, vec3f(0.3, 0.15, 0.075) * (0.6 + 0.6 * b), smoothstep(0.45, 0.75, uv.y)); }
+    if (sp > 0.5 && sp < 1.5) { alb = mix(alb, vec3f(0.2, 0.12, 0.075) * (0.6 + 0.6 * b), smoothstep(0.45, 0.75, uv.y)); }
     snow = smoothstep(0.75, 0.9, vn(vec2f(uv.x * 3.0 + seed, wp.y * 0.8)) + n.x * 0.2) * 0.7;
   }
-  alpha *= sightFade(wp);
   if (G.lod2.z < 0.5) { if (alpha < 0.5) { discard; } alpha = 1.0; }
   if (alpha < 0.02) { discard; }
+  snow *= 0.7 + 0.3 * fract(seed * 5.3);
   alb = mix(alb, vec3f(0.93, 0.95, 0.99), snow);
   trans *= 1.0 - snow;
   let L = G.sunDir.xyz;
@@ -89,7 +94,9 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   let sun = G.sunCol.rgb * sh;
   let dif = saturate((ndl + 0.35) / 1.35);
   let ll = localLights(wp, n, 0.4) + lampLight(wp.xz, in.hy);
-  var col = alb * (sun * dif + ambient(n) * ao + ll);
+  var amb = ambient(n) * ao;
+  if (under) { amb = (ambient(n) * 0.5 + ambient(vec3f(0.0, 1.0, 0.0)) * 0.3) * ao; }
+  var col = alb * (sun * dif + amb + ll);
   col += alb * sun * trans * pow(saturate(dot(v, -L)), 2.0) * 1.6;
   col += sun * snow * pow(saturate(dot(n, normalize(L + v))), 24.0) * 0.12;
   return vec4f(applyFog(col, wp), alpha);

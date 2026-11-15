@@ -203,7 +203,7 @@ async function main() {
   const treeShMod = mod(shadowW + treeDefW + shTreeW, 'treeshadow');
   const treeShPipe = device.createRenderPipeline({ layout: layS, vertex: { module: treeShMod, entryPoint: 'vs', buffers: treeBufs }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
   const LOD = [42 * Q.lodMul, 200 * Q.lodMul, 850 * Q.lodMul];
-  const lodBG = [[0, LOD[0], 0], [LOD[0], LOD[1], 0], [LOD[1], LOD[2], 1], [LOD[2], 1e9, 1]].map((r) => device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: mkBuf(new Float32Array([r[0], r[1], r[2], 0]), U.UNIFORM) } }] }));
+  const lodBG = [[0, LOD[0], 0], [LOD[0], LOD[1], 0], [LOD[1], LOD[2], 1], [LOD[2], 1e9, 1]].map((r) => device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: mkBuf(new Float32Array([r[0], r[1], r[2], 1]), U.UNIFORM) } }] }));
   const camPlanes = new Float32Array(20);
   function planesFrom(out, m, n) {
     for (let i = 0; i < 4; i++) { const a = i >> 1, sg = i & 1 ? -1 : 1; for (let k = 0; k < 4; k++) out[i * 4 + k] = m[k * 4 + 3] + sg * m[k * 4 + a]; }
@@ -351,7 +351,7 @@ async function main() {
       while (em.spray >= 1) { em.spray--; loc((rnd() - 0.5) * SWATH, 0.12 + rnd() * 0.25, 3.5 + rnd() * 0.6);
         const bk = (0.3 + rnd() * 1.8) * dir, lat = (rnd() - 0.5) * 1.2, vy = 0.6 + rnd() * 2.0;
         if (rnd() < 0.7) parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.3 + rnd() * 0.45, 0.007 + rnd() * 0.013, 0, 0, 1, 1, 1, 0.9);
-        else parts.emit(tmp3[0], tmp3[1] + 0.15, tmp3[2], s * bk * 0.6, 0.25 + rnd() * 0.5, c * bk * 0.6, 1.2 + rnd() * 1.0, 0.25 + rnd() * 0.18, 0.9, 1, 1, 1, 1, 0.34); }
+        else parts.emit(tmp3[0], tmp3[1] + 0.15, tmp3[2], s * bk * 0.6, 0.25 + rnd() * 0.5, c * bk * 0.6, 1.2 + rnd() * 1.0, 0.25 + rnd() * 0.18, 0.9, 1, 1.25, 1.25, 1.25, 0.16); }
     }
     if (sp > 0.5) {
       em.kick += dt * sp * 14;
@@ -517,7 +517,7 @@ async function main() {
       lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
     } else if (cam.mode === 1) {
       cam.cabYaw = clamp(cam.cabYaw - inp.lookX * sens, -2.7, 2.7); cam.cabPitch = clamp(cam.cabPitch - inp.lookY * sens, -0.8, 0.6);
-      const cp = Math.cos(cam.cabPitch), lx = -Math.sin(cam.cabYaw) * cp, ly = Math.sin(cam.cabPitch), lz = -Math.cos(cam.cabYaw) * cp, ex = 0, ey = 2.02, ez = -1.25;
+      const cp = Math.cos(cam.cabPitch), lx = -Math.sin(cam.cabYaw) * cp, ly = Math.sin(cam.cabPitch), lz = -Math.cos(cam.cabYaw) * cp, ex = 0, ey = 2.08, ez = -1.75;
       cam.x = BM[0] * ex + BM[4] * ey + BM[8] * ez + BM[12]; cam.y = BM[1] * ex + BM[5] * ey + BM[9] * ez + BM[13]; cam.z = BM[2] * ex + BM[6] * ey + BM[10] * ez + BM[14];
       lookAt(view, cam.x, cam.y, cam.z, cam.x + BM[0] * lx + BM[4] * ly + BM[8] * lz, cam.y + BM[1] * lx + BM[5] * ly + BM[9] * lz, cam.z + BM[2] * lx + BM[6] * ly + BM[10] * lz, BM[4], BM[5], BM[6]);
     } else {

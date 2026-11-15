@@ -15,7 +15,7 @@ fn baseH(xz: vec2f) -> f32 {
   if (o > 0.0) { h = mix(h, 262.0, smoothstep(0.0, 1200.0, o)); }
   return h;
 }
-fn pressOf(m: vec4f) -> f32 { return max(smoothstep(0.08, 0.3, m.r), m.b * 0.85); }
+fn pressOf(m: vec4f) -> f32 { return max(smoothstep(0.1, 0.34, m.r), m.b * 0.85); }
 fn bermOf(m: vec4f) -> f32 { return smoothstep(0.02, 0.1, m.r) * (1.0 - smoothstep(0.1, 0.28, m.r)); }
 fn icePatch(p: vec2f) -> f32 {
   let q = vec2f(p.x * 0.6 + p.y * 0.8, p.y * 0.6 - p.x * 0.8) * vec2f(0.016, 0.03);
@@ -115,7 +115,9 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
       let gp = vec2f(pressOf(ax1) - pressOf(ax0), pressOf(az1) - pressOf(az0)) / (2.0 * tm);
       let gb = vec2f(bermOf(ax1) - bermOf(ax0), bermOf(az1) - bermOf(az0)) / (2.0 * tm);
       Sd = det.yz * (1.0 - press) - det.x * gp + 0.06 * gb * (1.0 - smoothstep(60.0, 120.0, dxz));
-      let gu = vec2f(bx1.r - bx0.r, bz1.r - bz0.r) / (2.0 * tm);
+      // one-sided differences near the lane edge: only trust neighbours that are groomed themselves
+      let w4 = smoothstep(vec4f(0.12), vec4f(0.3), vec4f(ax0.r, ax1.r, az0.r, az1.r)) + 1e-3;
+      let gu = vec2f((w4.y * (bx1.r - mB.r) + w4.x * (mB.r - bx0.r)) / (w4.x + w4.y), (w4.w * (bz1.r - mB.r) + w4.z * (mB.r - bz0.r)) / (w4.z + w4.w)) / tm;
       let gl = length(gu);
       let valid = smoothstep(0.45, 0.8, gl * SW) * (1.0 - smoothstep(1.35, 1.9, gl * SW));
       let lat = gu / max(gl, 1e-4);
@@ -182,10 +184,10 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let ndl = dot(n, L);
   let ndv = saturate(dot(n, v));
   let canopy = nt.b;
-  var sh = shadowSunS(wp, nb, dist, true) * terrainShadow(p, 0.3);
+  var sh = shadowSunS(wp, nb, dist, 1) * terrainShadow(p, 0.3);
   sh *= mix(1.0, G.misc.w, saturate(canopy * 1.6) * smoothstep(G.casc.z * 0.6, G.casc.z, dist));
   let gd2 = p - G.groom.xz;
-  let ao = (1.0 - 0.5 * saturate(canopy * 1.3) - 0.45 * groove - cordAO - 0.3 * edge) * (1.0 - 0.4 * exp(-dot(gd2, gd2) * 0.12));
+  let ao = (1.0 - 0.5 * saturate(canopy * 1.3) - 0.45 * groove - cordAO - 0.2 * edge) * (1.0 - 0.4 * exp(-dot(gd2, gd2) * 0.12));
 
   var alb = mix(vec3f(0.9, 0.93, 0.98), vec3f(0.975, 0.975, 0.98), groomed * mix(0.6, 1.0, fresh));
   alb *= (1.0 - 0.05 * cordAvg - 0.4 * groove - 0.06 * imp) * (1.0 + 0.03 * pan);

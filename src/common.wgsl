@@ -113,12 +113,12 @@ fn lampLight(wxz: vec2f, hAbove: f32) -> vec3f {
 }
 
 // ---------- shadows ----------
-fn shadowCasc(wp: vec3f, ci: i32, soft: bool) -> f32 {
+fn shadowCasc(wp: vec3f, ci: i32, soft: i32) -> f32 {
   let p = G.shadowMat[ci] * vec4f(wp, 1.0);
   let uv = p.xy * vec2f(0.5, -0.5) + 0.5;
   let t = G.casc.w;
   let z = p.z;
-  if (!soft || G.lod2.x < 0.5) {
+  if (soft == 0 || G.lod2.x < 0.5 || (soft == 1 && ci == 2)) {
     var s = textureSampleCompareLevel(shadowTex, shadowSmp, uv + vec2f(-0.75, -0.75) * t, ci, z);
     s += textureSampleCompareLevel(shadowTex, shadowSmp, uv + vec2f(0.75, -0.75) * t, ci, z);
     s += textureSampleCompareLevel(shadowTex, shadowSmp, uv + vec2f(-0.75, 0.75) * t, ci, z);
@@ -132,23 +132,27 @@ fn shadowCasc(wp: vec3f, ci: i32, soft: bool) -> f32 {
   let ang = ihash(vec2i(floor(wp.xz * 140.0))) * 6.2832;
   let rc = cos(ang); let rs = sin(ang);
   let sr = clamp(0.55 / tw, 2.0, 10.0);
-  var zb = 0.0; var nb = 0.0;
-  let mx = vec2f(res - 1.0);
-  for (var i = 0; i < 8; i++) {
-    let o = vec2f(P[i].x * rc - P[i].y * rs, P[i].x * rs + P[i].y * rc) * sr;
-    let d = textureLoad(shadowTex, vec2i(clamp(uv * res + o, vec2f(0.0), mx)), ci, 0);
-    if (d < z - 0.0004) { zb += d; nb += 1.0; }
+  var pen = 3.0;
+  if (soft == 1 && ci > 0) { pen = 2.2; }
+  if (soft == 1 && ci == 0) {
+    var zb = 0.0; var nb = 0.0;
+    let mx = vec2f(res - 1.0);
+    for (var i = 0; i < 6; i++) {
+      let o = vec2f(P[i * 2].x * rc - P[i * 2].y * rs, P[i * 2].x * rs + P[i * 2].y * rc) * sr;
+      let d = textureLoad(shadowTex, vec2i(clamp(uv * res + o, vec2f(0.0), mx)), ci, 0);
+      if (d < z - 0.0004) { zb += d; nb += 1.0; }
+    }
+    if (nb < 0.5) { return 1.0; }
+    pen = clamp((z - zb / nb) * 1040.0 * 0.022 / tw, 1.0, sr);
   }
-  if (nb < 0.5) { return 1.0; }
-  let pen = clamp((z - zb / nb) * 1040.0 * 0.022 / tw, 1.0, sr);
   var s = 0.0;
-  for (var i = 0; i < 12; i++) {
+  for (var i = 0; i < 8; i++) {
     let o = vec2f(P[i].x * rc - P[i].y * rs, P[i].x * rs + P[i].y * rc) * pen;
     s += textureSampleCompareLevel(shadowTex, shadowSmp, uv + o * t, ci, z);
   }
-  return s / 12.0;
+  return s * 0.125;
 }
-fn shadowSunS(wp: vec3f, n: vec3f, vd: f32, soft: bool) -> f32 {
+fn shadowSunS(wp: vec3f, n: vec3f, vd: f32, soft: i32) -> f32 {
   if (vd >= G.casc.z) { return 1.0; }
   var ci = 0;
   if (vd > G.casc.x) { ci = 1; }
@@ -166,7 +170,7 @@ fn shadowSunS(wp: vec3f, n: vec3f, vd: f32, soft: bool) -> f32 {
   }
   return s;
 }
-fn shadowSun(wp: vec3f, n: vec3f, vd: f32) -> f32 { return shadowSunS(wp, n, vd, false); }
+fn shadowSun(wp: vec3f, n: vec3f, vd: f32) -> f32 { return shadowSunS(wp, n, vd, 0); }
 // fades geometry that sits between the chase camera and the groomer (x = keep factor)
 fn sightFade(wp: vec3f) -> f32 {
   let r = G.lod2.w;

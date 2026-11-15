@@ -254,9 +254,9 @@ export async function genWorld(tick, Q) {
   }
   { // soften the shoreline terraces around the cabin yard
     const R = 75, i0 = Math.floor(w2t(cabin.x - R)), i1 = Math.ceil(w2t(cabin.x + R)), j0 = Math.floor(w2t(cabin.z - R)), j1 = Math.ceil(w2t(cabin.z + R)), tmp = new Float32Array(HN * HN);
-    for (let it = 0; it < 6; it++) {
+    for (let it = 0; it < 45; it++) {
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * HN + i; tmp[k] = (H[k] * 4 + H[k - 1] + H[k + 1] + H[k - HN] + H[k + HN] + 0.5 * (H[k - HN - 1] + H[k - HN + 1] + H[k + HN - 1] + H[k + HN + 1])) / 10; }
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * HN + i, d = Math.hypot((i + 0.5) * TEX - HALF - cabin.x, (j + 0.5) * TEX - HALF - cabin.z); if (mat[k * 4] < 60 && d > 15) H[k] = lerp(tmp[k], H[k], smooth(55, 75, d)); }
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * HN + i, d = Math.hypot((i + 0.5) * TEX - HALF - cabin.x, (j + 0.5) * TEX - HALF - cabin.z); const x = (i + 0.5) * TEX - HALF, z = (j + 0.5) * TEX - HALF, s = lakeS(L0, x, z); if (s >= 1) { if (d > 15) H[k] = lerp(tmp[k], H[k], smooth(55, 75, d)); H[k] = Math.min(H[k], L0.lv + 0.2 + (s - 1) * L0.rx * 0.2 + smooth(60, 75, d) * 50); } }
     }
   }
   await tick('Computing normals', 0.68);
@@ -331,7 +331,7 @@ export async function genWorld(tick, Q) {
           else {
             const bf = fbm(x * 0.008 + 90, z * 0.008 - 20, 2), pf = fbm(x * 0.005 - 30, z * 0.005 + 70, 2);
             let pb = 0.05 + smooth(0.12, 0.3, bf) * 0.8 + (1 - smooth(1.05, 1.3, ls)) * 0.5 + (1 - smooth(0.25, 0.6, af)) * 0.6 + bog * 0.5;
-            const pp = 0.06 + smooth(0.12, 0.28, pf) * 0.55 + bog * 0.4;
+            const pp = 0.04 + smooth(0.14, 0.3, pf) * 0.32 + bog * 0.4;
             if (r3 < pb) { sp = 2; ht = (6 + 9 * r2) * (0.3 + 0.7 * smooth(0.1, 0.7, af)); wd = 0.9 + 0.3 * r1 + (1 - af) * 0.5; }
             else if (r3 < pb + pp) { sp = 1; ht = (11 + 10 * r2) * (0.35 + 0.65 * smooth(0.2, 0.8, af)); wd = 0.9 + 0.3 * r1; }
             else { sp = 0; ht = (7 + 17 * r2 * Math.sqrt(r2)) * (0.22 + 0.78 * smooth(0.1, 0.85, af)); wd = 0.85 + 0.35 * r1 + (1 - af) * 0.4; }

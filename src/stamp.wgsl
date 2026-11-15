@@ -15,9 +15,9 @@ struct SO { @builtin(position) pos: vec4f, @location(0) w: f32, @location(1) s: 
 }
 struct FO { @location(0) a: vec4f, @location(1) b: vec4f };
 @fragment fn fs(in: SO) -> FO {
-  let cov = saturate(min(in.w, 1.0 - in.w) * in.uu.z + 0.5);
+  let cov = saturate(min(in.w, 1.0 - in.w) * in.uu.z * 0.5 + 0.5);
   var o: FO;
   o.a = vec4f(in.val.rgb, cov);
-  o.b = vec4f(mix(in.uu.x, in.uu.y, in.w), abs(fract(in.s / 8.0) * 2.0 - 1.0), 0.0, cov);
+  o.b = vec4f(mix(in.uu.x, in.uu.y, in.w), abs(fract(in.s / 8.0) * 2.0 - 1.0), 0.0, step(0.02, cov));
   return o;
 }
