@@ -4,6 +4,7 @@ struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   if (G.lod2.w > 0.0) {
     let a = G.camPos.xz; let ab = G.groom.xz - a; let t = dot(i0.xz - a, ab) / dot(ab, ab);
     if (t > 0.0 && t < 0.9) { sc = smoothstep(1.2, 3.2, length(i0.xz - a - ab * t) + 4.0 * max(t - 0.75, 0.0)); }
+    sc = min(sc, smoothstep(1.6, 3.6, distance(i0.xz, a)));
   }
   let d = treeDeform(pos * sc, nrm, uk.z, i0, i1, G.camPos.xyz);
   var o: TV;
@@ -77,7 +78,7 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   } else { // conifer bark
     let b = vn(vec2f(uv.x * 12.0, wp.y * 2.5 + seed * 5.0));
     alb = mix(vec3f(0.09, 0.07, 0.06), vec3f(0.2, 0.16, 0.13), b);
-    if (sp > 0.5 && sp < 1.5) { alb = mix(alb, vec3f(0.2, 0.12, 0.075) * (0.6 + 0.6 * b), smoothstep(0.45, 0.75, uv.y)); }
+    if (sp > 0.5 && sp < 1.5) { alb = mix(alb, vec3f(0.2, 0.12, 0.075) * (0.6 + 0.6 * b), smoothstep(0.6, 0.85, uv.y) * (1.0 - TR.r.z * 0.8)); }
     snow = smoothstep(0.75, 0.9, vn(vec2f(uv.x * 3.0 + seed, wp.y * 0.8)) + n.x * 0.2) * 0.7;
   }
   if (G.lod2.z < 0.5) { if (alpha < 0.5) { discard; } alpha = 1.0; }
