@@ -73,9 +73,9 @@ function spruce(lod) {
     for (let k = 0; k < K; k++) { const t = k / (K - 1), y = 0.12 + 0.8 * Math.pow(t, 0.92), len = 0.17 * Math.pow(1 - y, 0.72) + 0.02; b.tier(0, y, 0, len, 0.72 - 0.4 * t, 7, k * 1.3, 0.62 + 0.38 * y, 0.62); }
   } else if (lod === 2) {
     b.tube([[0, 0, 0, 0.016], [0, 0.5, 0, 0.008]], 3, 0, 0.55, 0.7);
-    for (let k = 0; k < 3; k++) { const y = 0.14 + 0.29 * k, len = 0.165 * Math.pow(1 - y, 0.7) + 0.02; b.tier(0, y, 0, len, 0.7, 5, k * 1.1, 0.7 + 0.3 * y, k === 2 ? 2.6 : 1.9); }
+    for (let k = 0; k < 5; k++) { const y = 0.12 + 0.17 * k, len = 0.17 * Math.pow(1 - y, 0.72) + 0.02; b.tier(0, y, 0, len, 0.7, 6, k * 1.1, 0.7 + 0.3 * y, k === 4 ? 2.6 : 1.25); }
   } else {
-    b.tier(0, 0.1, 0, 0.14, 0.4, 4, 0.4, 0.85, 6.4);
+    b.tier(0, 0.1, 0, 0.15, 0.5, 5, 0.4, 0.8, 3.2); b.tier(0, 0.5, 0, 0.085, 0.6, 5, 1.3, 0.95, 5.6);
   }
   return b;
 }
@@ -86,7 +86,7 @@ function pine(lod) {
     const n = 10;
     for (let i = 0; i < n; i++) {
       const f = i / (n - 1), y = 0.54 + 0.4 * f + (R(i + 40) - 0.5) * 0.03, ph = i * 2.4 + R(i) * 0.8, ro = (0.035 + 0.1 * (1 - f * f * 0.8)) * (0.8 + 0.4 * R(i + 9));
-      const cx = Math.cos(ph) * ro, cz = Math.sin(ph) * ro, rad = 0.075 * (1.15 - 0.45 * f) * (0.85 + 0.3 * R(i + 77));
+      const cx = Math.cos(ph) * ro, cz = Math.sin(ph) * ro, rad = 0.105 * (1.15 - 0.45 * f) * (0.85 + 0.3 * R(i + 77));
       b.tube([[0, y - 0.07, 0, 0.007], [cx * 0.6, y - 0.03, cz * 0.6, 0.005], [cx, y, cz, 0.002]], 4, 0, 0.7, 0.9);
       b.tier(cx, y - 0.005, cz, rad, 0.28, 6, i * 0.9, 0.75 + 0.25 * f, 0.5);
       b.tier(cx * 0.9, y + 0.022, cz * 0.9, rad * 0.62, 0.3, 5, i * 1.7 + 0.5, 0.9, 0.6);
@@ -94,7 +94,7 @@ function pine(lod) {
     b.tier(0, 0.95, 0, 0.055, 0.3, 6, 0.2, 1, 0.9);
   } else {
     b.tube([[0, 0, 0, 0.021], [0, 0.9, 0, 0.005]], 4, 0, 0.7, 1);
-    for (let i = 0; i < 5; i++) { const f = i / 4, y = 0.56 + 0.36 * f, ph = i * 2.4, ro = 0.085 * (1 - f * 0.85); b.tier(Math.cos(ph) * ro, y, Math.sin(ph) * ro, 0.095 * (1.1 - 0.4 * f), 0.3, 5, i, 0.75 + 0.25 * f, 0.6); }
+    for (let i = 0; i < 5; i++) { const f = i / 4, y = 0.56 + 0.36 * f, ph = i * 2.4, ro = 0.085 * (1 - f * 0.85); b.tier(Math.cos(ph) * ro, y, Math.sin(ph) * ro, 0.125 * (1.1 - 0.4 * f), 0.3, 5, i, 0.75 + 0.25 * f, 0.6); }
   }
   return b;
 }

@@ -23,7 +23,7 @@ export function buildGroomer() {
       else { const t = (s - 4 * A - Math.PI * R) / R; y = yc + R * Math.cos(t); z = -A - R * Math.sin(t); ny = Math.cos(t); nz = -Math.sin(t); }
       P.push([y, z, ny, nz, s]);
     }
-    for (const [xa, xb] of [[x0 + 0.06, x0 + 0.3], [cx - 0.12, cx + 0.12], [x1 - 0.3, x1 - 0.06]]) for (let i = 0; i < N; i++) {
+    for (const [xa, xb] of [[x0 + 0.03, x1 - 0.03]]) for (let i = 0; i < N; i++) {
       const p = P[i], q = P[i + 1];
       const a = b.vert(xa, p[0], p[1], 0, p[2], p[3], 0, p[4]), c = b.vert(xb, p[0], p[1], 0, p[2], p[3], 1, p[4]), d = b.vert(xb, q[0], q[1], 0, q[2], q[3], 1, q[4]), e = b.vert(xa, q[0], q[1], 0, q[2], q[3], 0, q[4]);
       b.i.push(a, c, d, a, d, e);
@@ -117,7 +117,9 @@ export function buildGroomer() {
         b.quad([xo, p[0], p[1]], [xo, q[0], q[1]], [xw, q[0], q[1] - 0.55], [xw, p[0], p[1] - 0.55]);
         b.quad([xw, p[0], p[1] - 0.52], [xw, q[0], q[1] - 0.52], [xo, q[0], q[1] + 0.05], [xo, p[0], p[1] + 0.05]);
       } }
-    b.set(STEEL, MAT.metal); b.box(-W2 - 0.02, 0.02, -3.4, W2 + 0.02, 0.12, -3.3); }
+    b.set(STEEL, MAT.metal); b.box(-W2 - 0.02, 0.02, -3.4, W2 + 0.02, 0.12, -3.3);
+    // snow rolling ahead of the blade
+    b.set([1, 1, 1], MAT.snow); b.blob(-0.9, 0.12, -3.75, 1.5, 0.42, 0.5, 3, 0.25, 9); b.blob(0.9, 0.1, -3.78, 1.5, 0.36, 0.48, 5, 0.25, 9); b.blob(0, 0.1, -3.7, 2.1, 0.3, 0.42, 8, 0.2, 9); }
   // --- rear tiller + finisher (part 2) ---
   b.part = 2;
   b.set(DARK, MAT.metal);

@@ -17,7 +17,7 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
   o.pos = G.viewProj * vec4f(wp, 1.0);
   o.uv = q; o.kind = c.x; o.seed = c.y;
   var col = b.rgb;
-  if (c.x < 1.5) { col *= litAt(a.xyz, c.z); } else { col *= G.misc.x; }
+  if (c.x < 1.5) { let vd = normalize(a.xyz - G.camPos.xyz); col *= litAt(a.xyz, c.z) + G.sunCol.rgb * pow(saturate(dot(vd, G.sunDir.xyz)), 5.0) * 1.2; } else { col *= G.misc.x; }
   o.col = vec4f(col, b.a);
   if (b.a <= 0.0 && c.x < 1.5) { o.pos = vec4f(0.0, 0.0, -1.0, 1.0); }
   return o;

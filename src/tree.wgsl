@@ -19,8 +19,8 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   if (kind > 0.5 && kind < 1.5) {
     let e = abs(uv.y);
     if (generic && sp > 1.5) { // distant birch: frosted twig haze
-      alpha = 0.34 + 0.3 * vn(wp.xz * 1.7 + wp.y * 2.3);
-      alb = mix(vec3f(0.2, 0.15, 0.16), vec3f(0.74, 0.74, 0.8), 0.55);
+      alpha = (1.0 - smoothstep(0.2, 0.3, e + 0.25 * tri(uv.x * 5.0 + seed * 9.0))) * step(0.12, uv.x);
+      alb = mix(vec3f(0.2, 0.15, 0.16), vec3f(0.74, 0.74, 0.8), 0.5);
     } else {
       // needle fringe
       let fr = e + 0.26 * tri(uv.x * 9.0 + seed * 7.0) * smoothstep(0.25, 0.6, e) + 0.1 * tri(uv.x * 23.0 + seed * 3.0);
@@ -28,11 +28,14 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       alpha = 1.0 - smoothstep(0.95 - aw, 0.95 + aw, fr);
       var g = mix(vec3f(0.028, 0.062, 0.03), vec3f(0.05, 0.082, 0.035), step(0.5, sp));
       g *= 0.75 + 0.5 * seed;
-      g *= 0.7 + 0.6 * vn(vec2f(uv.x * 14.0 + seed * 40.0, uv.y * 5.0));
+      // needle rows: fine herringbone streaks along the branch
+      let nd = tri(uv.x * 26.0 + e * 5.0 + seed * 3.0);
+      g *= (0.65 + 0.55 * vn(vec2f(uv.x * 14.0 + seed * 40.0, uv.y * 5.0))) * (0.72 + 0.5 * nd * (1.0 - saturate(duv.x * 40.0)));
       // snow load on the top side, heavier along the branch axis
       let sw = 0.78 - 0.3 * uv.x + (vn(vec2f(uv.x * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
       snow = (1.0 - smoothstep(sw - 0.1, sw + 0.03, e)) * smoothstep(0.02, 0.12, uv.x);
-      if (under) { snow = 0.0; g *= 0.5; }
+      if (under) { snow = 0.0; g *= 0.8; }
+      snow *= 0.82 + 0.18 * vn(vec2f(uv.x * 9.0 + seed * 5.0, uv.y * 3.0 + in.hy));
       alb = g; trans = 1.0;
     }
   } else if (kind > 1.5 && kind < 2.5) { // birch twig spray: main twigs from the apex with alternating side shoots
@@ -51,11 +54,11 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       let sd = f32(i32(cell) & 1) * 2.0 - 1.0;
       let sl = 0.1 * (1.0 - 0.45 * t) * (0.5 + ihash(vec2i(i32(cell), k + i32(seed * 31.0))));
       let dxs = ddx * sd;
-      l = max(l, (1.0 - smoothstep(0.003, 0.0055 + px, abs(dxs - f * sl))) * step(0.0, dxs) * step(dxs, sl) * step(t, 0.96) * step(0.06, t));
+      l = max(l, (1.0 - smoothstep(0.003, 0.0055 + px, abs(dxs - f * sl))) * step(0.0, dxs) * step(dxs, sl) * step(t, 0.96) * step(0.06, t) * (1.0 - fine));
       a = max(a, l);
     }
     let env = smoothstep(0.02, 0.2, uv.x) * smoothstep(0.98, 0.8, uv.x) * smoothstep(1.0, 0.75, y);
-    alpha = mix(a, 0.26 * env, fine);
+    alpha = a * env;
     let frost = 0.25 + 0.4 * vn(wp.xz * 2.0 + wp.y * 3.0);
     alb = mix(vec3f(0.13, 0.08, 0.075), vec3f(0.8, 0.8, 0.86), frost);
     trans = 0.3;
@@ -69,16 +72,17 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   } else { // conifer bark
     let b = vn(vec2f(uv.x * 12.0, wp.y * 2.5 + seed * 5.0));
     alb = mix(vec3f(0.09, 0.07, 0.06), vec3f(0.2, 0.16, 0.13), b);
-    if (sp > 0.5 && sp < 1.5) { alb = mix(alb, vec3f(0.42, 0.2, 0.09) * (0.6 + 0.6 * b), smoothstep(0.3, 0.55, uv.y)); }
+    if (sp > 0.5 && sp < 1.5) { alb = mix(alb, vec3f(0.3, 0.15, 0.075) * (0.6 + 0.6 * b), smoothstep(0.45, 0.75, uv.y)); }
     snow = smoothstep(0.75, 0.9, vn(vec2f(uv.x * 3.0 + seed, wp.y * 0.8)) + n.x * 0.2) * 0.7;
   }
+  alpha *= sightFade(wp);
   if (G.lod2.z < 0.5) { if (alpha < 0.5) { discard; } alpha = 1.0; }
   if (alpha < 0.02) { discard; }
   alb = mix(alb, vec3f(0.93, 0.95, 0.99), snow);
   trans *= 1.0 - snow;
   let L = G.sunDir.xyz;
   let ndl = dot(n, L);
-  let ao = (0.35 + 0.65 * in.ao) * mix(0.55, 1.0, saturate(in.hy / max(in.ks.w * 0.6, 1.0)));
+  let ao = (0.45 + 0.55 * in.ao) * mix(0.6, 1.0, saturate(in.hy / max(in.ks.w * 0.6, 1.0)));
   var sh = shadowSun(wp, n, dist) * terrainShadow(wp.xz, in.hy);
   // distant trees: approximate neighbour shadowing by height in the canopy
   sh *= mix(1.0, saturate(0.25 + in.hy / max(in.ks.w, 1.0) * 1.2), smoothstep(G.casc.z * 0.6, G.casc.z, dist) * (1.0 - G.misc.w) * 1.4);

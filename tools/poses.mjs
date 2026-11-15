@@ -27,6 +27,6 @@ async function run(list, vw, vh, dp, mob, query) {
   }
   await ctx.close();
 }
-if (mobile) await run(MOBILE, 852, 393, 3, true, 'touch' + (q ? '&q=' + q : ''));
+if (mobile) await run(MOBILE, 852, 393, 3, true, 'touch&safe' + (q ? '&q=' + q : ''));
 else await run(SCENES, 1728, 1117, dpr, false, q ? 'q=' + q : '');
 await browser.close();

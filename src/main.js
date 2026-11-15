@@ -338,7 +338,7 @@ async function main() {
   const parts = new Particles(Q.parts), partBuf = device.createBuffer({ size: Q.parts * 48, usage: U.VERTEX | U.COPY_DST });
   let glowN = 0, glowBuf;
   { const g = [];
-    for (const L of W.lamps) g.push(L.x + Math.sin(L.yaw) * 1.55, L.y + 6.0, L.z + Math.cos(L.yaw) * 1.55, 1.4, 1.0, 0.72, 0.38, 0, 2, 0, 0, 0);
+    for (const L of W.lamps) g.push(L.x + Math.sin(L.yaw) * 1.55, L.y + 6.0, L.z + Math.cos(L.yaw) * 1.55, 0.95, 0.9, 0.65, 0.34, 0, 2, 0, 0, 0);
     glowN = g.length / 12; glowBuf = mkBuf(new Float32Array(g), U.VERTEX); }
   const em = { spray: 0, exh: 0, smoke: 0, kick: 0 };
   const tmp3 = new Float32Array(3); let fwdX = 0, fwdZ = -1, eBM = null;
@@ -350,8 +350,8 @@ async function main() {
       em.spray += dt * sp * 80;
       while (em.spray >= 1) { em.spray--; loc((rnd() - 0.5) * SWATH, 0.12 + rnd() * 0.25, 3.5 + rnd() * 0.6);
         const bk = (0.3 + rnd() * 1.8) * dir, lat = (rnd() - 0.5) * 1.2, vy = 0.6 + rnd() * 2.0;
-        if (rnd() < 0.94) parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.3 + rnd() * 0.45, 0.007 + rnd() * 0.013, 0, 0, 1, 1, 1, 0.9);
-        else parts.emit(tmp3[0], tmp3[1] + 0.2, tmp3[2], s * bk * 0.5, 0.3 + rnd() * 0.4, c * bk * 0.5, 1.2 + rnd(), 0.3, 0.6, 1, 1, 1, 1, 0.1); }
+        if (rnd() < 0.7) parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.3 + rnd() * 0.45, 0.007 + rnd() * 0.013, 0, 0, 1, 1, 1, 0.9);
+        else parts.emit(tmp3[0], tmp3[1] + 0.15, tmp3[2], s * bk * 0.6, 0.25 + rnd() * 0.5, c * bk * 0.6, 1.2 + rnd() * 1.0, 0.25 + rnd() * 0.18, 0.9, 1, 1, 1, 1, 0.34); }
     }
     if (sp > 0.5) {
       em.kick += dt * sp * 14;
@@ -360,9 +360,9 @@ async function main() {
       if (veh.v > 0.5 && rnd() < dt * sp * 3) { const sd = rnd() < 0.5 ? -1 : 1; loc(sd * 2.45, 0.3 + rnd() * 0.5, -3.7); parts.emit(tmp3[0], tmp3[1], tmp3[2], -s * sp * 0.6 + c * sd * 1.2, 0.5 + rnd(), -c * sp * 0.6 - s * sd * 1.2, 0.4 + rnd() * 0.4, 0.008 + rnd() * 0.014, 0, 0, 1, 1, 1, 0.9); }
     }
     em.exh += dt * (5 + 26 * Math.abs(veh.throttle));
-    while (em.exh >= 1) { em.exh--; loc(0.98, 3.1, -0.03); parts.emit(tmp3[0], tmp3[1], tmp3[2], (rnd() - 0.5) * 0.4 + fwdX * veh.v * 0.5, 1.8 + rnd() * 1.2, (rnd() - 0.5) * 0.4 + fwdZ * veh.v * 0.5, 0.9 + rnd() * 0.7, 0.09, 0.55, 1, 0.09, 0.09, 0.1, 0.3 + 0.25 * Math.abs(veh.throttle)); }
-    em.smoke += dt * 7;
-    while (em.smoke >= 1) { em.smoke--; const ch = W.cabin.chimney; parts.emit(ch[0] + (rnd() - 0.5) * 0.3, ch[1], ch[2] + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3, 1.3 + rnd() * 0.6, (rnd() - 0.5) * 0.3, 7 + rnd() * 4, 0.3, 0.42, 1, 0.8, 0.8, 0.84, 0.42); }
+    while (em.exh >= 1) { em.exh--; loc(0.98, 3.1, -0.03); parts.emit(tmp3[0], tmp3[1], tmp3[2], (rnd() - 0.5) * 0.4 + fwdX * veh.v * 0.5, 1.8 + rnd() * 1.2, (rnd() - 0.5) * 0.4 + fwdZ * veh.v * 0.5, 1.1 + rnd() * 0.8, 0.1, 0.7, 1, 0.3, 0.31, 0.34, 0.16 + 0.14 * Math.abs(veh.throttle)); }
+    em.smoke += dt * 11;
+    while (em.smoke >= 1) { em.smoke--; const ch = W.cabin.chimney; parts.emit(ch[0] + (rnd() - 0.5) * 0.3, ch[1], ch[2] + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3, 1.3 + rnd() * 0.6, (rnd() - 0.5) * 0.3, 8 + rnd() * 5, 0.38, 0.5, 1, 0.85, 0.85, 0.88, 0.6); }
   }
 
   // ---------- post ----------
@@ -420,6 +420,7 @@ async function main() {
     for (let i = 0; i < NB - 1; i++) upBG[i] = mk(pU[NB + i], bloom[i + 1].v, black);
     finalBG = mk(pU[NB * 2], hdrView, bloom[0].v);
     R.w = w; R.h = h;
+    if (qs.has('safe')) { const st = $('ui').style, pt = innerHeight > innerWidth; st.setProperty('--st', (pt ? 59 : 10) + 'px'); st.setProperty('--sb', (pt ? 34 : 21) + 'px'); st.setProperty('--sl', (pt ? 12 : 59) + 'px'); st.setProperty('--sr', (pt ? 12 : 59) + 'px'); }
   }
   resize();
   addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 250));
@@ -572,6 +573,7 @@ async function main() {
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
     GU[O.camPos] = cam.x; GU[O.camPos + 1] = cam.y; GU[O.camPos + 2] = cam.z; GU[O.camPos + 3] = R.time;
     writeTod(GU, O);
+    GU[O.groom] = veh.x; GU[O.groom + 1] = veh.y; GU[O.groom + 2] = veh.z; GU[O.lod2] = Q.casc === 3 ? 1 : 0; GU[O.lod2 + 3] = (cam.mode === 0 || cam.mode === 2) && !R.pose ? 1.5 : 0;
     GU[O.misc + 1] = R.snowAmt; GU[O.screen] = rw; GU[O.screen + 1] = rh; GU[O.groom + 3] = cam.mode === 1 && !R.pose ? 1 : 0;
     if (R.snowAmt > 0.01) { const k = 1 - 0.55 * R.snowAmt; GU[O.sunCol] *= k; GU[O.sunCol + 1] *= k; GU[O.sunCol + 2] *= k; GU[O.fogCol + 3] *= 1 + 5 * R.snowAmt; GU[O.skyHor + 3] = Math.min(1.6, GU[O.skyHor + 3] + R.snowAmt); }
     updateCascades(rw / rh, fovy);
@@ -580,7 +582,7 @@ async function main() {
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[131] = 1;
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
-    setLight(O.l0p, BM, 0, 2.7, -2.15, 0, -0.2, -1, 90, Math.cos(0.75), Math.cos(0.3), 1.25 * nt, 1.18 * nt, 1.0 * nt);
+    setLight(O.l0p, BM, 0, 2.7, -2.15, 0, -0.2, -1, 90, Math.cos(0.98), Math.cos(0.2), 1.25 * nt, 1.18 * nt, 1.0 * nt);
     setLight(O.l1p, BM, 0, 2.65, -0.2, 0, -0.5, 1, 32, Math.cos(1.1), Math.cos(0.5), 0.5 * nt, 0.48 * nt, 0.42 * nt);
     { const a = R.time * 5.5, o = O.l2p; GU[o] = BM[0] * 0.6 + BM[4] * 2.75 + BM[8] * -1.1 + BM[12]; GU[o + 1] = BM[1] * 0.6 + BM[5] * 2.75 + BM[9] * -1.1 + BM[13]; GU[o + 2] = BM[2] * 0.6 + BM[6] * 2.75 + BM[10] * -1.1 + BM[14]; GU[o + 3] = 26;
       GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 0.8 * nt; GU[o + 9] = 0.3 * nt; GU[o + 10] = 0.03 * nt; }

@@ -252,6 +252,13 @@ export async function genWorld(tick, Q) {
     H[k] = lerp(H[k], Math.abs(tT[k]), w);
     if (b && w > 0.5) mat[k * 4 + 1] = 0;
   }
+  { // soften the shoreline terraces around the cabin yard
+    const R = 75, i0 = Math.floor(w2t(cabin.x - R)), i1 = Math.ceil(w2t(cabin.x + R)), j0 = Math.floor(w2t(cabin.z - R)), j1 = Math.ceil(w2t(cabin.z + R)), tmp = new Float32Array(HN * HN);
+    for (let it = 0; it < 6; it++) {
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * HN + i; tmp[k] = (H[k] * 4 + H[k - 1] + H[k + 1] + H[k - HN] + H[k + HN] + 0.5 * (H[k - HN - 1] + H[k - HN + 1] + H[k + HN - 1] + H[k + HN + 1])) / 10; }
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * HN + i, d = Math.hypot((i + 0.5) * TEX - HALF - cabin.x, (j + 0.5) * TEX - HALF - cabin.z); if (mat[k * 4] < 60 && d > 15) H[k] = lerp(tmp[k], H[k], smooth(55, 75, d)); }
+    }
+  }
   await tick('Computing normals', 0.68);
 
   // ---- alpine mask + normals ----
@@ -275,16 +282,17 @@ export async function genWorld(tick, Q) {
   for (const t of trails) if (t.lit) {
     for (let i = 8; i < t.n - 6; i += 17) {
       const x = t.pts[i * 2], z = t.pts[i * 2 + 1], tx = t.pts[i * 2 + 2] - x, tz = t.pts[i * 2 + 3] - z, l = Math.hypot(tx, tz) || 1;
-      const side = 1, px = x - tz / l * 4.3 * side, pz = z + tx / l * 4.3 * side;
+      const side = 1, px = x - tz / l * 5.3 * side, pz = z + tx / l * 5.3 * side;
       if (Math.hypot(px - cabin.x, pz - cabin.z) < 15) continue;
       lamps.push({ x: px, z: pz, y: heightAt(px, pz), yaw: Math.atan2(x - px, z - pz) });
     }
   }
-  for (const L of lamps) {
-    const lx = L.x + Math.sin(L.yaw) * 1.6, lz = L.z + Math.cos(L.yaw) * 1.6, R = 30, i0 = Math.max(0, Math.floor(w2t(lx - R))), i1 = Math.min(HN - 1, Math.ceil(w2t(lx + R))), j0 = Math.max(0, Math.floor(w2t(lz - R))), j1 = Math.min(HN - 1, Math.ceil(w2t(lz + R)));
+  const spill = [[-3.3, 6.5, 0.5], [3.3, 6.5, 0.5], [0, 7.5, 0.6], [-3, -6.3, 0.4], [3, -6.3, 0.4], [8.5, 0, 0.35], [-8.5, 0, 0.35]].map((q) => ({ x: cabin.x + Math.cos(cabin.yaw) * q[0] + Math.sin(cabin.yaw) * q[1], z: cabin.z - Math.sin(cabin.yaw) * q[0] + Math.cos(cabin.yaw) * q[1], yaw: 0, k: q[2], off: 0 }));
+  for (const L of lamps.concat(spill)) {
+    const lx = L.x + Math.sin(L.yaw) * (L.k ? 0 : 1.6), lz = L.z + Math.cos(L.yaw) * (L.k ? 0 : 1.6), R = L.k ? 12 : 30, i0 = Math.max(0, Math.floor(w2t(lx - R))), i1 = Math.min(HN - 1, Math.ceil(w2t(lx + R))), j0 = Math.max(0, Math.floor(w2t(lz - R))), j1 = Math.min(HN - 1, Math.ceil(w2t(lz + R)));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const k = j * HN + i, d2 = ((i + 0.5) * TEX - HALF - lx) ** 2 + ((j + 0.5) * TEX - HALF - lz) ** 2, h2 = 30.25;
-      const v = 255 * 30 * 5.5 / Math.pow(d2 + h2, 1.5) * (1 - smooth(18, 30, Math.sqrt(d2)));
+      const v = L.k ? 255 * L.k * Math.exp(-d2 / 14) : 255 * 30 * 5.5 / Math.pow(d2 + h2, 1.5) * (1 - smooth(18, 30, Math.sqrt(d2)));
       nrm[k * 4 + 3] = Math.min(255, nrm[k * 4 + 3] + v);
     }
   }
@@ -313,7 +321,7 @@ export async function genWorld(tick, Q) {
           const dc = Math.hypot(x - cabin.x, z - cabin.z); if (dc < 27) continue;
           if (Math.hypot(x - dam.x, z - dam.z) < 16) continue;
           const bog = mat[ti * 4 + 2] / 255, r1 = hash2(hx, hz + 104729), r2 = hash2(hx + 31337, hz + 17), r3 = hash2(hx - 999, hz + 5);
-          const alt = y + 14 * pn(x * 0.02, z * 0.02) + 6 * pn(x * 0.07, z * 0.07), af = 1 - smooth(TREELINE - 42, TREELINE + 10, alt);
+          const alt = y + 14 * pn(x * 0.02, z * 0.02) + 6 * pn(x * 0.07, z * 0.07), af = 1 - smooth(TREELINE - 75, TREELINE + 16, alt);
           let ls = 9; for (let l = 0; l < LAKES.length; l++) { const L = LAKES[l]; if (Math.abs(x - L.x) < L.rx * 1.6 && Math.abs(z - L.z) < L.rz * 1.6) ls = Math.min(ls, lakeS(L, x, z)); }
           if (ls < 1.05) continue;
           const fo = 0.6 + 0.9 * fbm(x * 0.006 + 40, z * 0.006, 2);

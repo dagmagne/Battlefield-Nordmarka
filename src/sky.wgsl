@@ -1,3 +1,8 @@
+fn cloudD(q: vec2f) -> f32 {
+  let w = vec2f(vn(q * 0.6 + 3.0), vn(q * 0.6 + 11.0)) - 0.5;
+  let s = q * vec2f(0.45, 1.25) + w * 1.1;
+  return vn(s) * 0.5 + vn(s * 2.07 + 5.0) * 0.25 + vn(s * 4.3 + 9.0) * 0.125 + vn(s * 8.9 + 2.0) * 0.07 + vn(s * 18.0 + 4.0) * 0.04;
+}
 struct SOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
 @vertex fn vs(@builtin(vertex_index) i: u32) -> SOut {
   var o: SOut;
@@ -15,17 +20,24 @@ struct SOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
   // sun disc
   c += G.skySun.w * vec3f(1.0, 0.9, 0.75) * (smoothstep(0.99992, 0.99997, cs) * 60.0 + pow(max(cs, 0.0), 2500.0) * 6.0);
   if (d.y > 0.0) {
-    // high cirrus
-    let q = d.xz / (d.y + 0.12);
-    let cl = smoothstep(0.42, 0.85, fbm3(q * vec2f(0.55, 1.5) + vec2f(G.camPos.w * 0.002, 3.0)) * 0.7 + vn(q * 3.7 + 9.0) * 0.3) * G.skyHor.a * smoothstep(0.0, 0.12, d.y);
-    let lit = G.skyHor.rgb * 0.9 + G.fogSun.rgb * (0.35 + 1.4 * pow(max(cs, 0.0), 3.0)) + G.skyZen.rgb * 0.5;
-    c = mix(c, lit, cl * 0.75);
+    // clouds: warped multi-octave streaks, lit from the sun side
+    let q = d.xz / (d.y + 0.12) + vec2f(G.camPos.w * 0.0015, 0.0);
+    let dc = cloudD(q);
+    let cl = smoothstep(0.5, 0.74, dc) * G.skyHor.a * smoothstep(0.0, 0.1, d.y);
+    if (cl > 0.001) {
+      let sq = sd.xz / (max(sd.y, 0.0) + 0.12);
+      let toS = normalize(sq - q + vec2f(1e-4, 0.0));
+      let litf = saturate(0.55 + (dc - cloudD(q + toS * 0.22)) * 5.0);
+      let shade = G.skyHor.rgb * 0.55 + G.skyZen.rgb * 0.6;
+      let sunlit = G.skyHor.rgb * 0.9 + G.skyZen.rgb * 0.3 + G.fogSun.rgb * (0.5 + 1.6 * pow(max(cs, 0.0), 3.0)) + G.sunCol.rgb * 0.05;
+      c = mix(c, mix(shade, sunlit, litf), cl * 0.9);
+    }
     // stars
     if (G.skyZen.a > 0.001) {
-      let s = d * 240.0; let id = floor(s); let r = hash3(vec3i(id));
+      let s = d * 400.0; let id = floor(s); let r = hash3(vec3i(id));
       let f = s - id - 0.5;
       let tw = 0.7 + 0.3 * sin(G.camPos.w * (2.0 + r * 5.0) + r * 90.0);
-      c += vec3f(0.8, 0.9, 1.0) * (step(0.9965, r) * smoothstep(0.42, 0.0, length(f)) * tw * G.skyZen.a * (1.0 - cl) * smoothstep(0.0, 0.2, d.y) * (0.4 + 3.0 * fract(r * 913.0)));
+      c += vec3f(0.8, 0.9, 1.0) * (step(0.992, r) * smoothstep(0.3, 0.0, length(f)) * tw * G.skyZen.a * (1.0 - cl) * smoothstep(0.0, 0.2, d.y) * (0.4 + 3.0 * fract(r * 913.0)));
     }
     // moon
     let cm = dot(d, G.sunDir.xyz);

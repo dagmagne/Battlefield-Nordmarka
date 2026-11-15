@@ -32,14 +32,14 @@ fn snowDetail(p: vec2f, dist: f32, mt: vec4f) -> vec3f {
     r = vec3f(0.17 + (n1.x - 0.5) * 0.36, n1.yz * (0.11 * 0.36)) * f1;
     if (f2 > 0.0) {
       let n2 = vnoise(p * 0.43 + 17.3);
-      r += vec3f(n2.x - 0.5, n2.yz * 0.43) * (0.11 * f2);
+      r += vec3f(n2.x - 0.5, n2.yz * 0.43) * (0.16 * f2);
       // bog tussocks
       let n4 = vnoise(p * 0.9 + 3.3);
-      r += vec3f(n4.x, n4.yz * 0.9) * (0.2 * f2 * mt.b);
+      r += vec3f(n4.x, n4.yz * 0.9) * (0.1 * f2 * mt.b);
     }
     if (f3 > 0.0) { let n3 = vnoise(p * 1.7 + 5.1); r += vec3f(n3.x - 0.5, n3.yz * 1.7) * (0.028 * f3); }
   }
-  return r * (1.0 - 0.9 * max(mt.r, mt.g));
+  return r * (1.0 - 0.7 * max(mt.r, mt.g));
 }
 
 struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f };
@@ -76,13 +76,13 @@ fn sparkle1(p: vec3f, cell: f32, v: vec3f) -> f32 {
   let r = hash3(ii);
   let r2 = hash3(ii + vec3i(17, 5, 11));
   let ph = fract(r + dot(v, vec3f(7.3, 5.1, 6.7)) * (1.0 + r2));
-  let g = smoothstep(0.972, 1.0, ph);
+  let g = smoothstep(0.955, 1.0, ph);
   let c = q - id - 0.5;
   return g * smoothstep(0.5, 0.15, length(c)) * (0.4 + 2.0 * r2 * r2);
 }
 fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let lv = log2(max(dist, 0.5)) + 1.0; let l0 = floor(lv); let f = lv - l0;
-  let c0 = 0.0016 * exp2(l0);
+  let c0 = 0.0011 * exp2(l0);
   return mix(sparkle1(wp, c0, v), sparkle1(wp, c0 * 2.0, v), f);
 }
 
@@ -100,7 +100,7 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let det = snowDetail(p, dxz, mt);
   var S = S0;
   var Sd = det.yz;
-  var groomed = 0.0; var fresh = 0.0; var groove = 0.0; var imp = 0.0; var cordAvg = 0.0; var pan = 0.0;
+  var groomed = 0.0; var fresh = 0.0; var groove = 0.0; var imp = 0.0; var cordAvg = 0.0; var pan = 0.0; var cordAO = 0.0; var edge = 0.0;
   if (max(abs(p.x), abs(p.y)) < G.world.z && dist < 700.0) {
     let muv = p * G.world.w + 0.5;
     let mA = textureSampleLevel(maskA, linSmp, muv, 0.0);
@@ -125,9 +125,10 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
       // classic tracks
       let ut = abs(u - 0.5); let tcs = ut - 0.337; let tc = abs(tcs);
       let trk = mA.g * valid * groomed;
-      pan = trk * (1.0 - smoothstep(0.05, 0.062, tc));
-      let gds = tc - 0.026; let gd = abs(gds);
-      let hw = 0.0088;
+      pan = trk * (1.0 - smoothstep(0.058, 0.07, tc));
+      edge = saturate(length(gp) * 0.45);
+      let gds = tc - 0.03; let gd = abs(gds);
+      let hw = 0.0115;
       let tt = clamp((gd - hw * 0.45) / (hw * 0.8), 0.0, 1.0);
       let gr = 1.0 - tt * tt * (3.0 - 2.0 * tt);
       let sg = sign(gds) * sign(tcs) * sign(u - 0.5);
@@ -139,11 +140,12 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
       let cyc = NR * upp;
       let cf = 1.0 - smoothstep(0.16, 0.42, cyc);
       let cf2 = 1.0 - smoothstep(0.16, 0.42, cyc / 8.0);
-      let amp = groomed * mix(0.3, 1.0, fresh) * valid * (1.0 - pan);
+      let amp = groomed * mix(0.6, 1.0, fresh) * valid * (1.0 - pan);
       let ph = u * NR * 2.0 * PI;
       let wob = 1.0 + 0.25 * sin(mB.g * 40.0 + u * 31.0);
       S += lat * ((-0.0105 * PI * NR * gl) * sin(ph) * cf * wob + (-0.004 * PI * NR / 8.0 * gl) * sin(ph / 8.0) * cf2) * amp;
       cordAvg = amp * (1.0 - cf);
+      cordAO = amp * (cf * (0.5 - 0.5 * cos(ph)) * 0.3 + cf2 * (0.5 - 0.5 * cos(ph / 8.0)) * 0.1);
       // track imprints (grouser bars)
       imp = mA.b * (1.0 - groomed);
       let gt = vec2f(bx1.g - bx0.g, bz1.g - bz0.g) / (2.0 * tm);
@@ -163,7 +165,7 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let alpine = mt.a;
   let nA = vn(p * 0.09); let nB = vn(p * 0.31 + 4.0);
   // wind ripples (sastrugi) on exposed ground
-  let expo = max(alpine, mt.r) * (1.0 - groomed) * (1.0 - smoothstep(60.0, 220.0, dist));
+  let expo = max(max(alpine, mt.r), 0.22) * (1.0 - groomed) * (1.0 - smoothstep(60.0, 220.0, dist));
   if (expo > 0.01) {
     let q = vec2f(p.x * 0.6 + p.y * 0.8, p.y * 0.6 - p.x * 0.8);
     let w1 = vnoise(q * vec2f(0.5, 2.6) + nA * 3.0);
@@ -171,7 +173,7 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   }
   let big = fbm3(p * 0.021 + 7.0);
   var rock = smoothstep(0.74, 1.0, slope0 + (big - 0.5) * 0.45 + alpine * 0.08);
-  rock = max(rock, alpine * smoothstep(0.64, 0.7, big * 0.75 + nB * 0.25) * smoothstep(0.16, 0.36, slope0));
+  rock = max(rock, alpine * smoothstep(0.7, 0.76, big * 0.75 + nB * 0.25) * smoothstep(0.22, 0.42, slope0));
   rock *= 1.0 - max(groomed, imp);
   if (rock > 0.01) { let rn = vnoise(p * 1.9); let rn2 = vnoise(p * 6.3); S += (rn.yz * 1.9 * 0.22 + rn2.yz * 6.3 * 0.03) * rock; }
   var n = normalize(vec3f(-S.x, 1.0, -S.y));
@@ -180,17 +182,18 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let ndl = dot(n, L);
   let ndv = saturate(dot(n, v));
   let canopy = nt.b;
-  var sh = shadowSun(wp, nb, dist) * terrainShadow(p, 0.3);
+  var sh = shadowSunS(wp, nb, dist, true) * terrainShadow(p, 0.3);
   sh *= mix(1.0, G.misc.w, saturate(canopy * 1.6) * smoothstep(G.casc.z * 0.6, G.casc.z, dist));
-  let ao = 1.0 - 0.5 * saturate(canopy * 1.3) - 0.25 * groove;
+  let gd2 = p - G.groom.xz;
+  let ao = (1.0 - 0.5 * saturate(canopy * 1.3) - 0.45 * groove - cordAO - 0.3 * edge) * (1.0 - 0.4 * exp(-dot(gd2, gd2) * 0.12));
 
-  var alb = mix(vec3f(0.93, 0.95, 0.98), vec3f(0.86, 0.9, 0.96), groomed * 0.6);
-  alb *= 1.0 - 0.07 * cordAvg - 0.3 * groove - 0.06 * imp;
+  var alb = mix(vec3f(0.9, 0.93, 0.98), vec3f(0.975, 0.975, 0.98), groomed * mix(0.6, 1.0, fresh));
+  alb *= (1.0 - 0.05 * cordAvg - 0.4 * groove - 0.06 * imp) * (1.0 + 0.03 * pan);
   alb = mix(alb, vec3f(0.80, 0.86, 0.95), alpine * 0.35 * smoothstep(0.45, 0.7, nB));
   // sedge tufts on bogs
   let tuft = mt.b * smoothstep(0.84, 0.93, vn(p * 6.0)) * smoothstep(0.5, 0.75, vn(p * 0.3 + 9.0)) * (1.0 - groomed) * (1.0 - smoothstep(80.0, 200.0, dist));
-  alb = mix(alb, vec3f(0.45, 0.36, 0.2), tuft * 0.55);
-  let rcol = mix(vec3f(0.09, 0.09, 0.1), vec3f(0.2, 0.185, 0.17), fbm3(p * 0.33) ) * (0.8 + 0.4 * vn(p * 3.1));
+  alb = mix(alb, vec3f(0.5, 0.42, 0.26), tuft * 0.3);
+  let rcol = mix(vec3f(0.07, 0.075, 0.085), vec3f(0.17, 0.17, 0.175), fbm3(p * 0.33) ) * (0.8 + 0.4 * vn(p * 3.1));
   let rsnow = smoothstep(0.3, 0.72, vn(vec2f((p.x + p.y) * 0.16, wp.y * 0.55)) * 0.5 + vn(p * 0.9) * 0.3 + vn(p * 4.3) * 0.2 + (n.y - 0.75) * 0.6);
   alb = mix(alb, mix(rcol, alb, rsnow * 0.75), rock);
   var snowy = 1.0 - rock * (1.0 - rsnow * 0.75);
@@ -218,7 +221,8 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
     let r = reflect(-v, ni);
     let fr = 0.03 + 0.97 * pow(1.0 - saturate(dot(ni, v)), 5.0);
     let cr = abs(vn(p * 0.35 + 11.0) - 0.5); let cr2 = abs(vn(p * 1.3 + 5.0) - 0.5);
-    let crack = (1.0 - smoothstep(0.0, 0.012, cr)) * 0.7 + (1.0 - smoothstep(0.0, 0.02, cr2)) * 0.25;
+    let cw = 0.25 + 1.5 * vn(p * 0.11 + 2.0);
+    let crack = (1.0 - smoothstep(0.0, 0.012 * cw, cr)) * 0.7 * smoothstep(0.3, 0.6, vn(p * 0.05 + 8.0)) + (1.0 - smoothstep(0.0, 0.015 * cw, cr2)) * 0.2 * smoothstep(0.4, 0.7, vn(p * 0.09));
     var ic = mix(vec3f(0.015, 0.07, 0.11), vec3f(0.05, 0.16, 0.2), vn(p * 0.06 + 3.0));
     ic = mix(ic, vec3f(0.55, 0.7, 0.78), crack * (1.0 - smoothstep(40.0, 140.0, dist)) + 0.1 * vn(p * 9.0));
     ic = mix(ic, vec3f(0.006, 0.012, 0.018), water);
