@@ -6,7 +6,8 @@
 import { clamp, lerp, smooth, hash1, hash2 } from './math.js';
 import DATA from './data/world.bin';
 
-export const WS = 4096, HN = 2048, TEX = WS / HN, HALF = WS / 2, PLAY = 1560, MW = 3200, TREELINE = 900;
+export const WS = 4096, HN = 2048, TEX = WS / HN, HALF = WS / 2;
+const PLAY = 1560, MW = 3200, TREELINE = 900;
 export const NEAR = 32, NCN = WS / NEAR, FAR = 128, FCN = WS / FAR;
 // landmark geometry (from tools/geo/raw/landmarks.json)
 export const LM = {
@@ -38,7 +39,7 @@ async function inflate(b64) {
   return new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
 }
 
-export async function genWorld(tick, Q) {
+export async function genWorld(tick, Q, startAt) {
   const raw = await inflate(DATA), jl = new DataView(raw.buffer).getUint32(0, true);
   const meta = JSON.parse(new TextDecoder().decode(raw.subarray(4, 4 + jl)));
   const blob = (n) => raw.subarray(4 + jl + meta.blobs[n][0], 4 + jl + meta.blobs[n][0] + meta.blobs[n][1]);
@@ -264,12 +265,16 @@ export async function genWorld(tick, Q) {
     for (let j = 1; j < HN - 1; j++) for (let i = 1; i < HN - 1; i++) { const k = j * HN + i; nrm[k * 4 + 2] = clamp((t2[k] * 2 + t2[k - 1] + t2[k + 1] + t2[k - HN] + t2[k + HN]) / 6 * 255, 0, 255); } }
 
   Object.assign(W, {
+    PLAY, MW, TREELINE, name: 'nordmarka',
     mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM,
     trees: { data: td.subarray(0, tc * 8), count: tc, nearStart, nearCnt, nearY, farStart, farCnt, farY },
     start: { x: 0, z: 0, yaw: 0 },
   });
-  // start on the lit trail, at the point nearest Frognerseteren, heading along it
-  { const t = trails[0]; let bi = 20, bd = 1e9; for (let q = 20; q < t.n - 20; q++) { const d = Math.hypot(t.pts[q * 2] - cabin.x, t.pts[q * 2 + 1] - cabin.z); if (d < bd) { bd = d; bi = q; } }
+  // start on the trail point nearest the chosen place; that trail becomes trails[0] (scripted drives follow it)
+  { const T = startAt === 'holmenkollen' ? [LM.jump.end[0] - 20, LM.jump.end[1] + 45] : [cabin.x + Math.sin(cabin.yaw) * 45, cabin.z + Math.cos(cabin.yaw) * 45];
+    let bt = 0, bi = 20, bd = 1e9;
+    trails.forEach((t, ti) => { if (t.n < 80) return; for (let q = 20; q < t.n - 20; q++) { const d = Math.hypot(t.pts[q * 2] - T[0], t.pts[q * 2 + 1] - T[1]); if (d < bd) { bd = d; bi = q; bt = ti; } } });
+    const t = trails.splice(bt, 1)[0]; trails.unshift(t);
     W.startI = bi; W.start.x = t.pts[bi * 2]; W.start.z = t.pts[bi * 2 + 1]; W.start.yaw = Math.atan2(-(t.pts[bi * 2 + 4] - W.start.x), -(t.pts[bi * 2 + 5] - W.start.z)); }
   return W;
 }

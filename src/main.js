@@ -13,7 +13,8 @@ import shObjW from './shadowobj.wgsl';
 import tshW from './tshadow.wgsl';
 import particleW from './particle.wgsl';
 import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
-import { genWorld, mipChain, WS, HN, HALF, PLAY, MW, NEAR, NCN, FAR, FCN } from './world.js';
+import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
+import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
 import { buildGroomer, groomerParts, SWATH, TILL_Z } from './groomer.js';
 import { buildTrees } from './trees.js';
@@ -71,8 +72,14 @@ async function main() {
   ctx.configure({ device, format: cfmt, alphaMode: 'opaque' });
 
   const tick = (m, p) => { $('msg').textContent = m + '…'; $('bar').firstChild.style.width = (p * 100).toFixed(0) + '%'; return new Promise((r) => setTimeout(r, 0)); };
+  // world choice: ?w=fantasi|holmenkollen|frogner, otherwise ask (scripted runs with ?nohint default to Frognerseteren)
+  let wsel = qs.get('w') || (qs.has('nohint') ? 'frogner' : '');
+  if (!wsel) { $('pick').style.display = 'flex'; $('bar').style.display = $('msg').style.display = 'none';
+    wsel = await new Promise((r) => { for (const b of $('pick').children) b.onclick = () => r(b.dataset.w); });
+    $('pick').style.display = 'none'; $('bar').style.display = $('msg').style.display = ''; }
   await tick('Shaping terrain', 0);
-  const W = await genWorld(tick, Q);
+  const W = wsel === 'fantasi' ? await genFantasy(tick, Q) : await genWorld(tick, Q, wsel);
+  const PLAY = W.PLAY, MW = W.MW;
   await tick('Building scene', 0.95);
 
   // ---------- static textures ----------
@@ -168,6 +175,7 @@ async function main() {
   };
   const groomer = mkObj(buildGroomer());
   const props = mkObj(buildProps(W));
+  const NP = qs.has('np'); console.log('props tris', props.n / 3);
 
   // ---------- terrain shadow bake ----------
   const tshMod = mod(tshW, 'tshadow');
@@ -274,7 +282,7 @@ async function main() {
   }
 
   // ---------- grooming mask stamps ----------
-  const stampMod = mod(stampW, 'stamp');
+  const stampMod = mod(stampW.replace(/1600\.0/g, (MW / 2).toFixed(1)), 'stamp');
   const sBlend = { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } };
   const stampPipe = device.createRenderPipeline({
     layout: 'auto',
@@ -682,7 +690,7 @@ async function main() {
       const sp = enc.beginRenderPass(shPass[c]);
       sp.setBindGroup(0, shBG[c]);
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
-      sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
+      if (!NP) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n); }
       sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3);
       sp.end();
     }
@@ -690,7 +698,7 @@ async function main() {
     p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe); p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n);
-    p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
+    if (!NP) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
     p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4);
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
     for (let l = 0; l < NL; l++) {
