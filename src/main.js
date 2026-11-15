@@ -13,7 +13,7 @@ import shObjW from './shadowobj.wgsl';
 import tshW from './tshadow.wgsl';
 import particleW from './particle.wgsl';
 import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
-import { genWorld, mipChain, WS, HN, HALF, PLAY, NEAR, NCN, FAR, FCN } from './world.js';
+import { genWorld, mipChain, WS, HN, HALF, PLAY, MW, NEAR, NCN, FAR, FCN } from './world.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
 import { buildGroomer, groomerParts, SWATH, TILL_Z } from './groomer.js';
 import { buildTrees } from './trees.js';
@@ -284,7 +284,7 @@ async function main() {
   const stampPass = { colorAttachments: [{ view: maskA.createView(), loadOp: 'load', storeOp: 'store' }, { view: maskB.createView(), loadOp: 'load', storeOp: 'store' }] };
   const stData = new Float32Array(48), stBuf = device.createBuffer({ size: 192, usage: U.VERTEX | U.COPY_DST });
   const stPrev = new Float32Array(12), stCur = new Float32Array(12), stS = new Float32Array(3); let stN = 0, stInit = false, tillWas = false;
-  const TEXM = 2048 / Q.mask;
+  const TEXM = MW / Q.mask;
   { let n = 0; for (const t of W.trails) n += t.n - 1;
     const d = new Float32Array(n * 16); let o = 0;
     for (const t of W.trails) {
@@ -482,10 +482,10 @@ async function main() {
   if (qs.has('snow')) R.snow = 1;
   if (qs.has('debug')) api.debug(1);
   veh.vYaw = veh.yaw; veh.gPrev = veh.y; if (qs.has('turbo')) api.turbo(1);
-  GU[O.world] = HALF; GU[O.world + 1] = 1 / WS; GU[O.world + 2] = 1024; GU[O.world + 3] = 1 / 2048;
+  GU[O.world] = HALF; GU[O.world + 1] = 1 / WS; GU[O.world + 2] = MW / 2; GU[O.world + 3] = 1 / MW;
   GU[O.screen + 2] = TEXM; GU[O.screen + 3] = Q.mask;
   GU[O.casc + 3] = 1 / Q.shadow; GU[O.lod2 + 2] = Q.msaa;
-  const auto = qs.has('auto') ? { i: 14 } : null;
+  const auto = qs.has('auto') ? { i: W.startI } : null;
   if (auto) { const t = W.trails[0]; veh.x = t.pts[auto.i * 2]; veh.z = t.pts[auto.i * 2 + 1]; veh.y = W.heightAt(veh.x, veh.z); }
   R.auto = auto;
 

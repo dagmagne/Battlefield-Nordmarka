@@ -15,7 +15,7 @@ function cabin(b, c, W) {
   b.at(c.x, c.y, c.z, c.yaw);
   const hx = 6.2, hz = 4.1, y0 = 0.55, y1 = 3.5, yr = 5.9;
   b.set(STONE, MAT.stone); b.box(-hx - 0.15, -1.5, -hz - 0.15, hx + 0.15, y0, hz + 0.15);
-  b.set(RED, MAT.plank);
+  b.set(c.col || RED, MAT.plank);
   b.quad([-hx, y0, hz], [hx, y0, hz], [hx, y1, hz], [-hx, y1, hz], [0, y0, 2 * hx, y0, 2 * hx, y1, 0, y1]);
   b.quad([hx, y0, -hz], [-hx, y0, -hz], [-hx, y1, -hz], [hx, y1, -hz], [0, y0, 2 * hx, y0, 2 * hx, y1, 0, y1]);
   for (const s of [-1, 1]) {
@@ -151,10 +151,93 @@ function sign(b, S) {
   board(2.35, 1, S.a); board(2.08, -1, S.b); board(1.81, 1, S.b + 3);
 }
 
+const HCOL = [[0.74, 0.73, 0.69], [0.4, 0.06, 0.045], [0.5, 0.36, 0.14], [0.14, 0.095, 0.065], [0.27, 0.3, 0.27], [0.6, 0.58, 0.48], [0.19, 0.22, 0.28], [0.74, 0.73, 0.69], [0.4, 0.06, 0.045]];
+const SNOWC = [0.92, 0.94, 0.97];
+function gable(b, hw, hd, y0, rise, o) { // snow-covered pitched roof, ridge along local x
+  const e = y0 - o * rise / hd, t = y0 + rise;
+  b.quad([-hw - o, e, hd + o], [hw + o, e, hd + o], [hw + o, t, 0], [-hw - o, t, 0]);
+  b.quad([hw + o, e, -hd - o], [-hw - o, e, -hd - o], [-hw - o, t, 0], [hw + o, t, 0]);
+}
+function house(b, B, i, W) {
+  const r = hash1(i * 13 + 1), r2 = hash1(i * 29 + 7), r3 = hash1(i * 53 + 3), hw = B.w / 2, hd = B.d / 2, k = B.kind;
+  const wall = k === 2 ? 2.5 : k === 1 ? 2.7 : k === 3 ? Math.max(6.5, (B.lv || 3) * 3) : B.lv ? B.lv * 2.8 : 4.4 + 2.4 * r2;
+  const flat = k === 3 && (B.w > 34 || r > 0.6), rise = flat ? 0 : Math.min(hd * (k === 1 ? 0.6 : 0.8), 4.8);
+  const col = k === 1 ? HCOL[3] : k === 3 ? HCOL[r < 0.5 ? 0 : 5] : HCOL[(r * 9) | 0];
+  b.at(B.x, B.y, B.z, -B.yaw);
+  b.set(col, MAT.paint); b.box(-hw, -2.5, -hd, hw, wall, hd);
+  if (flat) { b.set(SNOWC, MAT.snow); b.box(-hw - 0.2, wall, -hd - 0.2, hw + 0.2, wall + 0.4, hd + 0.2); }
+  else {
+    for (const s of [-1, 1]) { const a = b.vert(s * hw, wall, s * hd, s, 0, 0), d = b.vert(s * hw, wall, -s * hd, s, 0, 0), e = b.vert(s * hw, wall + rise, 0, s, 0, 0); b.tri(a, d, e); }
+    b.set(SNOWC, MAT.snow); gable(b, hw, hd, wall, rise, 0.45);
+  }
+  if (k !== 2 && r3 < 0.6) { // a row of lit windows on each long wall
+    b.set([1, 0.78, 0.45], MAT.window);
+    const n = Math.max(1, Math.min(5, (B.w / 4.2) | 0)), y = k === 1 ? 1.1 : 1.3;
+    for (let f = 0; f < (wall > 5.6 && r2 > 0.4 ? 2 : 1); f++) for (let q = 0; q < n; q++) {
+      if (hash1(i * 7 + q * 3 + f) < 0.35) continue;
+      const x = (q + 0.5) / n * B.w - hw, s = hash1(i + q) < 0.5 ? 1 : -1, yy = y + f * 2.8;
+      b.quad([x - s * 0.55, yy, s * (hd + 0.03)], [x + s * 0.55, yy, s * (hd + 0.03)], [x + s * 0.55, yy + 1.15, s * (hd + 0.03)], [x - s * 0.55, yy + 1.15, s * (hd + 0.03)]);
+    }
+  }
+  const n = Math.max(1, Math.round(B.w / B.d)), c = Math.cos(B.yaw), sn = Math.sin(B.yaw);
+  for (let q = 0; q < n; q++) { const t = ((q + 0.5) / n - 0.5) * B.w; W.colliders.push(B.x + c * t, B.z + sn * t, Math.max(0.5, hd * 0.95 - 0.9)); }
+}
+// Ski jump: cantilevered inrun from the tower top down to the take-off; the landing hill is real terrain.
+function skiJump(b, W, J, wd) {
+  const dx = J.top[0] - J.lip[0], dz = J.top[1] - J.lip[1], L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L, rx = -uz, rz = ux;
+  const yl = W.heightAt(J.lip[0], J.lip[1]) + 2.5, yt = Math.max(yl + J.h, W.heightAt(J.top[0], J.top[1]) + J.h * 0.45), N = 14;
+  const P = (s, y, t) => [J.lip[0] + ux * s + rx * t, y, J.lip[1] + uz * s + rz * t];
+  const yd = (u) => yl + (yt - yl) * (0.12 * u + 0.88 * u * u * (1.6 - 0.6 * u)), yb = (u) => yd(u) - 1.2 - J.h * 0.22 * Math.sin(Math.PI * Math.min(1, u * 1.15)) ** 1.5;
+  b.at(0, 0, 0);
+  for (let i = 0; i < N; i++) {
+    const u0 = i / N, u1 = (i + 1) / N, s0 = u0 * L, s1 = u1 * L, a0 = yd(u0), a1 = yd(u1), c0 = yb(u0), c1 = yb(u1), h = wd / 2;
+    b.set(SNOWC, MAT.snow); b.quad(P(s0, a0, h), P(s0, a0, -h), P(s1, a1, -h), P(s1, a1, h));
+    b.set([0.5, 0.52, 0.55], MAT.metal);
+    for (const s of [-1, 1]) { // wind screens + girder flanks, both faces
+      const w = s * h, top = 2.6;
+      const q = [P(s0, c0, w), P(s1, c1, w), P(s1, a1 + top, w), P(s0, a0 + top, w)];
+      if (s > 0) { b.quad(q[1], q[0], q[3], q[2]); b.quad(q[0], q[1], q[2], q[3]); } else { b.quad(q[0], q[1], q[2], q[3]); b.quad(q[1], q[0], q[3], q[2]); }
+    }
+    b.quad(P(s0, c0, -h), P(s0, c0, h), P(s1, c1, h), P(s1, c1, -h));
+  }
+  b.set([0.42, 0.44, 0.47], MAT.metal);
+  for (const [u, t] of [[0.3, 0.6], [0.3, -0.6], [0.62, 1], [0.62, -1]]) { const p = P(u * L, yb(u) + 0.5, t * wd * 0.45), g = P(u * L + J.h * 0.12, 0, t * wd * 1.1); b.cyl(g[0], W.heightAt(g[0], g[2]) - 2, g[2], p[0], p[1], p[2], wd * 0.2, wd * 0.14, 8); W.colliders.push(g[0], g[2], wd * 0.2); }
+  // start house on top
+  const tp = P(L + wd * 0.5, yt, 0);
+  b.at(tp[0], tp[1], tp[2], Math.atan2(-ux, -uz));
+  b.set([0.5, 0.52, 0.55], MAT.metal); b.box(-wd * 0.7, -1.5, -wd * 0.6, wd * 0.7, 0.4, wd * 0.6);
+  b.set([0.03, 0.05, 0.075], MAT.glass); b.box(-wd * 0.62, 0.4, -wd * 0.52, wd * 0.62, 3.6, wd * 0.52);
+  b.set(SNOWC, MAT.snow); b.box(-wd * 0.75, 3.6, -wd * 0.65, wd * 0.75, 4.0, wd * 0.65);
+  b.set([1, 0.2, 0.1], MAT.beacon); b.cyl(0, 4, 0, 0, 4.6, 0, 0.25, 0.2, 6);
+}
+function tvTower(b, W, T) {
+  const y = W.heightAt(T.x, T.z) - 2; b.at(T.x, y, T.z);
+  b.set([0.62, 0.62, 0.6], MAT.stone); b.cyl(0, 0, 0, 0, 62, 0, 4.6, 3.1, 14);
+  b.set([0.5, 0.52, 0.55], MAT.metal); b.cyl(0, 56, 0, 0, 60, 0, 4.2, 8.2, 16); b.cyl(0, 64.5, 0, 0, 68, 0, 8.6, 5.5, 16);
+  b.set([0.03, 0.05, 0.075], MAT.glass); b.cyl(0, 60, 0, 0, 64.5, 0, 8.2, 8.6, 16);
+  b.set([0.62, 0.62, 0.6], MAT.stone); b.cyl(0, 68, 0, 0, 80, 0, 2.6, 2.0, 10);
+  for (let i = 0; i < 6; i++) { b.set(i & 1 ? [0.85, 0.85, 0.85] : [0.6, 0.08, 0.06], MAT.paint); b.cyl(0, 80 + i * 6.3, 0, 0, 86.3 + i * 6.3, 0, 1.1 - i * 0.14, 0.96 - i * 0.14, 8); }
+  b.set([1, 0.15, 0.08], MAT.beacon); b.cyl(0, T.h, 0, 0, T.h + 0.8, 0, 0.35, 0.25, 6); b.cyl(0, 68, 0, 0, 68.7, 0, 5.6, 5.5, 8);
+  W.colliders.push(T.x, T.z, 3.5);
+}
+function chapel(b, W, C) {
+  const y = W.heightAt(C.x, C.z); b.at(C.x, y, C.z, -C.yaw + Math.PI / 2);
+  const DW = [0.11, 0.075, 0.05];
+  b.set(DW, MAT.paint); b.box(-9, -2, -5, 9, 4.2, 5); b.box(-13, -2, -3.2, -9, 3.2, 3.2);
+  for (const s of [-1, 1]) { const a = b.vert(s * 9, 4.2, s * 5, s, 0, 0), d = b.vert(s * 9, 4.2, -s * 5, s, 0, 0), e = b.vert(s * 9, 11, 0, s, 0, 0); b.tri(a, d, e); }
+  b.set(SNOWC, MAT.snow); gable(b, 9, 5, 4.2, 6.8, 0.6);
+  b.at(C.x, y, C.z, -C.yaw + Math.PI / 2);
+  b.set(DW, MAT.paint); b.box(4.2, 9, -1.6, 7.4, 15, 1.6); b.cyl(5.8, 15, 0, 5.8, 31, 0, 2.3, 0.08, 4);
+  b.set([1, 0.78, 0.45], MAT.window); for (let q = -2; q <= 2; q++) for (const s of [-1, 1]) b.quad([q * 3.2 - s * 0.5, 1.4, s * 5.03], [q * 3.2 + s * 0.5, 1.4, s * 5.03], [q * 3.2 + s * 0.5, 3.2, s * 5.03], [q * 3.2 - s * 0.5, 3.2, s * 5.03]);
+  W.colliders.push(C.x, C.z, 5);
+}
+
 export function buildProps(W) {
   const b = new MB();
   W.colliders = [];
-  cabin(b, W.cabin, W); bridge(b, W.bridge); dam(b, W.dam);
+  cabin(b, W.cabin, W);
+  W.buildings.forEach((B, i) => house(b, B, i, W));
+  skiJump(b, W, W.lm.jump, 6.5); skiJump(b, W, W.lm.mid, 4.5); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel);
   for (let i = 0; i < W.pylons.length; i++) { pylon(b, W.pylons[i]); if (i) wires(b, W.pylons[i - 1], W.pylons[i]); W.colliders.push(W.pylons[i].x + Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z - Math.sin(W.pylons[i].yaw) * 2.6, 0.5, W.pylons[i].x - Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z + Math.sin(W.pylons[i].yaw) * 2.6, 0.5); }
   for (const L of W.lamps) { lamp(b, L); W.colliders.push(L.x, L.z, 0.35); }
   for (const S of W.signs) { sign(b, S); W.colliders.push(S.x, S.z, 0.3); }
@@ -165,6 +248,7 @@ export function buildProps(W) {
   for (let i = 0; i < 9000 && placed < 420; i++) {
     const x = (hash1(i * 3 + 1) * 2 - 1) * (PLAY + 250), z = (hash1(i * 3 + 2) * 2 - 1) * (PLAY + 250), r = hash1(i * 3 + 3);
     const k = (clamp(Math.round((z + 2048) / 2 - 0.5), 0, HN - 1) * HN + clamp(Math.round((x + 2048) / 2 - 0.5), 0, HN - 1)) * 4;
+    if (W.buildings.some((B) => Math.abs(B.x - x) < 14 && Math.abs(B.z - z) < 14)) continue;
     const alp = W.mat[k + 3] / 255; if (W.mat[k] > 0 || W.mat[k + 1] > 0 || W.mat[k + 2] > 20) continue;
     if (r > alp * 0.5 + 0.012) continue;
     let near = false; for (const t of W.trails) { for (let q = 0; q < t.n; q += 3) if (Math.abs(t.pts[q * 2] - x) < 6 && Math.abs(t.pts[q * 2 + 1] - z) < 6) { near = true; break; } if (near) break; }

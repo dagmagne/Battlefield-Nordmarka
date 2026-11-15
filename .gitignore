@@ -2,3 +2,5 @@ node_modules
 shots
 *.log
 .certs
+tools/geo/raw/
+tools/geo/__pycache__/

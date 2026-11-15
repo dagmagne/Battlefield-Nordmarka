@@ -9,7 +9,7 @@ struct SO { @builtin(position) pos: vec4f, @location(0) w: f32, @location(1) s: 
   let a = mix(p0.xy, p0.zw, w); let b = mix(p1.xy, p1.zw, w);
   let p = mix(a, b, fwd);
   var o: SO;
-  o.pos = vec4f(p.x / 1024.0, -p.y / 1024.0, 0.0, 1.0);
+  o.pos = vec4f(p.x / 1600.0, -p.y / 1600.0, 0.0, 1.0);
   o.w = w; o.s = mix(sv.x, sv.y, fwd); o.val = val; o.uu = vec3f(sv.z, sv.w, width / val.w);
   return o;
 }
