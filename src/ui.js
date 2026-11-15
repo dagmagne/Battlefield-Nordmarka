@@ -2,7 +2,7 @@
 const $ = (id) => document.getElementById(id);
 export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false };
 const keys = new Set();
-const SPD = []; for (let i = 0; i < 60; i++) SPD.push(String(i));
+const SPD = []; for (let i = 0; i < 200; i++) SPD.push(String(i));
 const CAMN = ['CHASE', 'CAB', 'ORBIT', 'FLY'];
 
 export function initUI(api, isTouch) {
@@ -27,6 +27,7 @@ export function initUI(api, isTouch) {
     else if (c === 'KeyC') api.cam();
     else if (c === 'KeyF') api.fly();
     else if (c === 'KeyN') api.snow();
+    else if (c === 'KeyX') api.turbo();
     else if (c === 'KeyH') showHelp(true);
     else if (c === 'Escape') showMenu(true);
     else if (c === 'Backquote') api.debug();
@@ -110,7 +111,7 @@ export function initUI(api, isTouch) {
     inp.fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
   };
   U.hud = (kmh, till, set, camMode) => {
-    if (kmh !== lSpd) { lSpd = kmh; $('spd').textContent = SPD[kmh] || '59'; }
+    if (kmh !== lSpd) { lSpd = kmh; $('spd').textContent = SPD[kmh] || '199'; }
     if (till !== lT) { lT = till; $('sT').classList.toggle('on', !!till); $('bT').classList.toggle('on', !!till); }
     if (set !== lS) { lS = set; $('sS').classList.toggle('on', !!set); $('bS').classList.toggle('on', !!set); }
     if (camMode !== lC) { lC = camMode; $('sC').textContent = CAMN[camMode]; document.body.classList.toggle('flying', camMode === 3); }

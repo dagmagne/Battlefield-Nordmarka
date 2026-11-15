@@ -38,9 +38,9 @@ const isTouch = qs.has('touch') || (matchMedia('(pointer:coarse)').matches && na
 const O = { viewProj: 0, invViewProj: 16, shadowMat: 32, camPos: 80, sunDir: 84, sunCol: 88, ambSky: 92, ambGnd: 96, fogCol: 100, fogSun: 104, skyZen: 108, skyHor: 112, skySun: 116, casc: 120, cascTex: 124, misc: 128, l0p: 132, l0d: 136, l0c: 140, l1p: 144, l1d: 148, l1c: 152, l2p: 156, l2d: 160, l2c: 164, world: 168, screen: 172, groom: 176, lod: 180, lod2: 184 };
 const GU = new Float32Array(188);
 
-const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, gpuMs: 0, ft: 16.7, ftMax: 0 };
+const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, gpuMs: 0, ft: 16.7, ftMax: 0, fovK: 1 };
 const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, orbYaw: 0, orbPitch: 0.2, dist: 14, baseYaw: 0, cabYaw: 0, cabPitch: -0.08, idle: 9 };
-const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, tillDown: true, tillPos: 1, setDown: true, setPos: 1, bladePos: 1, dist: 0, trL: 0, trR: 0, yawRate: 0 };
+const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, tillDown: true, tillPos: 1, setDown: true, setPos: 1, bladePos: 1, dist: 0, trL: 0, trR: 0, yawRate: 0, turbo: false, vYaw: 0, slip: 0, air: false, vy: 0, airT: 0, airX: 0, airZ: 0, airH: 0, hop: false, pitchV: 0, gPrev: 0, shake: 0, land: 0, tillWas: true, setWas: true };
 const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16), ivp = new Float32Array(16);
 let seed = 12345; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 8) / 16777216; };
 
@@ -312,7 +312,7 @@ async function main() {
     for (let k = 0; k < 3; k++) {
       const i = k * 4, mv = Math.hypot(stCur[i] - stPrev[i], stCur[i + 1] - stPrev[i + 1]) + Math.hypot(stCur[i + 2] - stPrev[i + 2], stCur[i + 3] - stPrev[i + 3]);
       if (mv < 0.07) continue;
-      if (k > 0 || till) {
+      if (!(veh.air && veh.y - veh.gPrev > 0.12) && (k > 0 || till)) {
         const o = stN * 16, d = stData;
         d[o] = stPrev[i]; d[o + 1] = stPrev[i + 1]; d[o + 2] = stPrev[i + 2]; d[o + 3] = stPrev[i + 3];
         d[o + 4] = stCur[i]; d[o + 5] = stCur[i + 1]; d[o + 6] = stCur[i + 2]; d[o + 7] = stCur[i + 3];
@@ -344,25 +344,36 @@ async function main() {
   { const g = [];
     for (const L of W.lamps) g.push(L.x + Math.sin(L.yaw) * 1.55, L.y + 6.0, L.z + Math.cos(L.yaw) * 1.55, 0.95, 0.9, 0.65, 0.34, 0, 2, 0, 0, 0);
     glowN = g.length / 12; glowBuf = mkBuf(new Float32Array(g), U.VERTEX); }
-  const em = { spray: 0, exh: 0, smoke: 0, kick: 0 };
+  const em = { spray: 0, exh: 0, smoke: 0, kick: 0, roost: 0 };
   const tmp3 = new Float32Array(3); let fwdX = 0, fwdZ = -1, eBM = null;
   const loc = (lx, ly, lz) => { const B = eBM; tmp3[0] = B[0] * lx + B[4] * ly + B[8] * lz + B[12]; tmp3[1] = B[1] * lx + B[5] * ly + B[9] * lz + B[13]; tmp3[2] = B[2] * lx + B[6] * ly + B[10] * lz + B[14]; };
   function emitParticles(dt, BM) {
     eBM = BM;
     const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw), sp = Math.abs(veh.v), dir = veh.v >= 0 ? 1 : -1;
-    if (veh.tillPos > 0.9 && sp > 0.3) {
+    if (veh.tillPos > 0.9 && sp > 0.3 && !veh.air) {
       em.spray += dt * sp * 80;
       while (em.spray >= 1) { em.spray--; loc((rnd() - 0.5) * SWATH, 0.12 + rnd() * 0.25, 3.5 + rnd() * 0.6);
         const bk = (0.3 + rnd() * 1.8) * dir, lat = (rnd() - 0.5) * 1.2, vy = 0.6 + rnd() * 2.0;
         if (rnd() < 0.7) parts.emit(tmp3[0], tmp3[1], tmp3[2], s * bk + c * lat, vy, c * bk - s * lat, 0.3 + rnd() * 0.45, 0.007 + rnd() * 0.013, 0, 0, 1, 1, 1, 0.9);
         else { loc((rnd() - 0.5) * SWATH * 0.9, 0.15 + rnd() * 0.15, 4.2 + rnd() * 0.4); parts.emit(tmp3[0], tmp3[1], tmp3[2], s * (0.6 + bk * 0.5) * dir, 0.2 + rnd() * 0.35, c * (0.6 + bk * 0.5) * dir, 0.7 + rnd() * 0.6, 0.16 + rnd() * 0.1, 0.4, 1, 1.2, 1.2, 1.2, 0.11); } }
     }
-    if (sp > 0.5) {
+    if (sp > 0.5 && !veh.air) {
       em.kick += dt * sp * 14;
       while (em.kick >= 1) { em.kick--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (0.95 + rnd() * 1.0), 0.15, veh.v > 0 ? 2.2 : -2.2);
         parts.emit(tmp3[0], tmp3[1], tmp3[2], s * dir * (0.5 + rnd()) + c * (rnd() - 0.5), 0.6 + rnd() * 1.6, c * dir * (0.5 + rnd()) - s * (rnd() - 0.5), 0.3 + rnd() * 0.4, 0.007 + rnd() * 0.012, 0, 0, 1, 1, 1, 0.9); }
       if (veh.v > 0.5 && rnd() < dt * sp * 3) { const sd = rnd() < 0.5 ? -1 : 1; loc(sd * 2.45, 0.3 + rnd() * 0.5, -3.7); parts.emit(tmp3[0], tmp3[1], tmp3[2], -s * sp * 0.6 + c * sd * 1.2, 0.5 + rnd(), -c * sp * 0.6 - s * sd * 1.2, 0.4 + rnd() * 0.4, 0.008 + rnd() * 0.014, 0, 0, 1, 1, 1, 0.9); }
     }
+    if (veh.turbo && !veh.air && sp > 8) { // powder roost tail behind the tracks
+      em.roost += dt * (sp - 6) * (5 + veh.slip * 10);
+      while (em.roost >= 1) { em.roost--; const sd = rnd() < 0.5 ? -1 : 1; loc(sd * (1.45 + (rnd() - 0.5) * 0.9), 0.25, 2.3 + rnd() * 0.5);
+        parts.emit(tmp3[0], tmp3[1], tmp3[2], -fwdX * sp * (0.1 + rnd() * 0.25) + c * sd * (0.5 + rnd() * 1.5 + veh.slip * 6), 1.2 + rnd() * 2.6, -fwdZ * sp * (0.1 + rnd() * 0.25) - s * sd * (0.5 + rnd() * 1.5 + veh.slip * 6), 1.0 + rnd() * 0.9, 0.4 + rnd() * 0.5, 1.2, 1, 1.25, 1.25, 1.28, 0.2); }
+    }
+    if (veh.land > 2) { // touchdown burst
+      const n = Math.min(160, veh.land * 14);
+      for (let i = 0; i < n; i++) { const sd = rnd() < 0.5 ? -1 : 1, a = rnd() * 6.283, r = 1 + rnd() * 4; loc(sd * (1.2 + rnd() * 0.6), 0.2, (rnd() - 0.5) * 4);
+        const big = rnd() < 0.5; parts.emit(tmp3[0], tmp3[1], tmp3[2], Math.cos(a) * r + fwdX * sp * 0.3, 1 + rnd() * veh.land * 0.45, Math.sin(a) * r + fwdZ * sp * 0.3, big ? 1.2 + rnd() : 0.5 + rnd() * 0.5, big ? 0.35 + rnd() * 0.4 : 0.01 + rnd() * 0.015, big ? 1 : 0, big ? 1 : 0, 1.25, 1.25, 1.28, big ? 0.12 : 0.9); }
+    }
+    veh.land = 0;
     em.exh += dt * (5 + 26 * Math.abs(veh.throttle));
     while (em.exh >= 1) { em.exh--; loc(0.98, 3.1, -0.03); parts.emit(tmp3[0], tmp3[1], tmp3[2], (rnd() - 0.5) * 0.4 + fwdX * veh.v * 0.5, 1.8 + rnd() * 1.2, (rnd() - 0.5) * 0.4 + fwdZ * veh.v * 0.5, 1.1 + rnd() * 0.8, 0.1, 0.7, 1, 0.3, 0.31, 0.34, 0.16 + 0.14 * Math.abs(veh.throttle)); }
     em.smoke += dt * 11;
@@ -443,7 +454,13 @@ async function main() {
     cam.mode = m; ui.toast(CAMT[m] + (m === 3 && !isTouch ? ' — click to look' : ''));
   }
   const api = {
-    tiller() { veh.tillDown = !veh.tillDown; ui.toast(veh.tillDown ? 'Tiller down' : 'Tiller up'); },
+    tiller() { if (veh.turbo) { if (!veh.air) veh.hop = true; return; } veh.tillDown = !veh.tillDown; ui.toast(veh.tillDown ? 'Tiller down' : 'Tiller up'); },
+    turbo(v) {
+      veh.turbo = v === undefined ? !veh.turbo : !!v; veh.vYaw = veh.yaw; veh.gPrev = veh.y; veh.vy = 0; veh.air = false;
+      if (veh.turbo) { veh.tillWas = veh.tillDown; veh.setWas = veh.setDown; veh.tillDown = veh.setDown = false; } else { veh.tillDown = veh.tillWas; veh.setDown = veh.setWas; }
+      document.body.classList.toggle('turbo', veh.turbo);
+      ui.toast(veh.turbo ? 'TURBO — Shift boost · Space jump · kickers on the lake' : 'Turbo off');
+    },
     setter() { veh.setDown = !veh.setDown; ui.toast(veh.setDown ? 'Track-setter down' : 'Track-setter up'); },
     cam() { setCam((cam.mode + 1) % (isTouch ? 4 : 3)); },
     fly() { setCam(cam.mode === 3 ? cam.prevMode : 3); },
@@ -464,6 +481,7 @@ async function main() {
   setTod(clamp((+qs.get('tod') || 1) - 1, 0, 3), true);
   if (qs.has('snow')) R.snow = 1;
   if (qs.has('debug')) api.debug(1);
+  veh.vYaw = veh.yaw; veh.gPrev = veh.y; if (qs.has('turbo')) api.turbo(1);
   GU[O.world] = HALF; GU[O.world + 1] = 1 / WS; GU[O.world + 2] = 1024; GU[O.world + 3] = 1 / 2048;
   GU[O.screen + 2] = TEXM; GU[O.screen + 3] = Q.mask;
   GU[O.casc + 3] = 1 / Q.shadow; GU[O.lod2 + 2] = Q.msaa;
@@ -491,25 +509,76 @@ async function main() {
       let d = Math.atan2(-(t.pts[i * 2] - veh.x), -(t.pts[i * 2 + 1] - veh.z)) - veh.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
       st = clamp(d * 2.5, -1, 1); th = 1 - 0.4 * Math.abs(st);
     }
-    veh.throttle = th; veh.steer += (st - veh.steer) * Math.min(1, dt * 5);
+    veh.throttle = th; veh.steer += (st - veh.steer) * Math.min(1, dt * (veh.turbo ? 8 : 5));
     fwdX = -Math.sin(veh.yaw); fwdZ = -Math.cos(veh.yaw);
-    const vmax = (th >= 0 ? 6.2 : 3.2) * (veh.tillPos > 0.5 ? 0.92 : 1);
-    const climb = Math.sin(veh.pitch) * (veh.v >= 0 ? 1 : -1);
-    const target = th * vmax * (1 - 0.8 * clamp(climb / 0.5, 0, 1));
-    veh.v += (target - veh.v) * Math.min(1, dt * 1.5) - 9.8 * Math.sin(veh.pitch) * 0.1 * dt;
-    if (th === 0 && Math.abs(veh.v) < 0.25) veh.v *= 1 - Math.min(1, dt * 6);
-    veh.yawRate = veh.steer * lerp(0.95, 0.55, Math.min(1, Math.abs(veh.v) / 6)) * (veh.v < -0.2 ? -1 : 1);
+    const sp = Math.abs(veh.v);
+    if (!veh.turbo) {
+      const vmax = (th >= 0 ? 6.2 : 3.2) * (veh.tillPos > 0.5 ? 0.92 : 1);
+      const climb = Math.sin(veh.pitch) * (veh.v >= 0 ? 1 : -1);
+      const target = th * vmax * (1 - 0.8 * clamp(climb / 0.5, 0, 1));
+      veh.v += (target - veh.v) * Math.min(1, dt * 1.5) - 9.8 * Math.sin(veh.pitch) * 0.1 * dt;
+      if (th === 0 && Math.abs(veh.v) < 0.25) veh.v *= 1 - Math.min(1, dt * 6);
+      veh.yawRate = veh.steer * lerp(0.95, 0.55, Math.min(1, sp / 6)) * (veh.v < -0.2 ? -1 : 1);
+      veh.vYaw = veh.yaw + veh.yawRate * dt;
+    } else { // arcade: momentum, full slope gravity, boost, drift, no traction in the air
+      const boost = inp.fast && th > 0, vmax = boost ? 38 : 25;
+      if (!veh.air) {
+        if (th > 0) veh.v += th * (boost ? 10 : 6.5) * (veh.v < 0 ? 2 : 1 - clamp(veh.v / vmax, 0, 1) ** 2) * dt;
+        else if (th < 0) veh.v = veh.v > 0.3 ? Math.max(0, veh.v + th * 16 * dt) : Math.max(-8, veh.v + th * 5 * dt);
+        veh.v -= (9.8 * Math.sin(veh.pitch) + veh.v * (th === 0 ? 0.3 : 0.05) + (veh.v > vmax ? (veh.v - vmax) * 0.8 : 0)) * dt;
+        if (th === 0 && sp < 0.3) veh.v *= 1 - Math.min(1, dt * 6);
+      }
+      veh.yawRate = veh.steer * (veh.air ? 0.35 : lerp(1.15, 0.62, Math.min(1, sp / 30))) * (veh.v < -0.2 ? -1 : 1);
+      let dy = veh.yaw + veh.yawRate * dt - veh.vYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      const grip = veh.air ? 0 : lerp(14, 2.6, clamp((sp - 6) / 26, 0, 1)) * (boost ? 0.8 : 1);
+      veh.vYaw += dy * Math.min(1, dt * grip); veh.slip = Math.abs(Math.sin(dy));
+      if (!veh.air) veh.v *= 1 - veh.slip * 0.5 * dt;
+    }
     veh.yaw += veh.yawRate * dt;
     veh.dist += veh.v * dt; veh.trL += (veh.v + veh.yawRate * 1.45) * dt; veh.trR += (veh.v - veh.yawRate * 1.45) * dt;
     veh.tillPos = clamp(veh.tillPos + (veh.tillDown ? dt : -dt) * 1.3, 0, 1); veh.setPos = clamp(veh.setPos + (veh.setDown ? dt : -dt) * 1.6, 0, 1);
-    veh.x = clamp(veh.x + fwdX * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + fwdZ * veh.v * dt, -PLAY, PLAY);
-    collide();
+    const mx = -Math.sin(veh.vYaw), mz = -Math.cos(veh.vYaw);
+    veh.x = clamp(veh.x + mx * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + mz * veh.v * dt, -PLAY, PLAY);
+    if (!veh.turbo) veh.vYaw = veh.yaw;
+    fwdX = -Math.sin(veh.yaw); fwdZ = -Math.cos(veh.yaw);
+    const v0 = Math.abs(veh.v); collide();
+    if (veh.turbo && v0 > 6 && Math.abs(veh.v) < v0 * 0.9) { veh.shake = Math.max(veh.shake, Math.min(1, v0 / 22)); veh.v *= 0.55; }
     const rx = -fwdZ, rz = fwdX, hl = 1.9, hw = 1.3, h = W.heightAt, fx = fwdX, fz = fwdZ;
     const a = h(veh.x + fx * hl + rx * hw, veh.z + fz * hl + rz * hw), b = h(veh.x + fx * hl - rx * hw, veh.z + fz * hl - rz * hw), c = h(veh.x - fx * hl + rx * hw, veh.z - fz * hl + rz * hw), d = h(veh.x - fx * hl - rx * hw, veh.z - fz * hl - rz * hw);
-    const k = Math.min(1, dt * 6);
-    veh.pitch += (Math.atan2((a + b - c - d) / 2, hl * 2) - veh.pitch) * k; veh.roll += (Math.atan2((a + c - b - d) / 2, hw * 2) - veh.roll) * k;
-    const bob = Math.sin(R.time * 31) * 0.004 * Math.min(1, Math.abs(veh.v)) + Math.sin(veh.dist * 2.1) * 0.012;
-    veh.y += ((a + b + c + d) / 4 + 0.03 + bob - veh.y) * Math.min(1, dt * 12);
+    const gY = (a + b + c + d) / 4 + 0.03, gV = clamp((gY - veh.gPrev) / dt, -40, 40); veh.gPrev = gY;
+    const bob = Math.sin(R.time * 31) * 0.004 * Math.min(1, sp) + Math.sin(veh.dist * 2.1) * 0.012;
+    veh.shake *= 1 - Math.min(1, dt * 3.5);
+    if (!veh.turbo) {
+      const k = Math.min(1, dt * 6);
+      veh.pitch += (Math.atan2((a + b - c - d) / 2, hl * 2) - veh.pitch) * k; veh.roll += (Math.atan2((a + c - b - d) / 2, hw * 2) - veh.roll) * k;
+      veh.y += (gY + bob - veh.y) * Math.min(1, dt * 12); veh.air = false; veh.vy = 0;
+      return;
+    }
+    const G = 10.5;
+    if (!veh.air) {
+      const ball = veh.y + veh.vy * dt - 0.5 * G * dt * dt;
+      if (veh.hop || (gY < ball - 0.04 && sp > 4)) { // leave the ground: crest, kicker lip or hop
+        veh.air = true; veh.airT = 0; veh.airX = veh.x; veh.airZ = veh.z; veh.airH = 0;
+        if (veh.hop) { veh.vy = Math.max(veh.vy, 0) + 6.5; veh.y += 0.05; } else { veh.y = ball; if (veh.vy > 1.5) veh.vy *= 1.25; }
+        veh.pitchV = 0;
+      } else { veh.vy = gV; veh.y = gY; }
+      veh.hop = false;
+    }
+    if (veh.air) {
+      veh.vy -= G * dt; veh.y += veh.vy * dt; veh.airT += dt; veh.airH = Math.max(veh.airH, veh.y - gY);
+      veh.pitch += (clamp(Math.atan2(veh.vy, Math.max(sp, 3)) * 0.6, -0.55, 0.5) - veh.pitch) * Math.min(1, dt * 1.4);
+      veh.roll *= 1 - Math.min(1, dt * 1.2);
+      if (veh.y <= gY) { // touchdown
+        const imp = Math.max(0, gV - veh.vy);
+        veh.air = false; veh.y = gY; veh.vy = gV; veh.land = imp;
+        veh.shake = Math.max(veh.shake, Math.min(1.3, imp / 9)); veh.v *= 1 - Math.min(0.3, imp * 0.012);
+        if (veh.airT > 0.7) { const dd = Math.hypot(veh.x - veh.airX, veh.z - veh.airZ); ui.toast(`AIR ${veh.airT.toFixed(1)} s · ${dd.toFixed(0)} m · ${veh.airH.toFixed(1)} m high`); }
+      }
+    }
+    if (!veh.air) {
+      const k = Math.min(1, dt * 14);
+      veh.pitch += (Math.atan2((a + b - c - d) / 2, hl * 2) - veh.pitch) * k; veh.roll += (Math.atan2((a + c - b - d) / 2, hw * 2) + veh.yawRate * sp * 0.006 - veh.roll) * k;
+    }
   }
   function updateCamera(dt, BM) {
     const sens = isTouch ? 0.006 : 0.0045;
@@ -529,13 +598,14 @@ async function main() {
       let d = veh.yaw - cam.baseYaw; d = Math.atan2(Math.sin(d), Math.cos(d)); cam.baseYaw += d * Math.min(1, dt * 2.6);
       if (cam.mode === 0) { cam.idle = inp.drag || inp.lookX || inp.lookY ? 0 : cam.idle + dt; if (cam.idle > 3 && Math.abs(veh.v) > 0.6) { cam.orbYaw = Math.atan2(Math.sin(cam.orbYaw), Math.cos(cam.orbYaw)); cam.orbYaw *= 1 - Math.min(1, dt * 1.2); } }
       const yaw = (cam.mode === 0 ? cam.baseYaw : 0) + cam.orbYaw, cp = Math.cos(cam.orbPitch);
-      const tx = veh.x + fwdX * 1.2, ty = veh.y + 2.1, tz = veh.z + fwdZ * 1.2;
-      const ex = tx + Math.sin(yaw) * cp * cam.dist, ez = tz + Math.cos(yaw) * cp * cam.dist;
-      const ey = Math.max(ty + Math.sin(cam.orbPitch) * cam.dist, W.heightAt(ex, ez) + 1.1);
+      const tx = veh.x + fwdX * 1.2, ty = veh.y + 2.1, tz = veh.z + fwdZ * 1.2, cd = cam.dist * (veh.turbo ? 1 + 0.5 * clamp(Math.abs(veh.v) / 30, 0, 1) : 1);
+      const ex = tx + Math.sin(yaw) * cp * cd, ez = tz + Math.cos(yaw) * cp * cd;
+      const ey = Math.max(ty + Math.sin(cam.orbPitch) * cd, W.heightAt(ex, ez) + 1.1);
       const k = R.frame < 3 || R.snap ? 1 : Math.min(1, dt * 9); R.snap = false;
       cam.x += (ex - cam.x) * k; cam.y += (ey - cam.y) * k; cam.z += (ez - cam.z) * k;
       cam.y = Math.max(cam.y, W.heightAt(cam.x, cam.z) + 0.8);
-      lookAt(view, cam.x, cam.y, cam.z, tx, ty, tz, 0, 1, 0);
+      const sk = veh.shake * veh.shake * 0.35, t = R.time;
+      lookAt(view, cam.x + Math.sin(t * 37) * sk, cam.y + Math.sin(t * 43 + 1) * sk, cam.z + Math.sin(t * 29 + 2) * sk, tx, ty, tz, 0, 1, 0);
     }
     inp.lookX = inp.lookY = inp.zoom = 0;
     if (R.pose) { const q = R.pose; cam.x = q[0]; cam.y = q[1]; cam.z = q[2]; const cp = Math.cos(q[4]); lookAt(view, q[0], q[1], q[2], q[0] - Math.sin(q[3]) * cp, q[1] + Math.sin(q[4]), q[2] - Math.cos(q[3]) * cp, 0, 1, 0); }
@@ -571,7 +641,8 @@ async function main() {
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
     const rw = Math.max(8, Math.round(R.w * R.scale)), rh = Math.max(8, Math.round(R.h * R.scale));
-    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * (cam.mode === 1 ? 1.15 : 1);
+    R.fovK += ((veh.turbo && cam.mode !== 3 ? 1 + 0.22 * clamp((Math.abs(veh.v) - 8) / 28, 0, 1) : 1) - R.fovK) * Math.min(1, dt * 2);
+    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * (cam.mode === 1 ? 1.15 : 1) * R.fovK;
     perspRZ(proj, fovy, rw / rh, cam.mode === 1 ? 0.12 : 0.25);
     mul(vp, proj, view); invert(ivp, vp);
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
@@ -655,7 +726,7 @@ async function main() {
     if (ri >= 0) { ts.busy[ri] = true; ts.rb[ri].mapAsync(GPUMapMode.READ).then(ts.cb[ri]); }
 
     drs(raw); if (raw * 1000 > R.ftMax) R.ftMax = raw * 1000;
-    ui.hud(Math.min(59, Math.round(Math.abs(veh.v) * 3.6)), veh.tillDown ? 1 : 0, veh.setDown ? 1 : 0, cam.mode);
+    ui.hud(Math.min(199, Math.round(Math.abs(veh.v) * 3.6)), veh.tillDown ? 1 : 0, veh.setDown ? 1 : 0, cam.mode);
     if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}`); R.ftMax = 0; }
     if (perf && !perf.done) {
       perf.t += raw; if (perf.t > 2 && perf.n < 20000) perf.dt[perf.n++] = raw * 1000;
@@ -680,7 +751,7 @@ async function main() {
   window.__look = (ex, eh, ez, tx, th, tz) => { const ey = W.heightAt(ex, ez) + eh, ty = W.heightAt(tx, tz) + th, dx = tx - ex, dy = ty - ey, dz = tz - ez; R.pose = [ex, ey, ez, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))]; };
   window.__chase = (yaw, pitch, dist) => { R.pose = null; cam.mode = 0; cam.orbYaw = yaw; cam.orbPitch = pitch; cam.dist = dist; cam.idle = -1e9; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
-  window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = yaw; veh.v = 0; veh.y = W.heightAt(x, z); cam.baseYaw = yaw; stInit = false; R.snap = true; };
+  window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = veh.vYaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; cam.baseYaw = yaw; stInit = false; R.snap = true; };
   Object.assign(window, { __R: R, __W: W, __cam: cam, __veh: veh, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none';
