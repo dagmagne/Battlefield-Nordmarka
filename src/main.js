@@ -240,9 +240,10 @@ async function main() {
     return true;
   }
   const TP = TM.parts, TT = W.trees;
-  let draws = 0;
+  let draws = 0; const triStat = new Float64Array(8); R.triStat = triStat;
   function drawTrees(p, pl, np, maxLod) {
     p.setVertexBuffer(0, treeVB); p.setVertexBuffer(1, treeInst); p.setIndexBuffer(treeIB, 'uint32');
+    const sb = maxLod === 4 ? 0 : 4; // triangle statistics: [0..3] main pass per LOD, [4..6] shadow passes per LOD
     const ccx = Math.floor((cam.x + HALF) / NEAR), ccz = Math.floor((cam.z + HALF) / NEAR), rad = Math.ceil(LOD[1] / 0.85 * (1 + BAND) / NEAR) + 1;
     const i0 = Math.max(0, ccx - rad), i1 = Math.min(NCN - 1, ccx + rad), j0 = Math.max(0, ccz - rad), j1 = Math.min(NCN - 1, ccz + rad);
     for (let l = 0; l < 2; l++) {
@@ -256,7 +257,7 @@ async function main() {
         if (dmin >= hi || dmax <= lo) continue;
         if (!vis(pl, np, x0 - 5, y0 - 1, z0 - 5, x0 + NEAR + 5, y1 + 1, z0 + NEAR + 5)) continue;
         let st = TT.nearStart[nc];
-        for (let s = 0; s < 3; s++) { const c = TT.nearCnt[nc * 3 + s]; if (c) { const P = TP[l * 3 + s]; p.drawIndexed(P.count, c, P.first, P.base, st); st += c; draws++; } }
+        for (let s = 0; s < 3; s++) { const c = TT.nearCnt[nc * 3 + s]; if (c) { const P = TP[l * 3 + s]; p.drawIndexed(P.count, c, P.first, P.base, st); st += c; draws++; triStat[sb + l] += P.count / 3 * c; } }
       }
     }
     for (let l = 2; l < maxLod; l++) {
@@ -268,7 +269,7 @@ async function main() {
         const dh = Math.hypot(x0 + 64 - cam.x, z0 + 64 - cam.z), dmin = Math.max(0, dh - 91), dmax = dh + 91 + Math.abs(cam.y - y0);
         if (dmin >= hi || dmax <= lo) continue;
         if (!vis(pl, np, x0 - 8, y0 - 1, z0 - 8, x0 + FAR + 8, y1 + 1, z0 + FAR + 8)) continue;
-        p.drawIndexed(P.count, c, P.first, P.base, TT.farStart[fc]); draws++;
+        p.drawIndexed(P.count, c, P.first, P.base, TT.farStart[fc]); draws++; triStat[sb + l] += P.count / 3 * c;
       }
     }
   }
@@ -714,7 +715,7 @@ async function main() {
     GU[O.misc + 1] = R.snowAmt; GU[O.screen] = rw; GU[O.screen + 1] = rh; GU[O.groom + 3] = 0; gunMarker();
     if (R.snowAmt > 0.01) { const k = 1 - 0.55 * R.snowAmt; GU[O.sunCol] *= k; GU[O.sunCol + 1] *= k; GU[O.sunCol + 2] *= k; GU[O.fogCol + 3] *= 1 + 5 * R.snowAmt; GU[O.skyHor + 3] = Math.min(1.6, GU[O.skyHor + 3] + R.snowAmt); }
     updateCascades(rw / rh, fovy);
-    planesFrom(camPlanes, vp, 5); draws = 0;
+    planesFrom(camPlanes, vp, 5); draws = 0; triStat.fill(0);
     updateStamps();
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[130] = veh.dead ? Math.min(1, (game.burnP || 0) * 0.5) : 0; groomer.d[131] = 1;
@@ -805,7 +806,7 @@ async function main() {
 
     drs(raw); if (raw * 1000 > R.ftMax) R.ftMax = raw * 1000;
     ui.hud(Math.min(199, Math.round((cam.mode === 4 ? Math.hypot(game.drone.vx, game.drone.vy, game.drone.vz) : Math.abs(veh.v)) * 3.6)), cam.mode, Math.round(aim.range / 10) * 10);
-    if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}`); R.ftMax = 0; }
+    if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}\ntree tris ${((triStat[0] + triStat[1] + triStat[2] + triStat[3]) / 1e6).toFixed(2)}M + shadow ${((triStat[4] + triStat[5] + triStat[6]) / 1e6).toFixed(2)}M`); R.ftMax = 0; }
     if (perf && !perf.done) {
       perf.t += raw; if (perf.t > 2 && perf.n < 20000) perf.dt[perf.n++] = raw * 1000;
       if (perf.t > 62) { perf.done = true; const st = (a, n) => { const s = Array.from(a.subarray(0, n)).sort((x, y) => x - y); return n ? { avg: +(s.reduce((x, y) => x + y, 0) / n).toFixed(2), p50: +s[n >> 1].toFixed(2), p99: +s[Math.floor(n * 0.99)].toFixed(2), max: +s[n - 1].toFixed(2), n } : null; };
