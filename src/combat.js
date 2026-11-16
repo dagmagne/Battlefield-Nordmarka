@@ -9,11 +9,12 @@ const DRONES = 5, DRONE_T = 75, DRONE_V = 26, DRONE_R = 1500; // drones per game
 const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
 // shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade
 const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0]];
+const BDMG = [20, 45, 70, 0, 35, 3, 0]; // direct-hit damage to a building by shell type (the drone charge does 100)
 const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1500, burst: 1, name: 'T-72B3' }, { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 950, burst: 5, name: 'BMP-2' }];
 
 export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
-  const S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
+  const SO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
   const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES;
   let fireWas = false, fireBlock = false;
@@ -53,6 +54,7 @@ export function initCombat(C) {
   // line of sight: terrain, forest canopy (density raster) and smoke clouds
   function losBlocked(x0, y0, z0, x1, y1, z1) {
     const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, d = Math.hypot(dx, dy, dz), n = clamp(Math.ceil(d / 10), 6, 110), st = d / n; let can = 0;
+    if (C.bld.seg(x0, y0, z0, x1, y1, z1)) return true; // intact and damaged buildings (rubble does not block)
     for (let k = 1; k < n; k++) {
       const f = k / n, x = x0 + dx * f, y = y0 + dy * f, z = z0 + dz * f, g = hAt(x, z);
       if (y < g + 0.4) return true;
@@ -105,12 +107,34 @@ export function initCombat(C) {
     if (t) hitVehicle(type, t, zone, fc, x, y, z);
     if (type === 0 || type === 4) { explode(x, y, z, t ? 0.9 : 0.55); if (t) for (let i = 0; i < 14; i++) parts.emit(x, y, z, sr() * 14, rnd() * 9, sr() * 14, 0.3 + rnd() * 0.4, 0.02 + rnd() * 0.02, 0, 0, 3, 2.2, 1, 1); }
     else if (type === 1) { explode(x, y, z, 1.7); splash(x, y, z, 3.5, 6, 40, owner); }
-    else if (type === 2) { explode(x, y, z, 3.2); splash(x, y, z, 9, 12, 70, owner); }
+    else if (type === 2) { explode(x, y, z, 3.2); splash(x, y, z, 9, 12, 70, owner); C.bld.splash(x, y, z, 9, 30, bSkip, bldFx); }
     else if (type === 5) { explode(x, y, z, 0.4); }
     else if (type === 3) { if (t) glow(x, y, z, 0.5, 20, 12, 4); else for (let i = 0; i < 3; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.5 + rnd() * 2.5, sr() * 2, 0.4 + rnd() * 0.3, 0.012 + rnd() * 0.015, 0, 0, 1, 1, 1, 0.9); }
     else if (type === 6) smokeBurst(x, y, z);
   }
   function smokeBurst(x, y, z) { const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
+
+  // ---------- buildings: damage, collapse ----------
+  const FI = new Float32Array(8 * 5); let fiNext = 0, bSkip = -1; // building fires: x y z time-left radius
+  function bldHit(i, d, x, y, z, hot) { const s = C.bld.damage(i, d); if (s >= 0) bldState(i, s, x, y, z, hot); }
+  const bldFx = (i, s) => bldState(i, s, C.bld.x[i], C.bld.y[i] + 2, C.bld.z[i], true);
+  function bldState(i, s, x, y, z, hot) {
+    const B = C.bld, bx = B.x[i], by = B.y[i], bz = B.z[i], sz = B.size[i], r = sz * 0.5;
+    if (s === 1) { // damaged: a puff of plaster dust and splinters where it was hit
+      for (let k = 0; k < 10; k++) parts.emit(x + sr() * 2, y + sr() * 2, z + sr() * 2, sr() * 3, 0.5 + rnd(), sr() * 3, 4 + rnd() * 3, 1.2 + rnd() * 1.4, 0.9, 1, 0.45, 0.42, 0.38, 0.6);
+      for (let k = 0; k < 16; k++) parts.emit(x, y, z, sr() * 9, 2 + rnd() * 6, sr() * 9, 1 + rnd(), 0.05 + rnd() * 0.1, 0, 0, 0.09, 0.08, 0.07, 1);
+      return;
+    }
+    // collapse: a dust cloud rolling out along the ground, a column, debris, fire for HE and the drone charge
+    for (let k = 0, n = Math.min(80, 30 + sz * 2); k < n; k++) { const a = rnd() * 6.283, rr = rnd() * r, v = 2.5 + rnd() * 6;
+      parts.emit(bx + Math.cos(a) * rr, by + 0.6 + rnd() * 2.5, bz + Math.sin(a) * rr, Math.cos(a) * v, 0.3 + rnd() * 1.4, Math.sin(a) * v, 8 + rnd() * 8, 2.5 + rnd() * 3.5, 1.3, 1, 0.43, 0.4, 0.35, 0.78); }
+    for (let k = 0; k < 14; k++) parts.emit(bx + sr() * r, by + 2 + rnd() * 4, bz + sr() * r, sr() * 1.5, 2.5 + rnd() * 4, sr() * 1.5, 7 + rnd() * 6, 3 + rnd() * 3, 1.5, 1, 0.3, 0.28, 0.25, 0.7);
+    for (let k = 0; k < 40; k++) parts.emit(bx + sr() * r, by + 1 + rnd() * sz * 0.25, bz + sr() * r, sr() * 12, 3 + rnd() * 9, sr() * 12, 1.2 + rnd(), 0.08 + rnd() * 0.2, 0, 0, 0.07, 0.06, 0.05, 1);
+    blast(bx, bz, r + 2.5, 0.75);
+    if (hot) { const o = fiNext * 5; fiNext = (fiNext + 1) % 8; FI[o] = bx; FI[o + 1] = by; FI[o + 2] = bz; FI[o + 3] = 6 + rnd() * 4; FI[o + 4] = Math.min(r, 9); }
+    const d = Math.hypot(bx - veh.x, bz - veh.z); veh.shake = Math.max(veh.shake, Math.min(1.2, sz * 0.9 / (d + 10)));
+    C.sfx('collapse', bx, by, bz, sz);
+  }
 
   // ---------- projectiles ----------
   function updateShells(dt) {
@@ -131,6 +155,8 @@ export function initCombat(C) {
         const gh = hAt(qx, qz);
         if (qy < gh) { let a = 0, b = 1; for (let it = 0; it < 5; it++) { const m = (a + b) / 2; if (py + (qy - py) * m < hAt(px + (qx - px) * m, pz + (qz - pz) * m)) b = m; else a = m; }
           const ix = px + (qx - px) * b, iz = pz + (qz - pz) * b; impact(type, owner, ix, hAt(ix, iz) + 0.05, iz, null, 0, 0); hit = true; break; }
+        const bh = C.bld.at(qx, qy, qz, 0);
+        if (bh >= 0) { bSkip = bh; bldHit(bh, BDMG[type], px, py, pz, type === 2); impact(type, owner, px, py, pz, null, 0, 0); bSkip = -1; hit = true; break; }
         if (qy < gh + 9 && type !== 6 && C.collAt(qx, qz)) { impact(type, owner, px, py, pz, null, 0, 0); hit = true; break; }
         if (Math.abs(qx) > HALF || Math.abs(qz) > HALF) { hit = true; break; }
         px = qx; py = qy; pz = qz;
@@ -199,6 +225,8 @@ export function initCombat(C) {
       for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = e.x - q.x, qz = e.z - q.z, qd = Math.hypot(qx, qz); if (qd < 7 && qd > 0.01) { const k = (7 - qd) / qd * (q.dead ? 1 : 0.5); e.x += qx * k; e.z += qz * k; } }
       e.v += (tgt - e.v) * Math.min(1, dt * 0.9); const yr = st * 0.55 * (e.v > 0.5 || tgt > 0 ? 1 : 0);
       e.yaw += yr * dt; e.x = clamp(e.x - Math.sin(e.yaw) * e.v * dt, -PLAY, PLAY); e.z = clamp(e.z - Math.cos(e.yaw) * e.v * dt, -PLAY, PLAY);
+      for (let s = -1; s <= 1; s++) { const px = e.x - Math.sin(e.yaw) * 1.8 * s, pz = e.z - Math.cos(e.yaw) * 1.8 * s; if (C.solid(px, pz, 1.9, SO)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; } } // buildings and colliders are solid
+      if (C.bld.rubble(e.x, e.z)) e.v = Math.min(e.v, 4.5);
       e.trL += (e.v + yr * 1.43) * dt; e.trR += (e.v - yr * 1.43) * dt;
       const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw), hl = K.hl, hw = K.hw;
       const a = hAt(e.x + fx * hl - fz * hw, e.z + fz * hl + fx * hw), b = hAt(e.x + fx * hl + fz * hw, e.z + fz * hl - fx * hw), c = hAt(e.x - fx * hl - fz * hw, e.z - fz * hl + fx * hw), dd = hAt(e.x - fx * hl + fz * hw, e.z - fz * hl - fx * hw), k = Math.min(1, dt * 8);
@@ -303,6 +331,9 @@ export function initCombat(C) {
     // vehicles are solid for each other
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz); if (d < 5.6 && d > 0.01) { const k = (5.6 - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
     updateShells(dt);
+    for (let f = 0; f < 8; f++) { const o = f * 5; if (FI[o + 3] <= 0) continue; FI[o + 3] -= dt; const r = FI[o + 4]; // collapsed buildings burn for a few seconds
+      if (rnd() < dt * 22) parts.emit(FI[o] + sr() * r, FI[o + 1] + 0.6 + rnd(), FI[o + 2] + sr() * r, sr(), 2 + rnd() * 2.5, sr(), 1 + rnd() * 0.8, 0.9 + rnd() * 1.1, 1.2, 4, 0.06, 0.06, 0.06, 0.85);
+      if ((R.frame & 1) === 0) glow(FI[o] + sr() * r * 0.6, FI[o + 1] + 1.4, FI[o + 2] + sr() * r * 0.6, 2.6 + rnd() * 1.6, 9, 3.5, 0.8); }
     if (G.burnP > 0) { G.burnP += dt; if (rnd() < dt * (G.burnP < 30 ? 9 : 3)) parts.emit(veh.x + sr() * 1.6, veh.y + 1.8 + rnd(), veh.z + sr() * 2.4, sr(), 2 + rnd() * 2, sr(), G.burnP < 30 ? 1.4 + rnd() : 5 + rnd() * 3, 0.7 + rnd() * 0.6, 1.2, G.burnP < 30 ? 4 : 1, 0.1, 0.1, 0.1, 0.7); }
     // flashes -> glow sprites, flash light decay, timers
     for (let i = 0; i < 24; i++) { const o = i * 8; if (FL[o + 4] <= 0) continue; FL[o + 4] -= dt; const k = Math.max(0, FL[o + 4] / FL[o + 5]); glow(FL[o], FL[o + 1], FL[o + 2], FL[o + 3] * (1.3 - 0.3 * k), FL[o + 6] * k, FL[o + 7] * k, FL[o + 7] * 0.3 * k); }
@@ -325,6 +356,7 @@ export function initCombat(C) {
   function droneEnd(msg) { D.on = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; if (msg) ui.toast(msg); }
   function droneBoom() {
     explode(D.x, D.y, D.z, 1.9); splash(D.x, D.y, D.z, 4, 115, 140, 0);
+    const db = C.bld.at(D.x, D.y, D.z, 0.9); if (db >= 0) bldHit(db, 100, D.x, D.y, D.z, true); C.bld.splash(D.x, D.y, D.z, 5, 30, db, bldFx);
     const d = Math.hypot(veh.x - D.x, veh.y + 1 - D.y, veh.z - D.z); if (d < 6.5) hurtPlayer(35 * clamp(1 - (d - 2.5) / 4, 0, 1), 1, false);
     D.on = false; D.vx = D.vy = D.vz = 0; D.hold = 4.5; D.bx = D.x; D.by = D.y; D.bz = D.z; hudDirty = true; // the camera stays on the blast (see updateCamera), then returns to the tank
   }
@@ -338,7 +370,7 @@ export function initCombat(C) {
     D.tp += (-inp.mvZ * 0.38 - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * 0.38 - D.tr) * Math.min(1, dt * 5); // lean into the motion
     const gh = hAt(D.x, D.z); let boom = inp.fire && !fireWas;
     if (D.y < gh + 0.35) { if (Math.hypot(D.vx, D.vy, D.vz) > 9) boom = true; else { D.y = gh + 0.35; D.vy = Math.max(0, D.vy); } }
-    if (D.y < gh + 8 && C.collAt(D.x, D.z)) boom = true;
+    if ((D.y < gh + 8 && C.collAt(D.x, D.z)) || C.bld.at(D.x, D.y, D.z, 0.3) >= 0) boom = true;
     for (let i = 0; i < MAXE && !boom; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, D.x, D.y, D.z)) boom = true; }
     if (boom) { droneBoom(); return; }
     if (D.t <= 0) { droneEnd('Drone battery empty — lost'); return; }
@@ -357,7 +389,7 @@ export function initCombat(C) {
     ui.toast('Drone away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank');
   };
   G.restart = () => {
-    for (const e of G.enemies) e.on = false; S.fill(0); CL.fill(0);
+    for (const e of G.enemies) e.on = false; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
     D.on = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
     Object.assign(G, { drones: DRONES, sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;
@@ -365,10 +397,11 @@ export function initCombat(C) {
   };
   // the sight ray also ranges on vehicles (returns the nearer distance)
   G.aimHit = (ox, oy, oz, dx, dy, dz, t) => {
+    const tb = C.bld.ray(ox, oy, oz, ox + dx * t, oy + dy * t, oz + dz * t, false); if (tb < 1) t *= tb;
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const cx = e.x - ox, cy = e.y + 1.3 - oy, cz = e.z - oz, b = cx * dx + cy * dy + cz * dz, q = cx * cx + cy * cy + cz * cz - b * b; if (b > 0 && q < 6.8 && b - 1.5 < t) t = b - Math.sqrt(6.8 - q) * 0.6; }
     return t;
   };
-  G.spawn = spawn; G.los = losBlocked; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
+  G.spawn = spawn; G.bldHit = bldHit; G.los = losBlocked; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
   hud();
   return G;
 }
