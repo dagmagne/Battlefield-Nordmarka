@@ -623,11 +623,18 @@ async function main() {
     if (sight && cam.mode === 0) cam.mode = 1; else if (cam.mode === 1 && cam.held && !inp.sight) cam.mode = 0;
     cam.held = inp.sight;
     if (cam.mode === 4) { // FPV drone: the mouse turns it, the camera trails just behind and above
-      const D = game.drone; D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.3, 1.1);
-      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
-      const ex = D.x - fx * 2.3, ez = D.z - fz * 2.3, ey = Math.max(D.y - fy * 2.3 + 0.55, W.heightAt(ex, ez) + 0.4), k = R.snap ? 1 : Math.min(1, dt * 18); R.snap = false;
-      cam.x += (ex - cam.x) * k; cam.y += (ey - cam.y) * k; cam.z += (ez - cam.z) * k;
-      lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy - 0.06, cam.z + fz, 0, 1, 0);
+      const D = game.drone;
+      if (D.on) { // rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
+        D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.3, 1.1);
+        const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
+        cam.x = D.x - fx * 2.3; cam.z = D.z - fz * 2.3; cam.y = Math.max(D.y - fy * 2.3 + 0.55, W.heightAt(cam.x, cam.z) + 0.4);
+        lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy - 0.06, cam.z + fz, 0, 1, 0);
+      } else { // after the detonation: pull back and up, and keep watching the blast for a few seconds
+        const tx = D.bx + Math.sin(D.yaw) * 11, tz = D.bz + Math.cos(D.yaw) * 11, ty = Math.max(D.by + 5, W.heightAt(tx, tz) + 2.5), k = Math.min(1, dt * 1.5);
+        cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.z += (tz - cam.z) * k; cam.y = Math.max(cam.y, W.heightAt(cam.x, cam.z) + 0.6);
+        lookAt(view, cam.x, cam.y, cam.z, D.bx, D.by + 0.6, D.bz, 0, 1, 0);
+      }
+      R.snap = false;
     } else if (cam.mode === 3) {
       cam.yaw -= inp.lookX * sens * 0.7; cam.pitch = clamp(cam.pitch - inp.lookY * sens * 0.7, -1.5, 1.5);
       const cp = Math.cos(cam.pitch), fx = -Math.sin(cam.yaw) * cp, fy = Math.sin(cam.pitch), fz = -Math.cos(cam.yaw) * cp, sp = (inp.fast ? 70 : 14) * dt;

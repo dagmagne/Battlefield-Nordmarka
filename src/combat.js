@@ -15,7 +15,7 @@ export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
   const S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
-  const D = G.drone = { on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES;
+  const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES;
   let fireWas = false, fireBlock = false;
   let sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i] });
@@ -260,7 +260,7 @@ export function initCombat(C) {
     if (G.rl > 0 && !veh.dead) { G.rl -= dt; if (G.rl <= 0) { G.rl = 0; } }
     R.reload = 1 - G.rl / RELOAD; dryT -= dt;
     if (!inp.fire) fireBlock = false;
-    if (inp.fire && !veh.dead && !R.pose && !D.on && !fireBlock) {
+    if (inp.fire && !veh.dead && !R.pose && !D.on && D.hold <= 0 && !fireBlock) {
       if (G.n[G.sel] <= 0) { if (dryT <= 0) { dryT = 1.5; ui.toast('Out of ' + AMMO[G.sel].name); } }
       else if (G.rl <= 0) {
         G.n[G.sel]--; G.rl = RELOAD; hudDirty = true;
@@ -326,10 +326,10 @@ export function initCombat(C) {
   function droneBoom() {
     explode(D.x, D.y, D.z, 1.9); splash(D.x, D.y, D.z, 4, 115, 140, 0);
     const d = Math.hypot(veh.x - D.x, veh.y + 1 - D.y, veh.z - D.z); if (d < 6.5) hurtPlayer(35 * clamp(1 - (d - 2.5) / 4, 0, 1), 1, false);
-    droneEnd(null);
+    D.on = false; D.vx = D.vy = D.vz = 0; D.hold = 4.5; D.bx = D.x; D.by = D.y; D.bz = D.z; hudDirty = true; // the camera stays on the blast (see updateCamera), then returns to the tank
   }
   function updateDrone(dt) {
-    if (!D.on) return;
+    if (!D.on) { if (D.hold > 0) { D.hold -= dt; if (D.hold <= 0 || veh.dead || (inp.fire && !fireWas)) { D.hold = 0; droneEnd(null); } } return; }
     if (veh.dead) { droneEnd('Drone link lost'); return; }
     D.t -= dt; D.spin += dt * 95;
     const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * 2.6);
@@ -348,6 +348,7 @@ export function initCombat(C) {
   }
   // X: launch a drone from the turret roof, or cut the link to the one in the air (it is lost)
   G.droneKey = () => {
+    if (D.hold > 0) { D.hold = 0; droneEnd(null); return; }
     if (D.on) { droneEnd('Drone link cut — back in the tank'); return; }
     if (veh.dead || cam.mode === 3) return;
     if (G.drones <= 0) { ui.toast('No drones left'); return; }
@@ -357,7 +358,7 @@ export function initCombat(C) {
   };
   G.restart = () => {
     for (const e of G.enemies) e.on = false; S.fill(0); CL.fill(0);
-    D.on = false; if (cam.mode === 4) cam.mode = 0;
+    D.on = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
     Object.assign(G, { drones: DRONES, sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;
     R.snap = true; hudDirty = true; ui.over(null); ui.toast('Stand by — contact expected from the north');
