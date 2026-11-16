@@ -68,11 +68,12 @@ export function initAudio(o) {
   const { R, cam, veh, view, game } = o, D = game.drone, EN = game.enemies;
   let ac = null, B = null, bus, T = 0, LD = 0, LP = 0, rpm = 1, tPrev = veh.turYaw, offT = 0;
   const S = { on: !!o.on, count: {}, played: {}, live: 0, srcs: 0, nodes: 0, master: 0, engine: { rate: 0, gain: 0 }, mg: 0, start, setOn, update, play };
-  Object.defineProperty(S, 'state', { get: () => (ac ? ac.state : typeof AudioContext === 'undefined' ? 'unsupported' : 'waiting') });
+  const AC = typeof window !== 'undefined' ? window.AudioContext || window.webkitAudioContext : undefined; // webkit prefix: iOS before 14.5
+  Object.defineProperty(S, 'state', { get: () => (ac ? ac.state : !AC ? 'unsupported' : 'waiting') });
   const vEnd = new Float64Array(NV), vG = new Float32Array(NV), vSrc = [], vLP = [], vGain = [], vPan = [];
   const best = new Int16Array(3), bd = new Float32Array(3), eV = new Int16Array(3).fill(-1), eSrc = [], eLP = [], eG = [], eP = [];
   let tSum, tLP, tPan, dsl, eLPf, eGain, rBP, rG, wO, wG, trk, kLP, kG, cLP, cG, uO1, uO2, uG, mG, dO = [], dLP, dG, dPan;
-  const raw = typeof AudioContext !== 'undefined' ? synth(SR) : null; // ~0.1 s at load, so the first click does not hitch
+  const raw = AC ? synth(SR) : null; // ~0.1 s at load, so the first click does not hitch
   R.sfx = play;
 
   // listener = camera; sets LD (distance) and LP (pan from the camera's right vector)
@@ -108,11 +109,13 @@ export function initAudio(o) {
   }
   function start() {
     if (!ac) {
-      const A = raw && window.AudioContext; if (!A) return;
+      const A = raw && AC; if (!A) return;
+      // iOS: without this Web Audio counts as 'ambient' and the ring/silent switch mutes it
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
       try { ac = new A({ latencyHint: 'interactive' }); build(); } catch (e) { ac = null; return; }
       if (!S.on) ac.suspend().catch(() => {});
     }
-    if (S.on && ac.state === 'suspended') ac.resume().catch(() => {});
+    if (S.on && ac.state !== 'running') ac.resume().catch(() => {}); // also 'interrupted' (iOS after a call or app switch)
   }
   function setOn(v) {
     S.on = !!v; if (!ac) return;
@@ -123,7 +126,8 @@ export function initAudio(o) {
       offT = setTimeout(() => { if (!S.on) ac.suspend().catch(() => {}); }, 150); } // suspended = no audio CPU while muted
   }
   if (typeof addEventListener !== 'undefined') {
-    addEventListener('pointerdown', start, true); addEventListener('keydown', start, true);
+    // iOS Safari only unlocks audio on the release of a touch (touchend / pointerup / click), not on pointerdown
+    for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, start, true);
     document.addEventListener('visibilitychange', () => { if (!ac) return; if (document.hidden) ac.suspend().catch(() => {}); else if (S.on) ac.resume().catch(() => {}); });
   }
 
