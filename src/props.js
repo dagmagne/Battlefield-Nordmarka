@@ -1,5 +1,5 @@
 // Static set pieces merged into one mesh: cabin, bridge, dam, power line, lamp posts, signs, boulders.
-import { MB, MAT } from './mesh.js';
+import { MB, MAT, VS } from './mesh.js';
 import { hash1, clamp } from './math.js';
 
 const RED = [0.4, 0.055, 0.04], WHITE = [0.85, 0.85, 0.82], WOOD = [0.2, 0.13, 0.08], DWOOD = [0.1, 0.07, 0.05], STONE = [0.36, 0.36, 0.37], DARK = [0.03, 0.03, 0.035];
@@ -162,6 +162,7 @@ function house(b, B, i, W) {
   const wall = k === 2 ? 2.5 : k === 1 ? 2.7 : k === 3 ? Math.max(6.5, (B.lv || 3) * 3) : B.lv ? B.lv * 2.8 : 4.4 + 2.4 * r2;
   const flat = k === 3 && (B.w > 34 || r > 0.6), rise = flat ? 0 : Math.min(hd * (k === 1 ? 0.6 : 0.8), 4.8);
   const col = k === 1 ? HCOL[3] : k === 3 ? HCOL[r < 0.5 ? 0 : 5] : HCOL[(r * 9) | 0];
+  const v0 = b.v.length / VS;
   b.at(B.x, B.y, B.z, -B.yaw);
   b.set(col, MAT.paint); b.box(-hw, -5, -hd, hw, wall, hd);
   if (flat) { b.set(SNOWC, MAT.snow); b.box(-hw - 0.2, wall, -hd - 0.2, hw + 0.2, wall + 0.4, hd + 0.2); }
@@ -178,12 +179,13 @@ function house(b, B, i, W) {
       b.quad([x - s * 0.55, yy, s * (hd + 0.03)], [x + s * 0.55, yy, s * (hd + 0.03)], [x + s * 0.55, yy + 1.15, s * (hd + 0.03)], [x - s * 0.55, yy + 1.15, s * (hd + 0.03)]);
     }
   }
-  const n = Math.max(1, Math.round(B.w / B.d)), c = Math.cos(B.yaw), sn = Math.sin(B.yaw);
-  for (let q = 0; q < n; q++) { const t = ((q + 0.5) / n - 0.5) * B.w; W.colliders.push(B.x + c * t, B.z + sn * t, Math.max(0.5, hd * 0.95 - 0.9)); }
+  W.bld.push({ x: B.x, y: B.y, z: B.z, th: -B.yaw, v0, v1: b.v.length / VS, area: B.w * B.d, col, boxes: [box(B.x, B.z, -B.yaw, hw, hd, B.y, flat ? wall + 0.4 : wall, rise)] });
 }
+// a solid oriented box: centre, yaw of the builder frame (local x = (cos, -sin)), half-extents, pad height, wall height, gable rise (ridge along local x)
+const box = (x, z, th, hw, hd, y, wall, rise) => ({ x, z, th, hw, hd, y, wall, rise });
 // Frognerseteren: dark dragon-style timber lodge — long hall, steep snow roofs, cross wing, veranda.
 function lodge(b, c, W) {
-  const TIM = [0.115, 0.075, 0.045], TRIM = [0.2, 0.13, 0.07], cs = Math.cos(c.yaw), sn = Math.sin(c.yaw);
+  const TIM = [0.115, 0.075, 0.045], TRIM = [0.2, 0.13, 0.07], cs = Math.cos(c.yaw), sn = Math.sin(c.yaw), v0 = b.v.length / VS;
   const wpos = (lx, lz) => [c.x + cs * lx + sn * lz, c.z - sn * lx + cs * lz];
   const wing = (lx, lz, yaw, hw, hd, y0, wall, rise, wins) => {
     const p = wpos(lx, lz); b.at(p[0], c.y, p[1], c.yaw + yaw);
@@ -215,7 +217,9 @@ function lodge(b, c, W) {
   b.set(WHITE, MAT.paint); b.cyl(21, -0.5, 13, 21, 11.5, 13, 0.08, 0.04, 8);
   b.set(WHITE, MAT.flag); b.quad([21.05, 9.6, 13], [23, 9.3, 13.5], [23, 10.7, 13.5], [21.05, 11, 13], [0, 1, 1, 1, 1, 0, 0, 0]);
   b.quad([23, 9.3, 13.5], [21.05, 9.6, 13], [21.05, 11, 13], [23, 10.7, 13.5], [1, 1, 0, 1, 0, 0, 1, 0]);
-  for (const [lx, lz, r] of [[-11, 0, 5.2], [-3.7, 0, 5.2], [3.7, 0, 5.2], [11, 0, 5.2], [0, 9.5, 5], [-11.5, -8, 3]]) { const q = wpos(lx, lz); W.colliders.push(q[0], q[1], r); }
+  const q1 = wpos(0, 9.5), q2 = wpos(-11.5, -8);
+  W.bld.push({ x: c.x, y: c.y, z: c.z, th: c.yaw, v0, v1: b.v.length / VS, area: 32 * 12 + 16 * 10.4 + 9 * 7.2, col: TIM,
+    boxes: [box(c.x, c.z, c.yaw, 16, 6, c.y, 7.25, 5.6), box(q1[0], q1[1], c.yaw + Math.PI / 2, 8, 5.2, c.y, 7.25, 5), box(q2[0], q2[1], c.yaw + Math.PI / 2, 4.5, 3.6, c.y, 4.85, 3.4)] });
 }
 // Ski jump: cantilevered inrun from the tower top down to the take-off; the landing hill is real terrain.
 function skiJump(b, W, J, wd) {
@@ -237,6 +241,7 @@ function skiJump(b, W, J, wd) {
   }
   b.set([0.42, 0.44, 0.47], MAT.metal);
   for (const [u, t] of [[0.3, 0.6], [0.3, -0.6], [0.62, 1], [0.62, -1]]) { const p = P(u * L, yb(u) + 0.5, t * wd * 0.45), g = P(u * L + J.h * 0.12, 0, t * wd * 1.1); b.cyl(g[0], W.heightAt(g[0], g[2]) - 2, g[2], p[0], p[1], p[2], wd * 0.2, wd * 0.14, 8); W.colliders.push(g[0], g[2], wd * 0.2); }
+  for (let u = 0; u <= 0.5; u += 0.04) { const s = u * L, p = P(s, 0, 0), g = W.heightAt(p[0], p[2]); if (yb(u) - g < 3.6) W.colliders.push(p[0], p[2], wd * 0.55); } // the low end of the inrun is hull height
   // start house on top
   const tp = P(L + wd * 0.5, yt, 0);
   b.at(tp[0], tp[1], tp[2], Math.atan2(-ux, -uz));
@@ -253,10 +258,10 @@ function tvTower(b, W, T) {
   b.set([0.62, 0.62, 0.6], MAT.stone); b.cyl(0, 68, 0, 0, 80, 0, 2.6, 2.0, 10);
   for (let i = 0; i < 6; i++) { b.set(i & 1 ? [0.85, 0.85, 0.85] : [0.6, 0.08, 0.06], MAT.paint); b.cyl(0, 80 + i * 6.3, 0, 0, 86.3 + i * 6.3, 0, 1.1 - i * 0.14, 0.96 - i * 0.14, 8); }
   b.set([1, 0.15, 0.08], MAT.beacon); b.cyl(0, T.h, 0, 0, T.h + 0.8, 0, 0.35, 0.25, 6); b.cyl(0, 68, 0, 0, 68.7, 0, 5.6, 5.5, 8);
-  W.colliders.push(T.x, T.z, 3.5);
+  W.colliders.push(T.x, T.z, 4.6); // the shaft is 4.6 m across at the foot
 }
 function chapel(b, W, C) {
-  const y = W.heightAt(C.x, C.z); b.at(C.x, y, C.z, -C.yaw + Math.PI / 2);
+  const y = W.heightAt(C.x, C.z), v0 = b.v.length / VS, th = -C.yaw + Math.PI / 2; b.at(C.x, y, C.z, th);
   const DW = [0.11, 0.075, 0.05];
   b.set(DW, MAT.paint); b.box(-9, -2, -5, 9, 4.2, 5); b.box(-13, -2, -3.2, -9, 3.2, 3.2);
   for (const s of [-1, 1]) { const a = b.vert(s * 9, 4.2, s * 5, s, 0, 0), d = b.vert(s * 9, 4.2, -s * 5, s, 0, 0), e = b.vert(s * 9, 11, 0, s, 0, 0); b.tri(a, d, e); }
@@ -264,7 +269,8 @@ function chapel(b, W, C) {
   b.at(C.x, y, C.z, -C.yaw + Math.PI / 2);
   b.set(DW, MAT.paint); b.box(4.2, 9, -1.6, 7.4, 15, 1.6); b.cyl(5.8, 15, 0, 5.8, 31, 0, 2.3, 0.08, 4);
   b.set([1, 0.78, 0.45], MAT.window); for (let q = -2; q <= 2; q++) for (const s of [-1, 1]) b.quad([q * 3.2 - s * 0.5, 1.4, s * 5.03], [q * 3.2 + s * 0.5, 1.4, s * 5.03], [q * 3.2 + s * 0.5, 3.2, s * 5.03], [q * 3.2 - s * 0.5, 3.2, s * 5.03]);
-  W.colliders.push(C.x, C.z, 5);
+  const ax = C.x - Math.cos(th) * 11, az = C.z + Math.sin(th) * 11;
+  W.bld.push({ x: C.x, y, z: C.z, th, v0, v1: b.v.length / VS, area: 18 * 10 + 4 * 6.4, col: DW, boxes: [box(C.x, C.z, th, 9, 5, y, 4.2, 6.8), box(ax, az, th, 2, 3.2, y, 3.2, 0)] });
 }
 
 function portal(b, W, p) { // concrete headwall where a road dives under a ski bridge; local +z points into the tunnel
@@ -283,7 +289,7 @@ function portal(b, W, p) { // concrete headwall where a road dives under a ski b
 
 export function buildProps(W) {
   const b = new MB();
-  W.colliders = [];
+  W.colliders = []; W.bld = []; // circle colliders (x, z, r); building records with their solid boxes (see buildings.js)
   const PLAY = W.PLAY;
   if (W.name === 'fantasy') { cabin(b, W.cabin, W); bridge(b, W.bridge); dam(b, W.dam); }
   else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump, 6.5); skiJump(b, W, W.lm.mid, 4.5); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }

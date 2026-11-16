@@ -20,6 +20,7 @@ import { buildLeopard, buildT72, buildBMP, buildDrone, tankParts, turMat, gunMat
 import { initCombat, MAXE, MAXG } from './combat.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
+import { initBuildings, DMAX } from './buildings.js';
 import { Particles } from './particles.js';
 import { initUI, inp } from './ui.js';
 import { initAudio } from './audio.js';
@@ -190,18 +191,31 @@ async function main() {
     return { vb: mkBuf(mesh.v, U.VERTEX), ib: mkBuf(mesh.i, U.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
   const groomer = mkObj(buildLeopard()), droneO = mkObj(buildDrone());
-  const props = mkObj(buildProps(W));
+  const propsMesh = buildProps(W), props = mkObj(propsMesh); // the CPU copy stays alive: building state changes edit and re-upload ranges of it
+  const BL = initBuildings(W, propsMesh, HALF);
+  BL.upload = (v0, v1) => device.queue.writeBuffer(props.vb, v0 * 56, propsMesh.v, v0 * 14, (v1 - v0) * 14);
+  const debO = { vb: device.createBuffer({ size: DMAX * 24 * 56, usage: U.VERTEX | U.COPY_DST }), ib: mkBuf(BL.di, U.INDEX) }; // rubble debris boxes
+  BL.debUpload = (k, n) => device.queue.writeBuffer(debO.vb, k * 24 * 56, BL.dv, k * 24 * 14, n * 24 * 14);
   // enemy vehicles: two shared meshes, one uniform block (part matrices) per slot
   const eMesh = [buildT72(), buildBMP()].map((m) => ({ vb: mkBuf(m.v, U.VERTEX), ib: mkBuf(m.i, U.INDEX), n: m.i.length }));
   const eObj = []; for (let i = 0; i < MAXE; i++) { const u = device.createBuffer({ size: 528, usage: U.UNIFORM | U.COPY_DST }); eObj.push({ u, d: new Float32Array(132), bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) }); }
   // collider lookup grid for projectiles (32 m cells)
   const CG = 32, NCG = Math.ceil(WS / CG), cgStart = new Uint32Array(NCG * NCG + 1); let cgItems;
   { const C = W.colliders, cnt = new Uint32Array(NCG * NCG), cell = (v) => clamp(Math.floor((v + HALF) / CG), 0, NCG - 1);
-    const each = (f) => { for (let i = 0; i < C.length; i += 3) { const r = C[i + 2]; for (let j = cell(C[i + 1] - r); j <= cell(C[i + 1] + r); j++) for (let k = cell(C[i] - r); k <= cell(C[i] + r); k++) f(j * NCG + k, i); } };
+    const each = (f) => { for (let i = 0; i < C.length; i += 3) { const r = C[i + 2] + 4.5; for (let j = cell(C[i + 1] - r); j <= cell(C[i + 1] + r); j++) for (let k = cell(C[i] - r); k <= cell(C[i] + r); k++) f(j * NCG + k, i); } };
     each((c) => cnt[c]++); for (let c = 0; c < NCG * NCG; c++) cgStart[c + 1] = cgStart[c] + cnt[c];
     cgItems = new Uint32Array(cgStart[NCG * NCG]); cnt.fill(0); each((c, i) => { cgItems[cgStart[c] + cnt[c]++] = i; }); }
+  // circles are listed in every cell within 4.5 m of them, so a vehicle-sized circle needs only its own cell
   const collAt = (x, z) => { const C = W.colliders, c = clamp(Math.floor((z + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((x + HALF) / CG), 0, NCG - 1);
     for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = x - C[i], dz = z - C[i + 1]; if (dx * dx + dz * dz < C[i + 2] * C[i + 2]) return true; } return false; };
+  // push a circle (r <= 4.5) out of the buildings and the circle colliders; out = [x, z, nx, nz, depth]; returns the contact count
+  const solid = (x, z, r, out) => {
+    let n = BL.push(x, z, r, out); const C = W.colliders, c = clamp(Math.floor((out[1] + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((out[0] + HALF) / CG), 0, NCG - 1);
+    for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = out[0] - C[i], dz = out[1] - C[i + 1], rr = C[i + 2] + r, d2 = dx * dx + dz * dz;
+      if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = rr - d; out[0] += dx / d * k; out[1] += dz / d * k; n++; if (k > out[4]) { out[2] = dx / d; out[3] = dz / d; out[4] = k; } } }
+    return n;
+  };
+  const SO = new Float32Array(5);
   const NP = qs.has('np');
   // ?hide=<letters> (diagnostics): leave parts of the frame out to find where a rendering fault comes from.
   // t terrain, s sky, p particles and glows, v vehicles and drone, o props, h shadow casters, x sight overlay (trees: ?trees=off)
@@ -532,7 +546,7 @@ async function main() {
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
   let sndOn = !qs.has('mute'); try { if (localStorage.gsnd === '0') sndOn = false; } catch (e) { /* ignore */ }
   const audio = initAudio({ R, cam, veh, view, game, on: sndOn }); window.__audio = audio;
@@ -553,9 +567,25 @@ async function main() {
   if (auto) { const t = W.trails[0]; veh.x = t.pts[auto.i * 2]; veh.z = t.pts[auto.i * 2 + 1]; veh.y = W.heightAt(veh.x, veh.z); }
   R.auto = auto;
 
-  function collide() {
-    const C = W.colliders;
-    for (let i = 0; i < C.length; i += 3) { const dx = veh.x - C[i], dz = veh.z - C[i + 1], rr = C[i + 2] + LEO.rad, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = (rr - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
+  let wallC = false; // in contact with a building last frame
+  function collide(dt) {
+    const C = W.colliders, fx = -Math.sin(veh.yaw), fz = -Math.cos(veh.yaw);
+    // buildings: the hull as three circles (front, middle, rear); push out along the smallest penetration, slide along the wall
+    let a = 0;
+    for (let s = -1; s <= 1; s++) { const px = veh.x + fx * 1.8 * s, pz = veh.z + fz * 1.8 * s;
+      if (BL.push(px, pz, 1.9, SO)) { veh.x += SO[0] - px; veh.z += SO[1] - pz; a = Math.max(a, Math.abs(fx * SO[2] + fz * SO[3])); } }
+    if (a > 0) {
+      const sp = Math.abs(veh.v);
+      if (!wallC) { // impact: lose the speed into the wall
+        if (sp * a > 3) { veh.shake = Math.max(veh.shake, Math.min(1.1, sp * a / 12)); sfx('crash', veh.x + fx * 3.6 * Math.sign(veh.v || 1), veh.y + 1, veh.z + fz * 3.6 * Math.sign(veh.v || 1), sp * a); }
+        veh.v *= 1 - a * 0.85;
+      } else veh.v *= 1 - Math.min(1, dt * (6 * a * a + 0.3)); // grinding along it
+    }
+    wallC = a > 0;
+    if (BL.rubble(veh.x, veh.z) && Math.abs(veh.v) > 6.5) { veh.v -= Math.sign(veh.v) * (Math.abs(veh.v) - 6.5) * Math.min(1, dt * 4); veh.shake = Math.max(veh.shake, 0.18); } // rubble: half speed
+    // circle colliders (lamps, pylons, boulders, landmark towers) from the grid cell under the tank
+    const c = clamp(Math.floor((veh.z + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((veh.x + HALF) / CG), 0, NCG - 1);
+    for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = veh.x - C[i], dz = veh.z - C[i + 1], rr = C[i + 2] + LEO.rad, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = (rr - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
     if (!R.trees) return;
     const cx = Math.floor((veh.x + HALF) / NEAR), cz = Math.floor((veh.z + HALF) / NEAR), T = TT.data;
     for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) {
@@ -594,8 +624,8 @@ async function main() {
     veh.dist += veh.v * dt; veh.trL += (veh.v + veh.yawRate * TRK.x) * dt; veh.trR += (veh.v - veh.yawRate * TRK.x) * dt;
     fwdX = -Math.sin(veh.yaw); fwdZ = -Math.cos(veh.yaw);
     veh.x = clamp(veh.x + fwdX * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + fwdZ * veh.v * dt, -PLAY, PLAY);
-    const vc = Math.abs(veh.v); collide();
-    if (vc > 5 && Math.abs(veh.v) < vc * 0.9) { veh.shake = Math.max(veh.shake, Math.min(1, vc / 18)); veh.v *= 0.5; }
+    const vc = Math.abs(veh.v); collide(dt);
+    if (vc > 5 && Math.abs(veh.v) < vc * 0.9 && !wallC) { veh.shake = Math.max(veh.shake, Math.min(1, vc / 18)); veh.v *= 0.5; }
     const rx = -fwdZ, rz = fwdX, hl = LEO.hl, hw = LEO.hw, h = W.heightAt, fx = fwdX, fz = fwdZ;
     const a = h(veh.x + fx * hl + rx * hw, veh.z + fz * hl + rz * hw), b = h(veh.x + fx * hl - rx * hw, veh.z + fz * hl - rz * hw), c = h(veh.x - fx * hl + rx * hw, veh.z - fz * hl + rz * hw), d = h(veh.x - fx * hl - rx * hw, veh.z - fz * hl - rz * hw);
     const gY = (a + b + c + d) / 4 + 0.02, gV = clamp((gY - veh.gPrev) / dt, -40, 40); veh.gPrev = gY;
@@ -804,7 +834,8 @@ async function main() {
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
       if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
-      if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n); }
+      if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
+        if (BL.dN) { sp.setVertexBuffer(0, debO.vb); sp.setIndexBuffer(debO.ib, 'uint32'); sp.drawIndexed(BL.dN * 36); } }
       if (R.trees) { sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3, c + 1); }
       }
       sp.end();
@@ -816,7 +847,8 @@ async function main() {
     if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
     if (droneOn && !hV) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
-    if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
+    if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
+      if (BL.dN) { p.setVertexBuffer(0, debO.vb); p.setIndexBuffer(debO.ib, 'uint32'); p.drawIndexed(BL.dN * 36); } }
     if (R.trees) { p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4, 0); }
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
     for (let l = 0; l < NL && !hT; l++) {
@@ -892,6 +924,8 @@ async function main() {
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();
   if (qs.has('nohud')) { $('ui').style.display = 'none'; R.nohud = true; }
   requestAnimationFrame(frame);
+  window.__bld = BL; // building records, boxes and states (test hook)
+  window.__collBench = (n = 10000) => { const x = veh.x, z = veh.z, v = veh.v, t0 = performance.now(); for (let i = 0; i < n; i++) { veh.x = x; veh.z = z; veh.v = v; collide(1 / 60); } const ms = performance.now() - t0; veh.x = x; veh.z = z; veh.v = v; return ms; }; // collide() cost test
   window.__ready = true;
 }
 main().catch((e) => { console.error(e); fail('Something went wrong while starting: ' + (e.message || e)); });

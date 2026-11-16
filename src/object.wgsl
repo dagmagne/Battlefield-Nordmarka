@@ -55,6 +55,21 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     alb = mix(alb, vec3f(0.6, 0.62, 0.64), 0.22 * smoothstep(0.9, 0.2, in.lp.y) * vn(in.lp.xz * 5.0 + 2.0)); // snow dust low on the hull
     spec = 0.07; gloss = 18.0;
   }
+  else if (m == 22u) { // building rubble: broken, sooty, a dusting of snow on the tops
+    alb *= 0.55 + 0.9 * fbm3(wp.xz * 1.7 + wp.y * 2.3);
+    alb *= 0.7 + 0.6 * vn(wp.xz * 9.0 + wp.y * 7.0);
+    alb = mix(alb, vec3f(0.012, 0.011, 0.01), smoothstep(0.5, 0.8, vn(wp.xz * 0.7 - wp.y * 0.9)) * 0.85);
+    spec = 0.03; gloss = 12.0; snowy = 0.15;
+  }
+  else if (m == 23u) { // scorched walls and roof of a damaged building: soot, burnt-through patches that glow at night
+    let hz = dot(wp.xz, vec2f(0.707, 0.707)) + dot(wp.xz, vec2f(-0.707, 0.707)) * 0.3;
+    let rg = fbm3(wp.xz * 0.11 + vec2f(wp.y * 0.04, 3.0) + in.col.g * 13.0); // scorched regions
+    let st = vn(vec2f(hz * 0.8, wp.y * 0.06));                                  // with streaky edges where smoke rose
+    let soot = smoothstep(0.45, 0.59, rg + (st - 0.5) * 0.25); let hole = smoothstep(0.68, 0.7, rg + (vn(wp.xz * 0.9 + wp.y * 0.9) - 0.5) * 0.1);
+    alb *= 0.75; alb = mix(alb, vec3f(0.02, 0.018, 0.016), soot * 0.94); alb = mix(alb, vec3f(0.003), hole);
+    emis = vec3f(1.0, 0.24, 0.035) * hole * (0.015 + night * 0.2) * smoothstep(0.3, 0.8, vn(wp.xz * 2.3 + wp.y * 2.9));
+    spec = 0.05 * (1.0 - soot); gloss = 20.0;
+  }
   else if (m == 18u) { // Norwegian flag
     let f = uv; let cx = abs(f.x - 0.36); let cy = abs(f.y - 0.5);
     alb = vec3f(0.62, 0.02, 0.04);
@@ -80,7 +95,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   if (isG < 0.5) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }
   if (G.groom.w > 0.5) { // thermal sight: heated houses, hot engine deck and running gear, burning wrecks
     var th = 0.24;
-    if (m == 2u) { th = 0.1; } else if (m == 7u) { th = 0.42; } else if (m == 6u || m == 10u) { th = 0.9; } else if (m == 12u) { th = 0.15; }
+    if (m == 2u) { th = 0.1; } else if (m == 7u) { th = 0.42; } else if (m == 6u || m == 10u) { th = 0.9; } else if (m == 12u || m == 22u) { th = 0.15; } else if (m == 23u) { th = 0.32; }
     if (isG > 0.5) {
       th = 0.36 + 0.1 * vn(in.lp.xz * 2.1 + in.lp.y * 3.0);
       if (m == 8u || m == 9u || m == 14u) { th = 0.8; }
