@@ -119,7 +119,7 @@ kbd{margin:0 1px}
     <button class="btn" id="bUp"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>UP</button>
     <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg>BOOM</button>
   </div>
-  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>H</kbd> help</div>
+  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>M</kbd> sound · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
   <div id="help" class="modal"><div class="card pill">
@@ -134,7 +134,7 @@ kbd{margin:0 1px}
       <b><kbd>G</kbd></b><span>Smoke grenades — breaks the enemy's line of sight, and blinds thermal sights too</span>
       <b><kbd>V</kbd></b><span>Thermal imager in the gunner sight and on the drone: off · white-hot · black-hot. Sees engines, tracks and fires through darkness, haze and dust</span>
       <b><kbd>X</kbd></b><span>Launch an FPV drone (5 per game): mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. Scout with it, or fly into a vehicle and press the left button to detonate its warhead. <kbd>X</kbd> again returns to the tank (the drone is lost). The tank stands still and exposed meanwhile</span>
-      <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd></b><span>Time of day · snowfall · free-fly camera</span>
+      <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd> <kbd>M</kbd></b><span>Time of day · snowfall · free-fly camera · sound on/off</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
       <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight · ✕ MG · ○ smoke · □ ammo · △ camera · Options menu</span>
     </div>
@@ -155,6 +155,7 @@ kbd{margin:0 1px}
     <div class="row"><span>Quality <span class="note">(reloads)</span></span><div class="seg" id="mQ"><button data-v="auto">Auto</button><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button><button data-v="ultra">Ultra</button></div></div>
     <div class="row"><span>Time of day</span><div class="seg" id="mD"><button data-v="0">Midday</button><button data-v="1">Golden</button><button data-v="2">Blue hour</button><button data-v="3">Night</button></div></div>
     <div class="row"><span>Snowfall</span><div class="seg" id="mN"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
+    <div class="row"><span>Sound</span><div class="seg" id="mS"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
     <div class="row"><span>Trees <span class="note">(lower = faster)</span></span><div class="seg" id="mF"><button data-v="high">High</button><button data-v="medium">Medium</button><button data-v="low">Low</button><button data-v="off">Off</button></div></div>
     <div class="row"><span>Dynamic resolution</span><div class="seg" id="mR"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
     <div class="row"><span>Performance overlay</span><div class="seg" id="mB"><button data-v="0">Off</button><button data-v="1">On</button></div></div>

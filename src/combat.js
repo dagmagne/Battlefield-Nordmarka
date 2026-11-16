@@ -32,6 +32,7 @@ export function initCombat(C) {
     S[o] = x; S[o + 1] = y; S[o + 2] = z; S[o + 3] = dx * l; S[o + 4] = dy * l; S[o + 5] = dz * l; S[o + 6] = type; S[o + 7] = owner; S[o + 8] = life;
   }
   function explode(x, y, z, s) {
+    C.sfx('boom', x, y, z, s);
     const gh = hAt(x, z), low = y - gh < 1.6;
     flashAdd(x, y + 0.4, z, 3 + 3.2 * s, 0.16, 30, 17, 5);
     for (let i = 0, n = 4 + 6 * s; i < n; i++) { const a = rnd() * 6.283, r = rnd() * 2.2 * s; parts.emit(x + Math.cos(a) * r * 0.4, y + 0.3 + rnd() * s, z + Math.sin(a) * r * 0.4, Math.cos(a) * r, 1.5 + rnd() * 3 * s, Math.sin(a) * r, 1.1 + rnd() * 1.3 * Math.sqrt(s), 0.5 * s + rnd() * 0.6, 1.4 + s, 4, 0.1, 0.1, 0.11, 0.85); }
@@ -80,6 +81,7 @@ export function initCombat(C) {
     ui.toast(ETYPE[e.type].name + ' destroyed'); R.hitT = 0.6;
   }
   function hurtPlayer(d, fc, low) {
+    if (!veh.dead) C.sfx('hit', veh.x, veh.y + 1.5, veh.z, d);
     if (veh.dead || R.god) return;
     veh.hp = Math.max(0, veh.hp - d); R.hurtT = Math.min(1, 0.35 + d * 0.03); veh.shake = Math.max(veh.shake, Math.min(1.2, d * 0.06)); hudDirty = true;
     if (fc === 1 && low && d > 10 && rnd() < 0.35 && veh.immob <= 0) { veh.immob = 6; ui.toast('Track hit — repairing'); }
@@ -110,7 +112,7 @@ export function initCombat(C) {
     else if (type === 3) { if (t) glow(x, y, z, 0.5, 20, 12, 4); else for (let i = 0; i < 3; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.5 + rnd() * 2.5, sr() * 2, 0.4 + rnd() * 0.3, 0.012 + rnd() * 0.015, 0, 0, 1, 1, 1, 0.9); }
     else if (type === 6) smokeBurst(x, y, z);
   }
-  function smokeBurst(x, y, z) { const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
+  function smokeBurst(x, y, z) { C.sfx('smoke', x, y, z, 0.5); const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
 
   // ---------- projectiles ----------
   function updateShells(dt) {
@@ -223,6 +225,7 @@ export function initCombat(C) {
     }
     tankParts(e.d, e, K); e.d[128] = e.trL; e.d[129] = e.trR; e.d[130] = e.burnt; e.d[131] = 1;
     if (e.fire) { e.fire = false; const M = gunMat(), mx = M[4] * K.gy + M[8] * K.mz + M[12], my = M[5] * K.gy + M[9] * K.mz + M[13], mz = M[6] * K.gy + M[10] * K.mz + M[14], l = -1 / Math.hypot(M[8], M[9], M[10]);
+      C.sfx(e.type ? 'auto' : 'egun', mx, my, mz, 1);
       const E2 = ETYPE[e.type]; fire(1, E2.shell, mx, my, mz, M[8] * l, M[9] * l, M[10] * l, E2.v, e.type ? 0.004 : 0.0016, 4);
       muzzle(mx, my, mz, M[8] * l, M[9] * l, M[10] * l, e.type ? 0.3 : 1); e.recoil = e.type ? 0.05 : 0.3; e.known = 14; }
   }
@@ -257,7 +260,7 @@ export function initCombat(C) {
     G.fxN = 0; // (blastN is cleared by the renderer once the scorch stamps are drawn)
     const gM = C.gunM;
     // main gun
-    if (G.rl > 0 && !veh.dead) { G.rl -= dt; if (G.rl <= 0) { G.rl = 0; } }
+    if (G.rl > 0 && !veh.dead) { G.rl -= dt; if (G.rl <= 0) { G.rl = 0; C.sfx('reload', veh.x, veh.y + 2, veh.z, 1); } }
     R.reload = 1 - G.rl / RELOAD; dryT -= dt;
     if (!inp.fire) fireBlock = false;
     if (inp.fire && !veh.dead && !R.pose && !D.on && D.hold <= 0 && !fireBlock) {
@@ -266,11 +269,12 @@ export function initCombat(C) {
         G.n[G.sel]--; G.rl = RELOAD; hudDirty = true;
         fire(0, G.sel, aim.mx, aim.my, aim.mz, aim.gx, aim.gy, aim.gz, AMMO[G.sel].v, 0.0005, 5);
         muzzle(aim.mx, aim.my, aim.mz, aim.gx, aim.gy, aim.gz, 1);
+        C.sfx('gun', aim.mx, aim.my, aim.mz, 1);
         veh.recoil = 0.34; veh.dpV += 0.55 * Math.cos(veh.turYaw); veh.drV -= 0.55 * Math.sin(veh.turYaw); veh.shake = Math.max(veh.shake, 0.75); veh.v -= 0.5 * Math.cos(veh.turYaw);
       }
     }
     // coaxial MG3: the fire control corrects for its steeper trajectory at the lased range
-    if (inp.mg && !veh.dead && G.mg > 0) {
+    if ((G.mgOn = inp.mg && !veh.dead && G.mg > 0)) {
       mgT += dt * 18;
       while (mgT >= 1 && G.mg > 0) { mgT--; G.mg--;
         const px = gM[0] * -0.32 + gM[4] * (LEO.gy + 0.15) + gM[8] * -2.4 + gM[12], py = gM[1] * -0.32 + gM[5] * (LEO.gy + 0.15) + gM[9] * -2.4 + gM[13], pz = gM[2] * -0.32 + gM[6] * (LEO.gy + 0.15) + gM[10] * -2.4 + gM[14];
@@ -316,7 +320,7 @@ export function initCombat(C) {
   G.ammo = (i) => { if (i < 0) i = (G.sel + 1) % 3; if (i === G.sel || veh.dead) return; G.sel = i; R.shellV = AMMO[i].v; G.rl = RELOAD; hudDirty = true; ui.toast('Loading ' + AMMO[i].name); };
   G.smoke = () => {
     if (veh.dead) return; if (G.smokeN <= 0) { ui.toast('No smoke grenades left'); return; }
-    G.smokeN--; hudDirty = true; const a = veh.yaw + veh.turYaw, T = C.turM;
+    G.smokeN--; hudDirty = true; C.sfx('smoke', veh.x, veh.y + 2.2, veh.z, 1); const a = veh.yaw + veh.turYaw, T = C.turM;
     for (let k = 0; k < 8; k++) { const sd = k < 4 ? -1 : 1, o = sd * (0.25 + (k % 4) * 0.33), dx = -Math.sin(a - o) * 0.82, dz = -Math.cos(a - o) * 0.82, lx = sd * 1.65, ly = 2.1, lz = 0.7;
       fire(0, 6, T[0] * lx + T[4] * ly + T[8] * lz + T[12], T[1] * lx + T[5] * ly + T[9] * lz + T[13], T[2] * lx + T[6] * ly + T[10] * lz + T[14], dx, 0.57, dz, 24 + (k % 4) * 3, 0.03, 1.15 + rnd() * 0.2); }
     ui.toast('Smoke!');
