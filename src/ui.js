@@ -153,6 +153,11 @@ export function initUI(api, isTouch) {
   // rare game-state updates (ammo, hull, wave): only called when something changes
   U.set = (id, text, cls) => { const e = $(id); e.textContent = text; if (cls !== undefined) e.className = cls; };
   U.show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
+  // end-of-game card (knocked out / victory); `cont` lets the player close it and keep going
+  let overCont = false;
+  U.over = (title, text, cont) => { overCont = !!cont; $('over').classList.toggle('show', !!title); if (title) { $('ovT').textContent = title; $('ovP').textContent = text; if (document.pointerLockElement) document.exitPointerLock(); } };
+  $('ovGo').addEventListener('click', () => api.restart());
+  $('over').addEventListener('pointerdown', (e) => { if (e.target === $('over') && overCont) U.over(null); });
   U.setDebug = (on) => { U.dbgOn = on; $('dbg').style.display = on ? 'block' : 'none'; };
   U.dbgText = (t) => { $('dbg').textContent = t; };
   let seen = false; try { seen = !!localStorage.getItem('hint1'); } catch (e) { /* ignore */ }

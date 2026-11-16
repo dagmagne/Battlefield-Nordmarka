@@ -5,7 +5,7 @@ import { trs, mul, identity } from './math.js';
 
 export const TRK = { A: 2.95, R: 0.4, yc: 0.42, x: 1.43, w: 0.64 };
 // turret ring centre, gun trunnion and muzzle of the Leopard (hull coordinates)
-export const LEO = { ty: 1.58, tz: -0.25, gy: 1.97, gz: -1.6, mz: -6.2, hl: 2.9, hw: 1.43, rad: 2.6 };
+export const LEO = { ty: 1.58, tz: -0.25, gy: 1.97, gz: -1.6, mz: -6.2, hl: 2.9, hw: 1.43, rad: 2.6, hh: 1.6, th: 2.45, tr: 1.75 };
 
 // ---- helpers: flat polygons that always face away from an interior point ----
 function poly(b, P, c) {
@@ -169,11 +169,93 @@ export function buildLeopard() {
   return b.build();
 }
 
+// ---------- T-72B3 ----------
+export const T72 = { ty: 1.32, tz: -0.35, gy: 1.68, gz: -1.3, mz: -6.15, hl: 2.9, hw: 1.43, rad: 2.6, hh: 1.32, th: 2.1, tr: 1.35 };
+export function buildT72() {
+  const b = new MB();
+  const GRN = [0.03, 0.04, 0.024], DGRN = [0.022, 0.03, 0.019], DARK = [0.03, 0.031, 0.034], STEEL = [0.16, 0.17, 0.17], BRN = [0.1, 0.065, 0.035];
+  runningGear(b, 6, 0.375, -2.45, 2.5, DGRN);
+  b.part = 0; b.set(DGRN, MAT.rus);
+  extX(b, [[0.45, -3.15], [0.85, -3.55], [1.32, -2.25], [1.32, 3.3], [0.62, 3.3], [0.45, 3.0]], -1.08, 1.08);
+  b.set(GRN, MAT.rus);
+  extX(b, [[0.9, -3.45], [1.32, -2.25], [1.32, 3.3], [0.9, 3.3]], -1.26, 1.26);
+  // glacis ERA bricks and the V-shaped splash board
+  b.set(DGRN, MAT.rus);
+  for (let r = 0; r < 2; r++) for (let k = 0; k < 6; k++) { const x = -1.05 + k * 0.36, t = 0.2 + r * 0.38, y = 0.9 + t * 0.42, z = -3.45 + t * 1.2; b.at(x + 0.15, y + 0.05, z, 0, 0.34); b.box(-0.15, 0, -0.2, 0.15, 0.07, 0.2); } b.at(0, 0, 0);
+  for (const sx of [-1, 1]) {
+    b.set(GRN, MAT.rus);
+    b.box(sx * 1.52 - 0.28, 0.9, -3.3, sx * 1.52 + 0.28, 0.96, 3.35); // fender shelf
+    b.box(sx * 1.52 - 0.24, 0.96, -1.6, sx * 1.52 + 0.24, 1.2, 0.2, 0.02, 0.02); b.box(sx * 1.52 - 0.24, 0.96, 0.4, sx * 1.52 + 0.24, 1.24, 2.6, 0.02, 0.02); // fender fuel cells and stowage
+    b.set(DARK, MAT.rubber); b.box(sx * 1.79 - 0.02, 0.52, -3.2, sx * 1.79 + 0.02, 0.92, 3.3); // rubber skirt
+    b.box(sx * 1.43 - 0.36, 0.5, -3.42, sx * 1.43 + 0.36, 0.95, -3.38); b.box(sx * 1.43 - 0.36, 0.4, 3.36, sx * 1.43 + 0.36, 0.95, 3.39);
+    b.set(DGRN, MAT.rus); for (let k = 0; k < 5; k++) b.box(sx * 1.83 - 0.04, 0.56, -3.1 + k * 0.5, sx * 1.83 + 0.04, 0.9, -2.66 + k * 0.5); // ERA on the front skirts
+    b.set([1, 0.95, 0.82], MAT.head); poly(b, [[sx * 0.95 - 0.09, 1.2, -2.52], [sx * 0.95 + 0.09, 1.2, -2.52], [sx * 0.95 + 0.09, 1.33, -2.52], [sx * 0.95 - 0.09, 1.33, -2.52]], [sx * 0.95, 1.25, 0]);
+    b.set(GRN, MAT.rus); b.cyl(sx * 0.95, 1.14, 3.58, sx * 0.05, 1.14, 3.58, 0.27, 0.27, 14); // external fuel drums
+    b.set(STEEL, MAT.metal); b.box(sx * 0.5 - 0.03, 0.85, 3.3, sx * 0.5 + 0.03, 1.4, 3.6);
+  }
+  b.set(BRN, MAT.paint); b.cyl(-1.15, 0.72, 3.42, 1.15, 0.72, 3.42, 0.11, 0.11, 8); // unditching log
+  b.set(DARK, MAT.metal); b.box(-1.0, 1.32, 2.0, 1.0, 1.34, 3.1); b.box(-0.2, 1.32, -2.0, 0.2, 1.38, -1.75); // engine grille, driver periscope
+  // --- turret: cast dome ---
+  b.part = 1; const tz = T72.tz;
+  b.set(GRN, MAT.rus);
+  b.cyl(0, 1.32, tz, 0, 1.52, tz, 1.3, 1.33, 22, 0); b.cyl(0, 1.52, tz, 0, 1.8, tz, 1.33, 1.12, 22, 0); b.cyl(0, 1.8, tz, 0, 1.98, tz, 1.12, 0.72, 22, 0); b.cyl(0, 1.98, tz, 0, 2.03, tz, 0.72, 0.3, 22);
+  b.set(DGRN, MAT.rus);
+  for (let k = -4; k <= 4; k++) { if (k === 0) continue; const a = k * 0.26; b.at(-Math.sin(a) * 1.36, 1.5, tz - Math.cos(a) * 1.36, a, 0.5); b.box(-0.16, -0.12, -0.3, 0.16, 0.14, 0.12); } b.at(0, 0, 0); // turret ERA wedges
+  b.box(-0.75, 1.5, tz + 1.25, 0.75, 1.9, tz + 1.75, 0.03, 0.03); // rear stowage box
+  b.cyl(-0.9, 1.72, tz + 1.9, 0.9, 1.72, tz + 1.9, 0.14, 0.14, 10); // snorkel tube
+  b.cyl(0.55, 2.0, tz + 0.15, 0.55, 2.16, tz + 0.15, 0.36, 0.33, 14); b.cyl(-0.55, 1.98, tz + 0.2, -0.55, 2.03, tz + 0.2, 0.33, 0.33, 14);
+  b.set(DARK, MAT.metal); b.cyl(0.55, 2.16, tz + 0.1, 0.55, 2.36, tz + 0.1, 0.03, 0.03, 6); b.box(0.5, 2.33, tz - 0.4, 0.6, 2.43, tz + 0.5); b.cyl(0.55, 2.38, tz - 0.4, 0.55, 2.4, tz - 1.25, 0.022, 0.022, 6); // NSVT
+  b.box(0.5, 1.72, tz - 1.5, 0.95, 2.0, tz - 1.2); b.cyl(-1.0, 2.0, tz + 0.9, -1.05, 4.0, tz + 1.1, 0.009, 0.004, 4);
+  b.set([0.1, 0.02, 0.02], MAT.glass); poly(b, [[0.54, 1.75, tz - 1.503], [0.91, 1.75, tz - 1.503], [0.91, 1.97, tz - 1.503], [0.54, 1.97, tz - 1.503]], [0.7, 1.85, 0]); // Luna searchlight
+  // --- gun 2A46M ---
+  b.part = 2; const gy = T72.gy;
+  b.set(GRN, MAT.rus); b.box(-0.3, gy - 0.2, -1.95, 0.3, gy + 0.2, -1.5, 0.03, 0, 0);
+  b.set(DGRN, MAT.rus);
+  b.cyl(0, gy, -1.9, 0, gy, -3.5, 0.115, 0.1, 12, 0);
+  b.cyl(0, gy, -3.5, 0, gy, -3.58, 0.1, 0.145, 12, 0); b.cyl(0, gy, -3.58, 0, gy, -4.2, 0.145, 0.145, 12, 0); b.cyl(0, gy, -4.2, 0, gy, -4.28, 0.145, 0.095, 12, 0);
+  b.cyl(0, gy, -4.28, 0, gy, T72.mz, 0.095, 0.085, 12, 0);
+  for (const z of [-2.5, -3.1, -4.9, -5.6]) b.cyl(0, gy, z, 0, gy, z - 0.06, 0.125, 0.125, 12);
+  b.set(DARK, MAT.void); b.cyl(0, gy, T72.mz, 0, gy, T72.mz - 0.003, 0.063, 0.063, 12);
+  return b.build();
+}
+
+// ---------- BMP-2 ----------
+export const BMP = { ty: 1.5, tz: 0.15, gy: 1.76, gz: -0.55, mz: -3.4, hl: 2.8, hw: 1.43, rad: 2.5, hh: 1.5, th: 2.05, tr: 1.0 };
+export function buildBMP() {
+  const b = new MB();
+  const GRN = [0.034, 0.044, 0.026], DGRN = [0.024, 0.032, 0.02], DARK = [0.03, 0.031, 0.034], STEEL = [0.16, 0.17, 0.17];
+  runningGear(b, 6, 0.3, -2.4, 2.45, DGRN);
+  b.part = 0; b.set(DGRN, MAT.rus);
+  extX(b, [[0.42, -2.9], [0.98, -3.45], [1.5, -1.5], [1.5, 3.3], [0.55, 3.3], [0.42, 3.0]], -1.08, 1.08);
+  b.set(GRN, MAT.rus);
+  extX(b, [[0.9, -3.4], [0.98, -3.45], [1.5, -1.5], [1.5, 3.3], [0.9, 3.3]], -1.55, 1.55);
+  for (let k = 0; k < 7; k++) { const t = 0.12 + k * 0.12, y = 0.98 + t * 0.52, z = -3.45 + t * 1.95; b.at(0, y, z, 0, 0.26); b.box(-1.3, 0, -0.02, 1.3, 0.04, 0.02); } b.at(0, 0, 0); // ribbed glacis
+  for (const sx of [-1, 1]) {
+    b.set(GRN, MAT.rus); b.box(sx * 1.66 - 0.13, 0.9, -3.3, sx * 1.66 + 0.13, 0.96, 3.3); b.box(sx * 1.77 - 0.02, 0.6, -3.2, sx * 1.77 + 0.02, 0.92, 3.25);
+    b.set([1, 0.95, 0.82], MAT.head); poly(b, [[sx * 1.2 - 0.09, 1.22, -2.602], [sx * 1.2 + 0.09, 1.22, -2.602], [sx * 1.2 + 0.09, 1.35, -2.602], [sx * 1.2 - 0.09, 1.35, -2.602]], [sx * 1.2, 1.28, 0]);
+    b.set(DGRN, MAT.rus); b.box(sx * 1.2 - 0.12, 1.2, -2.6, sx * 1.2 + 0.12, 1.37, -2.45);
+    b.box(sx * 0.68 - 0.52, 0.7, 3.3, sx * 0.68 + 0.52, 1.42, 3.42, 0.06, 0.0); // bulged rear doors (fuel tanks)
+    for (let k = 0; k < 4; k++) b.box(sx * 0.68 - 0.44, 0.82 + k * 0.15, 3.42, sx * 0.68 + 0.44, 0.86 + k * 0.15, 3.44);
+    b.set(DARK, MAT.metal); for (let k = 0; k < 3; k++) b.box(sx * 1.56 - 0.01, 1.3, 0.9 + k * 0.7, sx * 1.56 + 0.01, 1.4, 1.2 + k * 0.7); // firing ports
+  }
+  b.set(DARK, MAT.metal); b.box(0.2, 1.5, -1.3, 1.2, 1.52, 0.0); b.box(-0.9, 1.5, 1.4, 0.9, 1.53, 3.0);
+  b.part = 1; const tz = BMP.tz;
+  b.set(GRN, MAT.rus); b.cyl(0, 1.5, tz, 0, 1.96, tz, 1.0, 0.72, 18); b.cyl(0.35, 1.96, tz + 0.15, 0.35, 2.03, tz + 0.15, 0.3, 0.3, 12);
+  b.set(DGRN, MAT.rus); b.box(-0.12, 1.96, tz - 0.5, 0.12, 2.12, tz + 0.5); b.cyl(0, 2.2, tz - 0.6, 0, 2.2, tz + 0.6, 0.085, 0.085, 10); // ATGM launcher
+  b.set(DARK, MAT.metal); for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) b.cyl(sx * 0.9, 1.75, tz - 0.3 + k * 0.14, sx * 1.05, 1.9, tz - 0.42 + k * 0.14, 0.045, 0.045, 6);
+  b.cyl(-0.8, 1.96, tz + 0.5, -0.83, 3.6, tz + 0.65, 0.008, 0.004, 4);
+  b.part = 2; const gy = BMP.gy;
+  b.set(GRN, MAT.rus); b.box(-0.18, gy - 0.13, -1.0, 0.18, gy + 0.13, -0.6);
+  b.set(DARK, MAT.metal); b.cyl(0, gy, -0.95, 0, gy, -2.2, 0.05, 0.04, 8, 0); b.cyl(0, gy, -2.2, 0, gy, BMP.mz, 0.035, 0.035, 8); b.cyl(0, gy, BMP.mz + 0.25, 0, gy, BMP.mz, 0.05, 0.05, 8);
+  b.cyl(0.14, gy + 0.02, -0.95, 0.14, gy + 0.02, -1.5, 0.02, 0.02, 6);
+  return b.build();
+}
+
 // part matrices: 0 hull, 1 turret (yaw about the ring), 2 gun (pitch about the trunnion, recoil along the bore)
 const T1 = new Float32Array(16), T2 = new Float32Array(16), T3 = new Float32Array(16), BM = new Float32Array(16), TM = new Float32Array(16), GM = new Float32Array(16);
 export function tankParts(out, t, K) { // out: Float32Array(16*8), t: {x,y,z,yaw,pitch,roll,turYaw,gunPitch,recoil}
   trs(BM, t.x, t.y, t.z, t.yaw, t.pitch + t.dp, t.roll + t.dr);
-  trs(T1, 0, K.ty, K.tz, t.turYaw, 0, 0); identity(T2); T2[13] = -K.ty; T2[14] = -K.tz; mul(T3, T1, T2); mul(TM, BM, T3);
+  trs(T1, 0, K.ty + t.tl, K.tz, t.turYaw, t.tt, t.tt * 0.6); identity(T2); T2[13] = -K.ty; T2[14] = -K.tz; mul(T3, T1, T2); mul(TM, BM, T3);
   trs(T1, 0, K.gy, K.gz, 0, t.gunPitch, 0); identity(T2); T2[13] = -K.gy; T2[14] = -K.gz + t.recoil; mul(T3, T1, T2); mul(GM, TM, T3);
   out.set(BM, 0); out.set(TM, 16); out.set(GM, 32);
   return BM;

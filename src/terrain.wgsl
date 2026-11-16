@@ -66,7 +66,7 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f };
     var press = 0.0; var berm = 0.0;
     if (max(abs(xz.x), abs(xz.y)) < G.world.z) {
       let mA = textureSampleLevel(maskA, linSmp, xz * G.world.w + 0.5, 0.0);
-      press = pressOf(mA); berm = bermOf(mA);
+      press = pressOf(mA); berm = bermOf(mA); h -= 0.45 * mA.a;
     }
     let pl = plow(roadOf(mt));
     h += det.x * (1.0 - max(press, pl.x)) + BANK * pl.y * (1.0 - smoothstep(150.0, 420.0, dist)) + 0.06 * berm * (1.0 - smoothstep(60.0, 120.0, dist));
@@ -107,10 +107,13 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let det = snowDetail(p, dxz, mt);
   var S = S0;
   var Sd = det.yz;
-  var groomed = 0.0; var fresh = 0.0; var groove = 0.0; var imp = 0.0; var cordAvg = 0.0; var pan = 0.0; var cordAO = 0.0; var edge = 0.0;
+  var scorch = 0.0; var groomed = 0.0; var fresh = 0.0; var groove = 0.0; var imp = 0.0; var cordAvg = 0.0; var pan = 0.0; var cordAO = 0.0; var edge = 0.0;
   if (max(abs(p.x), abs(p.y)) < G.world.z && dist < 700.0) {
     let muv = p * G.world.w + 0.5;
     let mA = textureSampleLevel(maskA, linSmp, muv, 0.0);
+    scorch = mA.a;
+    if (scorch > 0.004) { let e = 1.0 / G.screen.w; // shell crater: bowl normal from the scorch gradient
+      S += vec2f(textureSampleLevel(maskA, linSmp, muv + vec2f(e, 0.0), 0.0).a - textureSampleLevel(maskA, linSmp, muv - vec2f(e, 0.0), 0.0).a, textureSampleLevel(maskA, linSmp, muv + vec2f(0.0, e), 0.0).a - textureSampleLevel(maskA, linSmp, muv - vec2f(0.0, e), 0.0).a) * (-0.45 / (2.0 * G.screen.z)); }
     if (mA.r + mA.b > 0.004) {
       let e = 1.0 / G.screen.w; let tm = G.screen.z;
       let mB = textureSampleLevel(maskB, linSmp, muv, 0.0);
@@ -224,6 +227,8 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   var dif = saturate((ndl + wrap) / (1.0 + wrap));
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.15) + lampLight(p, 0.0);
+  { let sc = smoothstep(0.08, 0.75, scorch + (fbm3(p * 0.9) - 0.5) * 0.5 * step(0.01, scorch)); // soot and thrown earth around impacts
+    alb = mix(alb, mix(vec3f(0.035, 0.032, 0.03), vec3f(0.16, 0.12, 0.08), vn(p * 2.3)), sc * 0.93); }
   var col = alb * (sun * dif + ambient(n) * ao + ll);
   // subsurface-ish glow on shadow terminator
   col += alb * G.sunCol.rgb * sh * vec3f(0.3, 0.5, 0.8) * 0.06 * saturate(1.0 - abs(ndl) * 4.0) * snowy;

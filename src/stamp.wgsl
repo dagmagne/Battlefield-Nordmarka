@@ -14,6 +14,14 @@ struct SO { @builtin(position) pos: vec4f, @location(0) w: f32, @location(1) s: 
   return o;
 }
 struct FO { @location(0) a: vec4f, @location(1) b: vec4f };
+// round blast mark: writes only maskA alpha (scorch / crater), see the blast pipeline in main.js
+@fragment fn fsBlast(in: SO) -> FO {
+  let r = length(vec2f(in.w, in.s) * 2.0 - 1.0);
+  var o: FO;
+  o.a = vec4f(0.0, 0.0, 0.0, (1.0 - smoothstep(0.3, 1.0, r)) * in.val.x);
+  o.b = vec4f(0.0);
+  return o;
+}
 @fragment fn fs(in: SO) -> FO {
   let cov = saturate(min(in.w, 1.0 - in.w) * in.uu.z * 0.5 + 0.5);
   var o: FO;

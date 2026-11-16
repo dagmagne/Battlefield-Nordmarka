@@ -100,9 +100,9 @@ fn spotL(P: vec3f, N: vec3f, lp: vec4f, ld: vec4f, lc: vec4f, wrap: f32) -> vec3
 }
 fn localLights(P: vec3f, N: vec3f, wrap: f32) -> vec3f {
   var c = spotL(P, N, G.l0p, G.l0d, G.l0c, wrap) + spotL(P, N, G.l1p, G.l1d, G.l1c, wrap);
-  // beacon: rotating point light
+  // flash: point light
   let v = G.l2p.xyz - P; let d2 = dot(v, v); let l = v * inverseSqrt(d2);
-  let beam = pow(saturate(dot(-l, G.l2d.xyz)), 6.0) * 0.5 + 0.02;
+  let beam = 1.0; // l2 is the omni flash light (muzzle blast, explosions)
   let w = saturate(1.0 - sqrt(d2) / G.l2p.w);
   c += G.l2c.rgb * beam * w * w / (1.0 + d2 * 0.05) * saturate((dot(N, l) + wrap) / (1.0 + wrap));
   return c;

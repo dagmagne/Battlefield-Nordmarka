@@ -16,7 +16,8 @@ import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
-import { buildLeopard, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
+import { buildLeopard, buildT72, buildBMP, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
+import { initCombat, MAXE, MAXG } from './combat.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { Particles } from './particles.js';
@@ -28,10 +29,10 @@ const fail = (m) => { $('load').style.display = 'none'; $('ui').style.display = 
 
 // ---------- quality tiers ----------
 const TIERS = {
-  low: { name: 'low', scale: 0.6, minScale: 0.4, msaa: 1, shadow: 1024, casc: 2, clipN: 64, mask: 2048, trees: 0.5, lodMul: 0.5, flakes: 2500, parts: 600, maxPx: 1.8e6, aniso: 2 },
-  medium: { name: 'medium', scale: 0.8, minScale: 0.5, msaa: 4, shadow: 1536, casc: 2, clipN: 96, mask: 2048, trees: 0.7, lodMul: 0.7, flakes: 6000, parts: 1200, maxPx: 2.8e6, aniso: 4 },
-  high: { name: 'high', scale: 1, minScale: 0.6, msaa: 4, shadow: 2048, casc: 3, clipN: 128, mask: 4096, trees: 1, lodMul: 1, flakes: 14000, parts: 2500, maxPx: 9e6, aniso: 8 },
-  ultra: { name: 'ultra', scale: 1, minScale: 0.75, msaa: 4, shadow: 4096, casc: 3, clipN: 160, mask: 4096, trees: 1, lodMul: 1.5, flakes: 22000, parts: 3500, maxPx: 16e6, aniso: 16 },
+  low: { name: 'low', scale: 0.6, minScale: 0.4, msaa: 1, shadow: 1024, casc: 2, clipN: 64, mask: 2048, trees: 0.5, lodMul: 0.5, flakes: 2500, parts: 1400, maxPx: 1.8e6, aniso: 2 },
+  medium: { name: 'medium', scale: 0.8, minScale: 0.5, msaa: 4, shadow: 1536, casc: 2, clipN: 96, mask: 2048, trees: 0.7, lodMul: 0.7, flakes: 6000, parts: 2600, maxPx: 2.8e6, aniso: 4 },
+  high: { name: 'high', scale: 1, minScale: 0.6, msaa: 4, shadow: 2048, casc: 3, clipN: 128, mask: 4096, trees: 1, lodMul: 1, flakes: 14000, parts: 4500, maxPx: 9e6, aniso: 8 },
+  ultra: { name: 'ultra', scale: 1, minScale: 0.75, msaa: 4, shadow: 4096, casc: 3, clipN: 160, mask: 4096, trees: 1, lodMul: 1.5, flakes: 22000, parts: 6000, maxPx: 16e6, aniso: 16 },
 };
 const isTouch = qs.has('touch') || (matchMedia('(pointer:coarse)').matches && navigator.maxTouchPoints > 0);
 
@@ -43,7 +44,7 @@ const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: 
 const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, dist: 13, zoom: 0, fovNow: 1, sightK: 0 };
 // where the player is aiming: world yaw/pitch of the sight line, the point it hits, and the gun's own state
 const aim = { yaw: 0, pitch: 0, x: 0, y: 0, z: 0, range: 800, dx: 0, dy: 0, dz: -1, sx: 9, sy: 9, ready: 0, err: 1, mx: 0, my: 0, mz: 0, gx: 0, gy: 0, gz: -1 };
-const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, dist: 0, trL: 0, trR: 0, yawRate: 0, air: false, vy: 0, airT: 0, gPrev: 0, shake: 0, land: 0, turYaw: 0, gunPitch: 0, recoil: 0, dp: 0, dr: 0, dpV: 0, drV: 0, acc: 0, road: 0, hp: 100, dead: false, immob: 0 };
+const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, dist: 0, trL: 0, trR: 0, yawRate: 0, air: false, vy: 0, airT: 0, gPrev: 0, shake: 0, land: 0, turYaw: 0, gunPitch: 0, recoil: 0, dp: 0, dr: 0, tl: 0, tt: 0, dpV: 0, drV: 0, acc: 0, road: 0, hp: 100, dead: false, immob: 0 };
 const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16), ivp = new Float32Array(16);
 let seed = 12345; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 8) / 16777216; };
 
@@ -179,6 +180,17 @@ async function main() {
   };
   const groomer = mkObj(buildLeopard());
   const props = mkObj(buildProps(W));
+  // enemy vehicles: two shared meshes, one uniform block (part matrices) per slot
+  const eMesh = [buildT72(), buildBMP()].map((m) => ({ vb: mkBuf(m.v, U.VERTEX), ib: mkBuf(m.i, U.INDEX), n: m.i.length }));
+  const eObj = []; for (let i = 0; i < MAXE; i++) { const u = device.createBuffer({ size: 528, usage: U.UNIFORM | U.COPY_DST }); eObj.push({ u, d: new Float32Array(132), bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) }); }
+  // collider lookup grid for projectiles (32 m cells)
+  const CG = 32, NCG = Math.ceil(WS / CG), cgStart = new Uint32Array(NCG * NCG + 1); let cgItems;
+  { const C = W.colliders, cnt = new Uint32Array(NCG * NCG), cell = (v) => clamp(Math.floor((v + HALF) / CG), 0, NCG - 1);
+    const each = (f) => { for (let i = 0; i < C.length; i += 3) { const r = C[i + 2]; for (let j = cell(C[i + 1] - r); j <= cell(C[i + 1] + r); j++) for (let k = cell(C[i] - r); k <= cell(C[i] + r); k++) f(j * NCG + k, i); } };
+    each((c) => cnt[c]++); for (let c = 0; c < NCG * NCG; c++) cgStart[c + 1] = cgStart[c] + cnt[c];
+    cgItems = new Uint32Array(cgStart[NCG * NCG]); cnt.fill(0); each((c, i) => { cgItems[cgStart[c] + cnt[c]++] = i; }); }
+  const collAt = (x, z) => { const C = W.colliders, c = clamp(Math.floor((z + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((x + HALF) / CG), 0, NCG - 1);
+    for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = x - C[i], dz = z - C[i + 1]; if (dx * dx + dz * dz < C[i + 2] * C[i + 2]) return true; } return false; };
   const NP = qs.has('np');
 
   // ---------- terrain shadow bake ----------
@@ -294,6 +306,13 @@ async function main() {
     fragment: { module: stampMod, entryPoint: 'fs', targets: [{ format: 'rgba8unorm', blend: sBlend, writeMask: 7 }, { format: 'rg16float', blend: sBlend }] },
   });
   const stampPass = { colorAttachments: [{ view: maskA.createView(), loadOp: 'load', storeOp: 'store' }, { view: maskB.createView(), loadOp: 'load', storeOp: 'store' }] };
+  const blastPipe = device.createRenderPipeline({
+    layout: 'auto',
+    vertex: { module: stampMod, entryPoint: 'vs', buffers: [{ arrayStride: 64, stepMode: 'instance', attributes: [0, 1, 2, 3].map((i) => ({ shaderLocation: i, offset: i * 16, format: 'float32x4' })) }] },
+    fragment: { module: stampMod, entryPoint: 'fsBlast', targets: [{ format: 'rgba8unorm', blend: { color: { srcFactor: 'zero', dstFactor: 'one' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } }, writeMask: GPUColorWrite.ALPHA }, { format: 'rg16float', writeMask: 0 }] },
+  });
+  const blData = new Float32Array(16 * 16), blBuf = device.createBuffer({ size: 16 * 64, usage: U.VERTEX | U.COPY_DST });
+  const fxBuf = device.createBuffer({ size: MAXG * 48, usage: U.VERTEX | U.COPY_DST });
   const stData = new Float32Array(48), stBuf = device.createBuffer({ size: 192, usage: U.VERTEX | U.COPY_DST });
   const stPrev = new Float32Array(12), stCur = new Float32Array(12), stS = new Float32Array(3); let stN = 0, stInit = false;
   const TEXM = MW / Q.mask;
@@ -465,6 +484,9 @@ async function main() {
     state: () => ({ quality: pref, tod: todIndex, snow: R.snow, drs: R.drs, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees` }),
   };
   ui = initUI(api, isTouch);
+  const turM = new Float32Array(16), gunM = new Float32Array(16);
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY, collAt, turM, gunM, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  R.game = game; R.aimHit = game.aimHit;
 
   // ---------- state ----------
   veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z);
@@ -604,7 +626,7 @@ async function main() {
       cam.y = clamp(cam.y + (fy * inp.mvZ + inp.mvY) * sp, W.heightAt(cam.x, cam.z) + 0.7, 1500);
       lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
     } else if (cam.mode === 1) { // gunner sight: stabilised view along the sight line from the EMES 15 head
-      const T = turMat(), ex = 0.9, ey = 2.52, ez = -2.0;
+      const T = turM, ex = 0.9, ey = 2.52, ez = -2.0;
       if (inp.zoom) cam.zoom = inp.zoom < 0 ? 1 : 0;
       cam.x = T[0] * ex + T[4] * ey + T[8] * ez + T[12]; cam.y = T[1] * ex + T[5] * ey + T[9] * ez + T[13]; cam.z = T[2] * ex + T[6] * ey + T[10] * ez + T[14];
       const sk = veh.shake * veh.shake * 0.05, t = R.time;
@@ -649,8 +671,10 @@ async function main() {
     ui.poll(cam.mode === 3);
     updateAim(dt);
     simulate(dt);
-    const BM = tankParts(groomer.d, veh, LEO); hullM.set(BM);
+    hullM.set(tankParts(groomer.d, veh, LEO)); turM.set(turMat()); gunM.set(gunMat());
+    const BM = hullM;
     updateGun();
+    game.update(dt);
     updateCamera(dt, BM);
     if (R.simOnly) return; // logic-only step for scripted tests (window.__sim)
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
@@ -671,12 +695,18 @@ async function main() {
     planesFrom(camPlanes, vp, 5); draws = 0;
     updateStamps();
     const nt = 0.12 + 0.88 * GU[O.misc];
-    groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[131] = 1;
+    groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[130] = veh.dead ? Math.min(1, (game.burnP || 0) * 0.5) : 0; groomer.d[131] = 1;
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
+    for (let i = 0; i < MAXE; i++) if (game.enemies[i].on) device.queue.writeBuffer(eObj[i].u, 0, eObj[i].d);
+    if (game.fxN) device.queue.writeBuffer(fxBuf, 0, game.fx, 0, game.fxN * 12);
+    for (let i = 0; i < game.blastN; i++) { const o = i * 16, b = game.blasts, x = b[i * 4], z = b[i * 4 + 1], r = b[i * 4 + 2], d = blData;
+      d[o] = x - r; d[o + 1] = z - r; d[o + 2] = x + r; d[o + 3] = z - r; d[o + 4] = x - r; d[o + 5] = z + r; d[o + 6] = x + r; d[o + 7] = z + r; d[o + 8] = 0; d[o + 9] = 1; d[o + 10] = 0; d[o + 11] = 1; d[o + 12] = b[i * 4 + 3]; d[o + 13] = 0; d[o + 14] = 0; d[o + 15] = TEXM; }
+    if (game.blastN) device.queue.writeBuffer(blBuf, 0, blData, 0, game.blastN * 16);
     setLight(O.l0p, BM, 0, 1.5, -2.9, 0, -0.14, -1, 90, Math.cos(0.98), Math.cos(0.2), 1.25 * nt, 1.18 * nt, 1.0 * nt);
     setLight(O.l1p, BM, 0, 1.4, 3.9, 0, -0.5, 1, 14, Math.cos(1.1), Math.cos(0.5), 0.25 * nt, 0.03 * nt, 0.02 * nt);
     { const a = R.time * 5.5, o = O.l2p; GU[o] = BM[0] * 0.6 + BM[4] * 2.75 + BM[8] * -1.1 + BM[12]; GU[o + 1] = BM[1] * 0.6 + BM[5] * 2.75 + BM[9] * -1.1 + BM[13]; GU[o + 2] = BM[2] * 0.6 + BM[6] * 2.75 + BM[10] * -1.1 + BM[14]; GU[o + 3] = 26;
-      GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 0; GU[o + 9] = 0; GU[o + 10] = 0; }
+      GU[o + 4] = Math.cos(a); GU[o + 5] = -0.1; GU[o + 6] = Math.sin(a); GU[o + 8] = 0; GU[o + 9] = 0; GU[o + 10] = 0;
+      const F = game.flash, k = F[7]; GU[o] = F[0]; GU[o + 1] = F[1]; GU[o + 2] = F[2]; GU[o + 3] = Math.max(1, F[3]); GU[o + 8] = F[4] * k; GU[o + 9] = F[5] * k; GU[o + 10] = F[6] * k; }
     device.queue.writeBuffer(gBuf, 0, GU);
     for (let l = 0; l < NL; l++) {
       const c = lvCell(l);
@@ -692,12 +722,16 @@ async function main() {
       tshD[0] = GU[O.sunDir]; tshD[1] = GU[O.sunDir + 1]; tshD[2] = GU[O.sunDir + 2]; device.queue.writeBuffer(tshU, 0, tshD);
       const tp = enc.beginRenderPass(tshPass); tp.setPipeline(tshPipe); tp.setBindGroup(0, tshBG); tp.draw(3); tp.end();
     }
-    if (stN) { const sp = enc.beginRenderPass(stampPass); sp.setPipeline(stampPipe); sp.setVertexBuffer(0, stBuf); sp.draw(6, stN); sp.end(); }
+    if (stN || game.blastN) { const sp = enc.beginRenderPass(stampPass);
+      if (stN) { sp.setPipeline(stampPipe); sp.setVertexBuffer(0, stBuf); sp.draw(6, stN); }
+      if (game.blastN) { sp.setPipeline(blastPipe); sp.setVertexBuffer(0, blBuf); sp.draw(6, game.blastN); }
+      sp.end(); }
     for (let c = 0; c < NC; c++) {
       if (skipCasc(c)) continue;
       const sp = enc.beginRenderPass(shPass[c]);
       sp.setBindGroup(0, shBG[c]);
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
+      for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!NP) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n); }
       sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3);
       sp.end();
@@ -707,6 +741,7 @@ async function main() {
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
     if (cam.mode !== 1 || R.pose) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
+    for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!NP) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
     p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4);
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
@@ -718,6 +753,7 @@ async function main() {
     p.setPipeline(partPipe);
     if (GU[O.misc] > 0.02) { p.setVertexBuffer(0, glowBuf); p.draw(4, glowN); }
     if (pn) { p.setVertexBuffer(0, partBuf); p.draw(4, pn); }
+    if (game.fxN) { p.setVertexBuffer(0, fxBuf); p.draw(4, game.fxN); }
     if (R.snowAmt > 0.01) { p.setPipeline(flakePipe); p.draw(4, Math.round(Q.flakes * Math.min(1, R.snowAmt * 1.5))); }
     p.end();
 
@@ -773,7 +809,7 @@ async function main() {
   window.__aim = (yaw, pitch, mode) => { R.pose = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
   window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; stInit = false; R.snap = true; };
-  Object.assign(window, { __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
+  Object.assign(window, { __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none';
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();

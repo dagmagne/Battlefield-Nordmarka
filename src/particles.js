@@ -29,7 +29,7 @@ export class Particles {
       out[q] = s[o]; out[q + 1] = s[o + 1]; out[q + 2] = s[o + 2]; out[q + 3] = s[o + 8];
       const fade = kind === 0 ? Math.min(1, (1 - t) * 2.5) : Math.min(t * 8, 1) * (1 - t) * (1 - t);
       out[q + 4] = c[i * 4]; out[q + 5] = c[i * 4 + 1]; out[q + 6] = c[i * 4 + 2]; out[q + 7] = c[i * 4 + 3] * fade;
-      out[q + 8] = kind; out[q + 9] = s[o + 11]; out[q + 10] = kind === 0 ? s[o + 1] - gy : 8; out[q + 11] = 0;
+      out[q + 8] = kind; out[q + 9] = s[o + 11]; out[q + 10] = kind === 0 ? s[o + 1] - gy : 8; out[q + 11] = t;
       n++;
     }
     this.live = n; return n;

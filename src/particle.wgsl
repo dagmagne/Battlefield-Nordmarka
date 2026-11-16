@@ -9,7 +9,7 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
   let up = vec3f(0.0, 1.0, 0.0);
   return G.sunCol.rgb * sh * 0.55 + ambient(up) + spotL(p, up, G.l0p, G.l0d, G.l0c, 1.0) * 2.5 + spotL(p, up, G.l1p, G.l1d, G.l1c, 1.0) * 2.5 + lampLight(p.xz, hAbove);
 }
-// a: xyz pos, w size ; b: rgb tint, a alpha ; c: x kind (0 snow, 1 smoke, 2 glow), y seed, z height above ground
+// a: xyz pos, w size ; b: rgb tint, a alpha ; c: x kind (0 chunk, 1 smoke, 2 lamp glow, 3 flash glow, 4 fire), y seed, z height above ground, w age
 @vertex fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f, @location(2) c: vec4f) -> PV {
   let q = corner(vi);
   let wp = a.xyz + (camRight() * q.x + camUp() * q.y) * a.w;
@@ -17,7 +17,8 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
   o.pos = G.viewProj * vec4f(wp, 1.0);
   o.uv = q; o.kind = c.x; o.seed = c.y;
   var col = b.rgb;
-  if (c.x < 1.5) { let vd = normalize(a.xyz - G.camPos.xyz); col *= litAt(a.xyz, c.z) + G.sunCol.rgb * pow(saturate(dot(vd, G.sunDir.xyz)), 5.0) * 1.2; } else { col *= G.misc.x; }
+  if (c.x < 1.5 || c.x > 3.5) { let vd = normalize(a.xyz - G.camPos.xyz); col *= litAt(a.xyz, c.z) + G.sunCol.rgb * pow(saturate(dot(vd, G.sunDir.xyz)), 5.0) * 1.2; } else if (c.x < 2.5) { col *= G.misc.x; }
+  if (c.x > 3.5) { col = mix(vec3f(9.0, 3.0, 0.55) * (1.0 - c.w * 2.2), col, smoothstep(0.03, 0.3, c.w)); } // fireball cooling into smoke (c.w = age 0..1)
   o.col = vec4f(col, b.a);
   if (b.a <= 0.0 && c.x < 1.5) { o.pos = vec4f(0.0, 0.0, -1.0, 1.0); }
   return o;
@@ -25,7 +26,7 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
 @fragment fn fs(in: PV) -> @location(0) vec4f {
   let r = length(in.uv);
   var a = 0.0; var col = in.col.rgb;
-  if (in.kind > 1.5) { // glow halo
+  if (in.kind > 1.5 && in.kind < 3.5) { // glow halo (2 = lamps at night, 3 = tracers and flashes)
     let g = exp(-r * r * 5.0) * 0.5 + exp(-r * 14.0) * 1.5;
     return vec4f(col * g * (1.0 - smoothstep(0.8, 1.0, r)), 0.0);
   }

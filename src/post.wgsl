@@ -57,7 +57,7 @@ fn tonemap(x: vec3f) -> vec3f { // ACES fit (Narkowicz), slightly softened
   let n2 = fract(sin(dot(in.pos.xy + 31.7, vec2f(39.346, 11.135))) * 24634.6345);
   c += (n + n2 - 1.0) / 255.0;
   // ---- sight overlays (drawn here so the HUD never touches the DOM per frame) ----
-  let res = 1.0 / U.a.zw; let px = (in.uv - 0.5) * res; let s = res.y / 1100.0;
+  let res = 1.0 / U.a.zw; let px = (in.uv - 0.5) * res; let s = max(1.0, res.y / 1100.0);
   c = mix(c, vec3f(0.75, 0.04, 0.02), U.d.w * smoothstep(0.25, 0.75, length(q)) * 0.55);
   if (U.c.w > 0.5) {
     let ax = abs(px.x) / s; let ay = abs(px.y) / s; let sb = U.d.z;
