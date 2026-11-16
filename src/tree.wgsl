@@ -112,5 +112,6 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   var col = alb * (sun * dif + amb + ll);
   col += alb * sun * trans * pow(saturate(dot(v, -L)), 2.0) * 1.6;
   col += sun * snow * pow(saturate(dot(n, normalize(L + v))), 24.0) * 0.12;
+  if (G.groom.w > 0.5) { return vec4f(thermal(mix(0.22, 0.1, snow) * (0.7 + 0.3 * ao), wp), alpha); }
   return vec4f(applyFog(col, wp), alpha);
 }

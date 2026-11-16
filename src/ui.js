@@ -25,7 +25,8 @@ export function initUI(api, isTouch) {
     keys.add(c);
     if (c === 'Space' || c === 'Tab') e.preventDefault();
     else if (c === 'KeyT') api.tod(-1);
-    else if (c === 'KeyC' || c === 'KeyV') api.cam();
+    else if (c === 'KeyC') api.cam();
+    else if (c === 'KeyV') api.thermal();
     else if (c === 'KeyF') api.fly();
     else if (c === 'KeyN') api.snow();
     else if (c === 'KeyG') api.smoke();

@@ -51,5 +51,6 @@ struct SOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
     g *= G.sunCol.rgb * max(G.sunDir.y, 0.05) * G.misc.w + ambient(vec3f(0.0, 1.0, 0.0));
     c = applyFog(g, gp);
   }
+  if (G.groom.w > 0.5) { c = vec3f(mix(0.13, 0.025, smoothstep(-0.02, 0.22, d.y))); } // thermal: cold sky, warmer towards the horizon
   return vec4f(c, 1.0);
 }

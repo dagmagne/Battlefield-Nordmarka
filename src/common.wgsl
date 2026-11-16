@@ -72,6 +72,9 @@ fn skyBase(d: vec3f) -> vec3f {
   c += G.fogSun.rgb * (pow(az, 3.0) * pow(1.0 - h, 9.0) * 0.8 + pow(cs, 10.0) * 0.3 + pow(cs, 90.0) * 0.6);
   return c;
 }
+// Thermal sight (G.groom.w > 0.5): every surface writes an apparent temperature instead of light
+// (0.1 snow, 0.2 forest, 0.4 hull, 1+ engine, fire). Long-wave IR passes haze, so only a faint path term remains.
+fn thermal(t: f32, wp: vec3f) -> vec3f { return vec3f(mix(0.13, t, exp(-distance(wp, G.camPos.xyz) * 0.00012))); }
 fn applyFog(col: vec3f, wp: vec3f) -> vec3f {
   let v = wp - G.camPos.xyz; let d = length(v); let dir = v / d;
   let k = G.fogSun.a;

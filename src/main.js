@@ -40,7 +40,7 @@ const isTouch = qs.has('touch') || (matchMedia('(pointer:coarse)').matches && na
 const O = { viewProj: 0, invViewProj: 16, shadowMat: 32, camPos: 80, sunDir: 84, sunCol: 88, ambSky: 92, ambGnd: 96, fogCol: 100, fogSun: 104, skyZen: 108, skyHor: 112, skySun: 116, casc: 120, cascTex: 124, misc: 128, l0p: 132, l0d: 136, l0c: 140, l1p: 144, l1d: 148, l1c: 152, l2p: 156, l2d: 160, l2c: 164, world: 168, screen: 172, groom: 176, lod: 180, lod2: 184 };
 const GU = new Float32Array(188);
 
-const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, gpuMs: 0, ft: 16.7, ftMax: 0, fovK: 1 };
+const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, therm: 0, thAll: false, gpuMs: 0, ft: 16.7, ftMax: 0, fovK: 1 };
 const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, dist: 13, zoom: 0, fovNow: 1, sightK: 0 };
 // where the player is aiming: world yaw/pitch of the sight line, the point it hits, and the gun's own state
 const aim = { yaw: 0, pitch: 0, x: 0, y: 0, z: 0, range: 800, dx: 0, dy: 0, dz: -1, sx: 9, sy: 9, ready: 0, err: 1, mx: 0, my: 0, mz: 0, gx: 0, gy: 0, gz: -1 };
@@ -474,6 +474,7 @@ async function main() {
     drone() { if (R.game) R.game.droneKey(); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
+    thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
     restart() { if (R.game) R.game.restart(); },
     fly() { if (cam.mode !== 4) setCam(cam.mode === 3 ? cam.prevMode : 3); },
     isFly: () => cam.mode === 3,
@@ -492,6 +493,7 @@ async function main() {
   // ---------- state ----------
   veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z);
   if (qs.get('veh')) { const q = qs.get('veh').split(',').map(Number); veh.x = q[0]; veh.z = q[1]; veh.yaw = q[2] || 0; veh.y = W.heightAt(veh.x, veh.z); }
+  if (qs.get('therm')) { R.therm = +qs.get('therm'); R.thAll = true; } // test hook: thermal view in every camera
   if (qs.get('cam')) R.pose = qs.get('cam').split(',').map(Number);
   setTod(clamp((+qs.get('tod') || 1) - 1, 0, 3), true);
   if (qs.has('snow')) R.snow = 1;
@@ -708,7 +710,7 @@ async function main() {
     GU[O.camPos] = cam.x; GU[O.camPos + 1] = cam.y; GU[O.camPos + 2] = cam.z; GU[O.camPos + 3] = R.time;
     writeTod(GU, O);
     GU[O.groom] = veh.x; GU[O.groom + 1] = veh.y; GU[O.groom + 2] = veh.z; GU[O.lod2] = Q.casc === 3 ? 1 : 0; GU[O.lod2 + 3] = cam.mode === 0 && !R.pose ? 1.5 : 0;
-    GU[O.misc + 1] = R.snowAmt; GU[O.screen] = rw; GU[O.screen + 1] = rh; GU[O.groom + 3] = 0; gunMarker();
+    GU[O.misc + 1] = R.snowAmt; GU[O.screen] = rw; GU[O.screen + 1] = rh; R.thNow = R.therm && (R.thAll || (!R.pose && (cam.mode === 1 || cam.mode === 4))) ? R.therm + (cam.mode === 4 ? 2 : 0) : 0; GU[O.groom + 3] = R.thNow ? 1 : 0; gunMarker();
     if (R.snowAmt > 0.01) { const k = 1 - 0.55 * R.snowAmt; GU[O.sunCol] *= k; GU[O.sunCol + 1] *= k; GU[O.sunCol + 2] *= k; GU[O.fogCol + 3] *= 1 + 5 * R.snowAmt; GU[O.skyHor + 3] = Math.min(1.6, GU[O.skyHor + 3] + R.snowAmt); }
     updateCascades(rw / rh, fovy);
     planesFrom(camPlanes, vp, 5); draws = 0;
@@ -777,7 +779,7 @@ async function main() {
     if (R.snowAmt > 0.01) { p.setPipeline(flakePipe); p.draw(4, Math.round(Q.flakes * Math.min(1, R.snowAmt * 1.5))); }
     p.end();
 
-    const sx = rw / R.w, sy = rh / R.h, expo = GU[O.misc + 2];
+    const sx = rw / R.w, sy = rh / R.h, expo = R.thNow ? 1 : GU[O.misc + 2];
     for (let i = 0; i < NB; i++) {
       const u = pUData[i], sw = i === 0 ? R.w : bloom[i - 1].w, sh = i === 0 ? R.h : bloom[i - 1].h;
       u[0] = i === 0 ? sx : 1; u[1] = i === 0 ? sy : 1; u[2] = 1 / sw; u[3] = 1 / sh; u[4] = expo; u[5] = 0; u[6] = R.time; u[7] = i === 0 ? 1 : 0;
@@ -789,7 +791,7 @@ async function main() {
       device.queue.writeBuffer(pU[NB + i], 0, u);
       const bp = enc.beginRenderPass(bloomPass[NB + i]); bp.setPipeline(upPipe); bp.setBindGroup(0, upBG[i]); bp.draw(3); bp.end();
     }
-    const fu = pUData[NB * 2]; fu[0] = sx; fu[1] = sy; fu[2] = 1 / R.w; fu[3] = 1 / R.h; fu[4] = expo; fu[5] = 0.1; fu[6] = R.manual ? 0.37 : R.time; fu[7] = R.scale < 0.99 ? 1 : 0;
+    const fu = pUData[NB * 2]; fu[0] = sx; fu[1] = sy; fu[2] = 1 / R.w; fu[3] = 1 / R.h; fu[4] = expo; fu[5] = 0.1; fu[6] = R.manual ? 0.37 : R.time; fu[7] = R.thNow;
     const hudOn = cam.mode !== 3 && !R.pose && !R.nohud;
     fu[8] = cam.mode === 4 ? 9 : aim.sx; fu[9] = aim.sy; fu[10] = R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
     device.queue.writeBuffer(pU[NB * 2], 0, fu);
