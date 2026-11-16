@@ -1,8 +1,8 @@
 #!/bin/sh
 # Container check of the combat visuals on the open lake (software WebGPU through tools/cshot.mjs; several seconds per frame).
 # usage: tools/battle.sh outdir [tier]   -> models, gunner sight, a kill, the wreck, smoke screen, driving
-out=${1:-shots/battle}; q=${2:-medium}; mkdir -p "$out"
-node tools/cshot.mjs "$out/b.png" "w=frogner&nohint&q=$q&drs=0&np&peace" --frames 2 --eval "
+out=${1:-shots/battle}; q=${2:-medium}; port=${PORT:-8080}; mkdir -p "$out" # PORT=8092 tools/battle.sh ... for a second checkout
+node tools/cshot.mjs "$out/b.png" "w=frogner&nohint&q=$q&drs=0&np&peace" --port "$port" --frames 2 --eval "
 const P=__W.PLAY-150, L=__W.lakes.filter((l)=>Math.abs(l.x)<P&&Math.abs(l.z)<P).sort((a,b)=>b.area-a.area)[0]; __tp(L.x-L.ax*110,L.z-L.az*110,0); __ui.poll=()=>{}; const g=__game; g.spawn(0); g.spawn(1); const e=g.enemies[0], b=g.enemies[1]; window.E=e; window.B=b; Object.assign(e,{x:L.x+L.ax*110,z:L.z+L.az*110,yaw:1,path:-1,immob:true}); Object.assign(b,{x:e.x+22,z:e.z+14,yaw:2.4,path:-1,immob:true}); __sim(1/60,20); __look(E.x-9,2.2,E.z+15,E.x,1.2,E.z); 1 ||
 __look(B.x-10,2.4,B.z+9,B.x,1.2,B.z); 1 ||
 __R.pose=null; __aim(Math.atan2(-(E.x-__veh.x),-(E.z-__veh.z)),-0.0079,1); __cam.zoom=1; __sim(1/60,220); [__aimS.range,__aimS.ready] ||

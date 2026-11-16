@@ -59,16 +59,15 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     alb *= 0.55 + 0.9 * fbm3(wp.xz * 1.7 + wp.y * 2.3);
     alb *= 0.7 + 0.6 * vn(wp.xz * 9.0 + wp.y * 7.0);
     alb = mix(alb, vec3f(0.012, 0.011, 0.01), smoothstep(0.5, 0.8, vn(wp.xz * 0.7 - wp.y * 0.9)) * 0.85);
-    spec = 0.03; gloss = 12.0; snowy = 0.35;
+    spec = 0.03; gloss = 12.0; snowy = 0.15;
   }
   else if (m == 23u) { // scorched walls and roof of a damaged building: soot, burnt-through patches that glow at night
     let hz = dot(wp.xz, vec2f(0.707, 0.707)) + dot(wp.xz, vec2f(-0.707, 0.707)) * 0.3;
-    let st = vn(vec2f(hz * 0.9, wp.y * 0.07) + in.col.g * 13.0); // vertical streaks where smoke rose
-    let rg = fbm3(wp.xz * 0.13 + vec2f(wp.y * 0.05, 3.0));        // scorched regions
-    let s = rg * 0.75 + st * 0.35 + 0.08 * vn(wp.xz * 3.1 + wp.y * 2.7);
-    let soot = smoothstep(0.5, 0.68, s); let hole = smoothstep(0.78, 0.8, s);
+    let rg = fbm3(wp.xz * 0.11 + vec2f(wp.y * 0.04, 3.0) + in.col.g * 13.0); // scorched regions
+    let st = vn(vec2f(hz * 0.8, wp.y * 0.06));                                  // with streaky edges where smoke rose
+    let soot = smoothstep(0.45, 0.59, rg + (st - 0.5) * 0.25); let hole = smoothstep(0.68, 0.7, rg + (vn(wp.xz * 0.9 + wp.y * 0.9) - 0.5) * 0.1);
     alb *= 0.75; alb = mix(alb, vec3f(0.02, 0.018, 0.016), soot * 0.94); alb = mix(alb, vec3f(0.003), hole);
-    emis = vec3f(1.0, 0.3, 0.05) * hole * (0.02 + night * 0.4) * smoothstep(0.3, 0.8, vn(wp.xz * 2.3 + wp.y * 2.9));
+    emis = vec3f(1.0, 0.24, 0.035) * hole * (0.015 + night * 0.2) * smoothstep(0.3, 0.8, vn(wp.xz * 2.3 + wp.y * 2.9));
     spec = 0.05 * (1.0 - soot); gloss = 20.0;
   }
   else if (m == 18u) { // Norwegian flag

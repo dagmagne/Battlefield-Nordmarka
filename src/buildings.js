@@ -89,10 +89,10 @@ export function initBuildings(W, mesh, HALF) {
     for (let q = B.b0[i]; q < B.b1[i]; q++) { const o = q * BS, dx = x - X[o], dz = z - X[o + 1], lx = dx * X[o + 2] + dz * X[o + 3], lz = dz * X[o + 2] - dx * X[o + 3], d = Math.max(Math.abs(lx) - X[o + 4], Math.abs(lz) - X[o + 5]); if (d < bd) { bd = d; best = q; } }
     return best * BS; };
   // rubble: the pile's height above the pad at local (lx, lz) of box o (a mound, highest in the middle)
-  const pileH = (o) => Math.max(2.1, (X[o + 7] + X[o + 8]) * 0.36);
+  const pileH = (o) => Math.max(2.1, (X[o + 7] + X[o + 8]) * 0.4);
   const heap = (o, lx, lz, wx, wz) => { const e = Math.max(Math.abs(lx) / X[o + 4], Math.abs(lz) / X[o + 5]), m = e < 1 ? 0.3 + 0.7 * (1 - e * e) : 0.3 * Math.max(0, 1 - (e - 1) * 3.5);
     return pileH(o) * m * (0.6 + 0.4 * vn(wx * 0.35, wz * 0.35)); };
-  const scorch = (m) => m === MAT.paint || m === MAT.snow || m === MAT.wood || m === MAT.plank || m === MAT.stone;
+  const scorch = (m) => m === MAT.paint || m === MAT.snow || m === MAT.wood || m === MAT.plank;
   function damaged(i) {
     const seed = i * 7 + 3, sx = hash1(seed) < 0.5 ? -1 : 1, sz = hash1(seed + 1) < 0.5 ? -1 : 1, sag = 1.1 + 0.6 * hash1(seed + 5); let wv = 0;
     for (let v = B.v0[i]; v < B.v1[i]; v++) {
@@ -121,10 +121,10 @@ export function initBuildings(W, mesh, HALF) {
       for (let iz = -1; iz <= nz; iz++) for (let ix = -1; ix <= nx; ix++) {
         const hs = (k) => hash1(i * 7919 + q * 131 + iz * 61 + ix * 17 + k * 3), edge = ix < 0 || iz < 0 || ix >= nx || iz >= nz;
         if (edge && hs(0) < 0.35) continue;
-        const lx = -hw + (ix + 0.5) * cx + (hs(1) - 0.5) * cx * 0.5, lz = -hd + (iz + 0.5) * cz + (hs(2) - 0.5) * cz * 0.5, wx = X[o] + lx * X[o + 2] - lz * X[o + 3], wz = X[o + 1] + lx * X[o + 3] + lz * X[o + 2];
+        const lx = -hw + (ix + 0.5) * cx + (hs(1) - 0.5) * cx * 0.9, lz = -hd + (iz + 0.5) * cz + (hs(2) - 0.5) * cz * 0.9, wx = X[o] + lx * X[o + 2] - lz * X[o + 3], wz = X[o + 1] + lx * X[o + 3] + lz * X[o + 2];
         const h = Math.max(0.35, heap(o, lx, lz, wx, wz) * (0.8 + 0.4 * hs(3))) + 0.6, r = hs(4), g = 0.65 + 0.5 * hs(5);
-        const cc = r < 0.5 ? [0.3 * g, 0.29 * g, 0.27 * g] : r < 0.75 ? [RUB[0] * g * 1.4, RUB[1] * g * 1.4, RUB[2] * g * 1.4] : r < 0.9 ? [col[0] * 0.55 * g, col[1] * 0.55 * g, col[2] * 0.55 * g] : [0.5 * g, 0.5 * g, 0.5 * g];
-        put(wx, X[o + 6] - 0.6 + h / 2, wz, th + (hs(6) - 0.5) * 0.7, (hs(7) - 0.5) * 0.45, (hs(8) - 0.5) * 0.45, cx * (1.05 + 0.35 * hs(9)), h, cz * (1.05 + 0.35 * hs(10)), cc);
+        const cc = r < 0.45 ? [0.2 * g, 0.19 * g, 0.18 * g] : r < 0.75 ? [RUB[0] * g * 1.4, RUB[1] * g * 1.4, RUB[2] * g * 1.4] : r < 0.9 ? [col[0] * 0.5 * g, col[1] * 0.5 * g, col[2] * 0.5 * g] : [0.36 * g, 0.35 * g, 0.34 * g];
+        put(wx, X[o + 6] - 0.6 + h / 2, wz, th + hs(6) * 3.14, (hs(7) - 0.5) * 0.6, (hs(8) - 0.5) * 0.6, cx * (1.05 + 0.35 * hs(9)), h, cz * (1.05 + 0.35 * hs(10)), cc);
       }
     }
     for (let c = 0; c < N; c++) {
