@@ -202,6 +202,9 @@ async function main() {
   const collAt = (x, z) => { const C = W.colliders, c = clamp(Math.floor((z + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((x + HALF) / CG), 0, NCG - 1);
     for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = x - C[i], dz = z - C[i + 1]; if (dx * dx + dz * dz < C[i + 2] * C[i + 2]) return true; } return false; };
   const NP = qs.has('np');
+  // ?hide=<letters> (diagnostics): leave parts of the frame out to find where a rendering fault comes from.
+  // t terrain, s sky, p particles and glows, v vehicles and drone, o props, h shadow casters, x sight overlay (trees: ?trees=off)
+  const HIDE = qs.get('hide') || '', hT = HIDE.includes('t'), hS = HIDE.includes('s'), hP = HIDE.includes('p'), hV = HIDE.includes('v'), hO = HIDE.includes('o') || NP, hH = HIDE.includes('h'), hX = HIDE.includes('x');
 
   // ---------- terrain shadow bake ----------
   const tshMod = mod(tshW, 'tshadow');
@@ -790,33 +793,37 @@ async function main() {
       if (skipCasc(c)) continue;
       const sp = enc.beginRenderPass(shPass[c]);
       sp.setBindGroup(0, shBG[c]);
+      if (!hH) {
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
       if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
-      if (!NP) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n); }
+      if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n); }
       if (R.trees) { sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3, c + 1); }
+      }
       sp.end();
     }
     const p = enc.beginRenderPass(mainPass);
     p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
-    if (cam.mode !== 1 || R.pose) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
-    if (droneOn) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
-    for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
-    if (!NP) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
+    if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
+    if (droneOn && !hV) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
+    for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
+    if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
     if (R.trees) { p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4, 0); }
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
-    for (let l = 0; l < NL; l++) {
+    for (let l = 0; l < NL && !hT; l++) {
       p.setBindGroup(1, lvBG[l]);
       if (l === 0) { p.setIndexBuffer(tibF, 'uint32'); p.drawIndexed(tiFull.length); } else { if (l === 1) p.setIndexBuffer(tibR, 'uint32'); p.drawIndexed(tiRing.length); }
     }
-    p.setPipeline(skyPipe); p.draw(3);
+    if (!hS) { p.setPipeline(skyPipe); p.draw(3); }
     p.setPipeline(partPipe);
+    if (hP) { /* particles hidden */ } else {
     if (GU[O.misc] > 0.02) { p.setVertexBuffer(0, glowBuf); p.draw(4, glowN); }
     if (pn) { p.setVertexBuffer(0, partBuf); p.draw(4, pn); }
     if (game.fxN) { p.setVertexBuffer(0, fxBuf); p.draw(4, game.fxN); }
     if (R.snowAmt > 0.01) { p.setPipeline(flakePipe); p.draw(4, Math.round(Q.flakes * Math.min(1, R.snowAmt * 1.5))); }
+    }
     p.end();
 
     const sx = rw / R.w, sy = rh / R.h, expo = R.thNow ? 1 : GU[O.misc + 2];
@@ -832,7 +839,7 @@ async function main() {
       const bp = enc.beginRenderPass(bloomPass[NB + i]); bp.setPipeline(upPipe); bp.setBindGroup(0, upBG[i]); bp.draw(3); bp.end();
     }
     const fu = pUData[NB * 2]; fu[0] = sx; fu[1] = sy; fu[2] = 1 / R.w; fu[3] = 1 / R.h; fu[4] = expo; fu[5] = 0.1; fu[6] = R.manual ? 0.37 : R.time; fu[7] = R.thNow;
-    const hudOn = cam.mode !== 3 && !R.pose && !R.nohud;
+    const hudOn = cam.mode !== 3 && !R.pose && !R.nohud && !hX;
     fu[8] = cam.mode === 4 ? 9 : aim.sx; fu[9] = aim.sy; fu[10] = R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
     device.queue.writeBuffer(pU[NB * 2], 0, fu);
     finalPass.colorAttachments[0].view = ctx.getCurrentTexture().createView();
@@ -844,7 +851,7 @@ async function main() {
 
     drs(raw); if (raw * 1000 > R.ftMax) R.ftMax = raw * 1000;
     ui.hud(Math.min(199, Math.round((cam.mode === 4 ? Math.hypot(game.drone.vx, game.drone.vy, game.drone.vz) : Math.abs(veh.v)) * 3.6)), cam.mode, Math.round(aim.range / 10) * 10);
-    if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}\n${R.gpuName}  trees ${R.treeSel}\ntree tris ${((triStat[0] + triStat[1] + triStat[2] + triStat[3]) / 1e6).toFixed(2)}M + shadow ${((triStat[4] + triStat[5] + triStat[6]) / 1e6).toFixed(2)}M`); R.ftMax = 0; }
+    if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}\n${R.gpuName}  trees ${R.treeSel}${HIDE ? '  hide ' + HIDE : ''}\ntree tris ${((triStat[0] + triStat[1] + triStat[2] + triStat[3]) / 1e6).toFixed(2)}M + shadow ${((triStat[4] + triStat[5] + triStat[6]) / 1e6).toFixed(2)}M`); R.ftMax = 0; }
     if (perf && !perf.done) {
       perf.t += raw; if (perf.t > 2 && perf.n < 20000) perf.dt[perf.n++] = raw * 1000;
       if (perf.t > 62) { perf.done = true; const st = (a, n) => { const s = Array.from(a.subarray(0, n)).sort((x, y) => x - y); return n ? { avg: +(s.reduce((x, y) => x + y, 0) / n).toFixed(2), p50: +s[n >> 1].toFixed(2), p99: +s[Math.floor(n * 0.99)].toFixed(2), max: +s[n - 1].toFixed(2), n } : null; };
