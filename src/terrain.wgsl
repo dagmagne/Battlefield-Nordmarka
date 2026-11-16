@@ -227,7 +227,7 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   var dif = saturate((ndl + wrap) / (1.0 + wrap));
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.15) + lampLight(p, 0.0);
-  { let sc = smoothstep(0.08, 0.75, scorch + (fbm3(p * 0.9) - 0.5) * 0.5 * step(0.01, scorch)); // soot and thrown earth around impacts
+  if (scorch > 0.01) { let sc = smoothstep(0.08, 0.75, scorch + (fbm3(p * 0.9) - 0.5) * 0.5); // soot and thrown earth around impacts (only where a shell has landed)
     alb = mix(alb, mix(vec3f(0.035, 0.032, 0.03), vec3f(0.16, 0.12, 0.08), vn(p * 2.3)), sc * 0.93); }
   var col = alb * (sun * dif + ambient(n) * ao + ll);
   // subsurface-ish glow on shadow terminator
