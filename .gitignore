@@ -4,3 +4,4 @@ shots
 .certs
 tools/geo/raw/
 tools/geo/__pycache__/
+.claude/worktrees/
