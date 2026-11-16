@@ -40,27 +40,36 @@ kbd{margin:0 1px}
 .btn:active,.btn.down{transform:scale(.93);background:#2a4566d0}
 .btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .btn.on{background:#3fd08ae6;color:#052414;border-color:#baf5d6}
-#acts{right:var(--sr);bottom:var(--sb);display:none;gap:12px;align-items:flex-end}
+#acts{right:var(--sr);bottom:var(--sb);display:none;flex-direction:column;gap:10px;align-items:flex-end}
+#acts .r{display:flex;gap:8px;pointer-events:none}
+#acts .r .btn{width:54px;height:54px;font-size:9px}
+#acts .r .btn svg{width:20px;height:20px}
 #acts .btn{border-radius:50%;width:76px;height:76px;font-size:11px}
 #acts .btn svg{width:26px;height:26px}
 #bT{width:88px!important;height:88px!important}
 #fly{right:var(--sr);bottom:var(--sb);display:none;gap:12px}
 #fly .btn{border-radius:50%;width:76px;height:76px}
 .touch #acts{display:flex}
-.touch.flying #acts{display:none}
-.touch.flying #fly{display:flex}
+.touch.flying #acts,.touch.droning #acts{display:none}
+.touch.flying #fly,.touch.droning #fly{display:flex}
+.donly{display:none!important}
+.touch.droning .donly{display:flex!important}
+#bB{background:#b3261ed0;border-color:#ffb4a8}
 .desk .tonly{display:none!important}
 #joy{left:0;top:0;width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:50%;border:2px solid #ffffff55;background:#0b142050;display:none}
 #joy i{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px;border-radius:50%;background:#ffffffd0;box-shadow:0 2px 10px #0006}
 #joyhint{left:calc(var(--sl) + 26px);bottom:calc(var(--sb) + 26px);width:118px;height:118px;border-radius:50%;border:2px dashed #ffffffd0;background:#0b142066;box-shadow:0 0 0 1px #0b142080;display:none;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;text-align:center;transition:opacity .2s}
-.touch #sM,.touch #sK,.touch #sD{display:none}
+.touch #sM,.touch #sK{display:none}
 .touch #joyhint{display:flex}
 #dbg{left:var(--sl);top:calc(var(--st) + 52px);padding:8px 11px;font:11px/1.5 ui-monospace,Menlo,monospace;white-space:pre;display:none}
 #rng{font-size:12px;opacity:.75;min-width:6ch}
 .st.warn{background:#e8b339;color:#2b1d00}.st.bad{background:#e2533f;color:#fff}
 #wave{right:calc(var(--sr) + 184px);top:calc(var(--st) + 8px);padding:6px 14px;font-weight:650;font-size:12px;letter-spacing:.08em}
 #map{right:var(--sr);bottom:var(--sb);width:176px;height:176px;border-radius:14px;border:1px solid #ffffff2c;background:#0b1420a0}
-.touch #map{display:none}
+.touch #map{bottom:auto;top:calc(var(--st) + 60px);width:104px;height:104px;border-radius:12px}
+.touch #wave{right:auto;left:var(--sl);top:calc(var(--st) + 46px);padding:4px 10px;font-size:10.5px}
+.touch #dbg{top:calc(var(--st) + 80px)}
+.touch #hud{gap:8px;padding:6px 10px}
 #ovP{opacity:.85;line-height:1.5}
 #toast{left:50%;top:calc(var(--st) + 60px);transform:translateX(-50%);padding:7px 14px;font-weight:600;opacity:0;transition:opacity .25s}
 #keys{left:var(--sl);bottom:var(--sb);padding:6px 11px;font-size:11.5px;opacity:.92}
@@ -77,8 +86,8 @@ kbd{margin:0 1px}
 .grid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;align-items:center;font-size:13.5px}
 .grid b{white-space:nowrap;font-weight:500}
 .note{opacity:.6;font-size:12px;margin-top:8px}
-@media (max-height:420px){#acts .btn,#fly .btn{width:66px;height:66px}#bT{width:76px!important;height:76px!important}.btn{width:46px;height:46px}}
-@media (orientation:portrait){#acts{flex-direction:column;align-items:flex-end}#joyhint{bottom:calc(var(--sb) + 40px)}#top{top:calc(var(--st) + 50px)}#dbg{top:calc(var(--st) + 112px)}#toast{top:calc(var(--st) + 116px)}}
+@media (max-height:420px){#acts .btn,#fly .btn{width:66px;height:66px}#acts .r .btn{width:48px;height:48px}.touch #map{top:calc(var(--st) + 54px);width:96px;height:96px}#bT{width:76px!important;height:76px!important}.btn{width:46px;height:46px}}
+@media (orientation:portrait){.touch #map{top:calc(var(--st) + 112px)}.touch #wave{top:calc(var(--st) + 50px)}#joyhint{bottom:calc(var(--sb) + 40px)}#top{top:calc(var(--st) + 50px)}#dbg{top:calc(var(--st) + 112px)}#toast{top:calc(var(--st) + 116px)}}
 </style>
 </head>
 <body>
@@ -96,12 +105,19 @@ kbd{margin:0 1px}
   <div id="joyhint">DRIVE</div>
   <div id="joy"><i></i></div>
   <div id="acts">
-    <button class="btn on" id="bS"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18"/></svg>AMMO</button>
+    <div class="r">
+      <button class="btn" id="bX"><svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="M7 8l10 8M17 8L7 16"/></svg>DRONE</button>
+      <button class="btn" id="bK"><svg viewBox="0 0 24 24"><path d="M6 18a4 4 0 0 1 1-7.9A5 5 0 0 1 17 9a4.5 4.5 0 0 1 1 9z"/></svg>SMOKE</button>
+      <button class="btn" id="bM"><svg viewBox="0 0 24 24"><path d="M3 12h3M9 12h3M15 12h6M19 9l3 3-3 3"/></svg>MG</button>
+      <button class="btn" id="bS"><svg viewBox="0 0 24 24"><path d="M8 21V9l4-6 4 6v12zM8 16h8"/></svg>AMMO</button>
+    </div>
     <button class="btn on" id="bT"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>FIRE</button>
   </div>
   <div id="fly">
+    <button class="btn donly" id="bR"><svg viewBox="0 0 24 24"><path d="M9 6l-6 6 6 6M3 12h18"/></svg>TANK</button>
     <button class="btn" id="bDn"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>DOWN</button>
     <button class="btn" id="bUp"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>UP</button>
+    <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg>BOOM</button>
   </div>
   <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>X</kbd> drone · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
@@ -124,7 +140,10 @@ kbd{margin:0 1px}
     <div class="grid" id="hT">
       <b>Left thumb</b><span>Joystick: push to drive, sideways to steer</span>
       <b>Right side</b><span>Drag to look around · pinch to zoom</span>
-      <b>FIRE / AMMO</b><span>Fire the main gun · cycle the ammunition type</span>
+      <b>FIRE · AMMO</b><span>Fire the main gun · cycle APFSDS / HEAT-MP / HE (the ammo pill at the top shows what is loaded)</span>
+      <b>MG · SMOKE</b><span>Hold for the coaxial machine gun · fire the smoke grenades</span>
+      <b>DRONE</b><span>Launch an FPV drone (5 per game): joystick flies, drag turns, UP / DOWN change height, BOOM detonates, TANK returns</span>
+      <b>Map</b><span>Top right: enemies within 900 m (red T-72, orange BMP-2)</span>
       <b>CAM · TIME</b><span>Commander view or gunner sight · time of day</span>
       <b>3-finger tap</b><span>Performance overlay</span>
     </div>

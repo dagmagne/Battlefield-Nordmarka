@@ -13,7 +13,7 @@ Scripted runs with `?nohint` and no `?w` default to Frognerseteren.
 2. **Smooth frame pacing.** The target is a steady 60 fps at native Retina on a MacBook Pro M2 Max in the latest Chrome.
 3. **Small bundle.** Currently about 644 kB (about 410 kB gzip), of which the embedded map data is about 339 kB before base64. Report the size after changes.
 
-The Mac is the only target platform. Mobile is out of scope for now: don't test, verify or tune for phones or touch, and don't spend effort on mobile-specific changes. The existing touch and phone code (`?touch`, `phone.sh`) can stay, but it is not maintained.
+The Mac is the only target platform. Mobile is out of scope for now: don't test, verify or tune for phones or touch, and don't spend effort on mobile-specific changes. The touch UI (`?touch`, `phone.sh`) was brought up to date with the tank game on request (minimap under the top buttons, wave pill under the HUD, AMMO / MG / SMOKE / DRONE buttons, and TANK / DOWN / UP / BOOM while a drone flies); check it with `tools/cshot.mjs ... --touch --w 852 --h 393`, but don't tune performance for phones.
 
 ## Hard rules
 - WebGPU only. No external texture, model or audio files. The one exception is the map data blob `src/data/world.bin`, which the build embeds as base64; all meshes, textures and detail are still procedural.

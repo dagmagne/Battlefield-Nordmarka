@@ -42,7 +42,7 @@ export function initUI(api, isTouch) {
 
   // ---- pointers ----
   const MAXP = 8, pid = new Int32Array(MAXP).fill(-1), prole = new Uint8Array(MAXP), px = new Float32Array(MAXP), py = new Float32Array(MAXP);
-  let mFire = false, mSight = false, tFire = false;
+  let mFire = false, mSight = false, tFire = false, tMg = false;
   let joyId = -1, jx0 = 0, jy0 = 0, jx = 0, jy = 0, pinch = 0, tapN = 0, tapT = 0, tapMax = 0;
   const joy = $('joy'), knob = joy.firstChild, JR = 58;
   const slot = (id) => { for (let i = 0; i < MAXP; i++) if (pid[i] === id) return i; return -1; };
@@ -91,8 +91,10 @@ export function initUI(api, isTouch) {
 
   // ---- buttons ----
   const btn = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); b.blur(); }); };
-  btn('bS', () => api.ammo(-1));
-  { const b = $('bT'), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); tFire = on; }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); } btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true));
+  btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bR', api.drone);
+  // hold buttons: FIRE (tank), BOOM (drone) and the coax MG
+  const holdBtn = (id, fn) => { const b = $(id), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); fn(on); b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
+  holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true));
   btn('mW', () => { const l = new URL(location.href); l.searchParams.delete('w'); l.searchParams.delete('nohint'); location.href = l.href; });
   btn('hGo', () => showHelp(false)); btn('mGo', () => showMenu(false)); btn('mH', () => { showMenu(false); showHelp(true); });
   const hold = (id, v) => { const b = $(id); const set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); inp.holdY = on ? v : 0; b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
@@ -145,12 +147,12 @@ export function initUI(api, isTouch) {
       if (fly === 2) inp.mvY = Math.max(-1, Math.min(1, inp.mvY + k('Space') - k('ShiftLeft') - k('ShiftRight'))); }
     else { inp.th = Math.max(-1, Math.min(1, f - jyy + gTh)); inp.st = Math.max(-1, Math.min(1, -r - jxx * 1.15 + gSt)); inp.mvX = inp.mvZ = inp.mvY = 0; }
     inp.fast = gFast || keys.has('ShiftLeft') || keys.has('ShiftRight');
-    inp.fire = fly !== 1 && (mFire || tFire || gFire || keys.has('Enter')); inp.mg = !fly && (gMg || keys.has('Space')); inp.sight = !fly && (mSight || gSight);
+    inp.fire = fly !== 1 && (mFire || tFire || gFire || keys.has('Enter')); inp.mg = !fly && (gMg || tMg || keys.has('Space')); inp.sight = !fly && (mSight || gSight);
   };
   U.hud = (kmh, camMode, range) => {
     if (kmh !== lSpd) { lSpd = kmh; $('spd').textContent = SPD[kmh] || '199'; }
     if (range !== lR) { lR = range; $('rng').textContent = RNG[range / 10] || '4000+ m'; }
-    if (camMode !== lC) { lC = camMode; $('sC').textContent = CAMN[camMode]; document.body.classList.toggle('flying', camMode === 3); }
+    if (camMode !== lC) { lC = camMode; $('sC').textContent = CAMN[camMode]; document.body.classList.toggle('flying', camMode === 3); document.body.classList.toggle('droning', camMode === 4); tFire = false; $('joyhint').textContent = camMode >= 3 ? 'FLY' : 'DRIVE'; }
   };
   // rare game-state updates (ammo, hull, wave): only called when something changes
   U.set = (id, text, cls) => { const e = $(id); e.textContent = text; if (cls !== undefined) e.className = cls; };
