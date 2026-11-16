@@ -284,7 +284,7 @@ export function initCombat(C) {
     // smoke clouds
     for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1) continue; CL[o + 3] += dt; const gh = hAt(CL[o], CL[o + 2]); CL[o + 1] = Math.max(gh + 1.8, CL[o + 1] - 3 * dt);
       if (CL[o + 3] > 24) { CL[o + 4] = 0; continue; }
-      if (CL[o + 3] < 13 && rnd() < dt * 8) parts.emit(CL[o] + sr() * 7, CL[o + 1] + sr() * 3, CL[o + 2] + sr() * 7, sr() * 0.8, 0.15 + rnd() * 0.3, sr() * 0.8, 9 + rnd() * 5, 3.4 + rnd() * 2.6, 0.5, 1, 0.66, 0.67, 0.7, 0.72); }
+      if (CL[o + 3] < 13 && rnd() < dt * 8) parts.emit(CL[o] + sr() * 7, CL[o + 1] + sr() * 3, CL[o + 2] + sr() * 7, sr() * 0.8, 0.15 + rnd() * 0.3, sr() * 0.8, 9 + rnd() * 5, 3.4 + rnd() * 2.6, 0.5, 5, 0.66, 0.67, 0.7, 0.72); }
     // waves
     if (!G.peace && !veh.dead) {
       let alive = 0; for (const e of G.enemies) if (e.on && !e.dead) alive++;

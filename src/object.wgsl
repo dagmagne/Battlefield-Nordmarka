@@ -78,6 +78,17 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let L = G.sunDir.xyz;
   let ndl = saturate(dot(n, L));
   if (isG < 0.5) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }
+  if (G.groom.w > 0.5) { // thermal sight: heated houses, hot engine deck and running gear, burning wrecks
+    var th = 0.24;
+    if (m == 2u) { th = 0.1; } else if (m == 7u) { th = 0.42; } else if (m == 6u || m == 10u) { th = 0.9; } else if (m == 12u) { th = 0.15; }
+    if (isG > 0.5) {
+      th = 0.36 + 0.1 * vn(in.lp.xz * 2.1 + in.lp.y * 3.0);
+      if (m == 8u || m == 9u || m == 14u) { th = 0.8; }
+      th += 1.2 * smoothstep(0.7, 1.9, in.lp.z) * smoothstep(0.7, 1.1, in.lp.y) * smoothstep(1.75, 1.55, in.lp.y);
+      th = mix(th, 1.0 + 0.9 * vn(in.lp.xz * 1.7 + in.lp.y * 2.0), OB.tr.z);
+    }
+    return vec4f(thermal(mix(th, 0.1, saturate(sn)), wp), 1.0);
+  }
   let sh = shadowSunS(wp, n, dist, 3) * terrainShadow(wp.xz, hAbove);
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.0) + lampLight(wp.xz, hAbove) * (0.5 + 0.5 * saturate(n.y + 0.6));

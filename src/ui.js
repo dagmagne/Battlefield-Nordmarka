@@ -25,7 +25,8 @@ export function initUI(api, isTouch) {
     keys.add(c);
     if (c === 'Space' || c === 'Tab') e.preventDefault();
     else if (c === 'KeyT') api.tod(-1);
-    else if (c === 'KeyC' || c === 'KeyV') api.cam();
+    else if (c === 'KeyC') api.cam();
+    else if (c === 'KeyV') api.thermal();
     else if (c === 'KeyF') api.fly();
     else if (c === 'KeyN') api.snow();
     else if (c === 'KeyG') api.smoke();
@@ -66,7 +67,7 @@ export function initUI(api, isTouch) {
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (inp.locked) { inp.lookX += e.movementX; inp.lookY += e.movementY; return; }
+    if (inp.locked) { inp.lookX += e.movementX; inp.lookY += e.movementY; if (e.pointerType === 'mouse') { mFire = (e.buttons & 1) !== 0; mSight = (e.buttons & 2) !== 0; } return; }
     const s = slot(e.pointerId); if (s < 0) return;
     const dx = e.clientX - px[s], dy = e.clientY - py[s]; px[s] = e.clientX; py[s] = e.clientY;
     if (prole[s] === 1) {
@@ -76,6 +77,8 @@ export function initUI(api, isTouch) {
     } else if (looks() >= 2) { const d = pinchDist(); if (pinch > 0 && d > 0) inp.zoom += Math.log(pinch / d) * 1.6; pinch = d; }
     else { inp.lookX += dx; inp.lookY += dy; }
   });
+  // a second mouse button pressed while the first is held (RMB sight + LMB fire) sends no pointerdown/pointerup, only mousedown/mouseup
+  for (const ev of ['mousedown', 'mouseup']) addEventListener(ev, (e) => { if (inp.locked) { const d = ev === 'mousedown'; if (e.button === 0) mFire = d; else if (e.button === 2) mSight = d; } });
   const up = (e) => {
     if (e.pointerType === 'mouse') { if (e.button === 0) mFire = false; else if (e.button === 2) mSight = false; }
     const s = slot(e.pointerId); if (s < 0) return;

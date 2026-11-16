@@ -40,12 +40,30 @@ fn tonemap(x: vec3f) -> vec3f { // ACES fit (Narkowicz), slightly softened
   let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
   return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
+// Thermal imager: the scene pass wrote temperatures (see thermal() in common.wgsl). A coarse detector grid, line structure,
+// detector noise and blooming on hot spots; U.b.w = 1 white-hot, 2 black-hot, +2 for the drone's grey display (the tank's is green).
+fn thermalView(uv: vec2f, fp: vec2f, bloom: f32) -> vec3f {
+  let res = 1.0 / U.a.zw; let cell = max(2.0, floor(res.y / 560.0));
+  let ci = floor(fp / cell); let uq = (ci + 0.5) * cell / res; let dx = vec2f(cell * 0.3 / res.x, 0.0);
+  let t = (S(uq - dx).r + S(uq + dx).r) * 0.5 + bloom * 0.8;
+  var v = 1.0 - exp(-t * 2.3);
+  let tm = floor(U.b.z * 30.0);
+  v += (fract(sin(dot(ci + tm * 7.31, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.05;   // detector noise
+  v += (fract(sin(ci.x * 91.7) * 4375.85) - 0.5) * 0.018;                                       // fixed column pattern
+  v *= 0.9 + 0.1 * smoothstep(0.1, 0.5, abs(fract(fp.y / cell) - 0.5) * 2.0 * step(2.5, cell) + step(cell, 2.5));
+  v = saturate(v);
+  let m = U.b.w; let grey = step(2.5, m);
+  if (abs(m - 2.0 - 2.0 * grey) < 0.5) { v = 1.0 - v; }
+  let q = uv - 0.5;
+  return mix(mix(vec3f(0.0, 0.035, 0.012), vec3f(0.5, 1.0, 0.55), v), vec3f(v * 0.95 + 0.02), grey) * (1.0 - dot(q, q) * 0.5);
+}
 @fragment fn fsFinal(in: PO) -> @location(0) vec4f {
   var c = S(in.uv);
   let bl = textureSampleLevel(src2, smp, in.uv, 0.0).rgb;
+  let q = in.uv - 0.5;
+  if (U.b.w > 0.5) { c = thermalView(in.uv, in.pos.xy, bl.r); } else {
   c = mix(c, bl, U.b.y * 0.5) + bl * U.b.y * 0.5;
   c *= U.b.x;
-  let q = in.uv - 0.5;
   c *= 1.0 - dot(q, q) * 0.42;
   // gentle filmic curve that keeps snow highlights clean
   let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
@@ -56,6 +74,7 @@ fn tonemap(x: vec3f) -> vec3f { // ACES fit (Narkowicz), slightly softened
   let n = fract(sin(dot(in.pos.xy + fract(U.b.z) * 61.0, vec2f(12.9898, 78.233))) * 43758.5453);
   let n2 = fract(sin(dot(in.pos.xy + 31.7, vec2f(39.346, 11.135))) * 24634.6345);
   c += (n + n2 - 1.0) / 255.0;
+  }
   // ---- sight overlays (drawn here so the HUD never touches the DOM per frame) ----
   let res = 1.0 / U.a.zw; let px = (in.uv - 0.5) * res; let s = max(1.0, res.y / 1100.0);
   c = mix(c, vec3f(0.75, 0.04, 0.02), U.d.w * smoothstep(0.25, 0.75, length(q)) * 0.55);

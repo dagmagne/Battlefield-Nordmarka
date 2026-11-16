@@ -9,7 +9,7 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
   let up = vec3f(0.0, 1.0, 0.0);
   return G.sunCol.rgb * sh * 0.55 + ambient(up) + spotL(p, up, G.l0p, G.l0d, G.l0c, 1.0) * 2.5 + spotL(p, up, G.l1p, G.l1d, G.l1c, 1.0) * 2.5 + lampLight(p.xz, hAbove);
 }
-// a: xyz pos, w size ; b: rgb tint, a alpha ; c: x kind (0 chunk, 1 smoke, 2 lamp glow, 3 flash glow, 4 fire), y seed, z height above ground, w age
+// a: xyz pos, w size ; b: rgb tint, a alpha ; c: x kind (0 chunk, 1 smoke, 2 lamp glow, 3 flash glow, 4 fire, 5 screening smoke), y seed, z height above ground, w age
 @vertex fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f, @location(2) c: vec4f) -> PV {
   let q = corner(vi);
   let wp = a.xyz + (camRight() * q.x + camUp() * q.y) * a.w;
@@ -18,8 +18,18 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
   o.uv = q; o.kind = c.x; o.seed = c.y;
   var col = b.rgb;
   if (c.x < 1.5 || c.x > 3.5) { let vd = normalize(a.xyz - G.camPos.xyz); col *= litAt(a.xyz, c.z) + G.sunCol.rgb * pow(saturate(dot(vd, G.sunDir.xyz)), 5.0) * 1.2; } else if (c.x < 2.5) { col *= G.misc.x; }
-  if (c.x > 3.5) { col = mix(vec3f(9.0, 3.0, 0.55) * (1.0 - c.w * 2.2), col, smoothstep(0.03, 0.3, c.w)); } // fireball cooling into smoke (c.w = age 0..1)
-  o.col = vec4f(col, b.a);
+  if (c.x > 3.5 && c.x < 4.5) { col = mix(vec3f(9.0, 3.0, 0.55) * (1.0 - c.w * 2.2), col, smoothstep(0.03, 0.3, c.w)); } // fireball cooling into smoke (c.w = age 0..1)
+  var al = b.a;
+  if (G.groom.w > 0.5) { // thermal: dust and exhaust smoke are nearly transparent, fire is hot, screening smoke (5) is a hot aerosol that blinds the sensor
+    var t = 0.25;
+    if (c.x > 4.5) { t = 1.15; al = min(1.0, al * 1.3); }
+    else if (c.x > 3.5) { t = mix(5.0, 0.3, smoothstep(0.0, 0.5, c.w)); al *= mix(1.0, 0.2, smoothstep(0.25, 0.6, c.w)); }
+    else if (c.x > 2.5) { t = dot(b.rgb, vec3f(0.33)); }
+    else if (c.x > 1.5) { t = 0.0; }
+    else if (c.x > 0.5) { al *= 0.2; }
+    col = vec3f(t);
+  }
+  o.col = vec4f(col, al);
   if (b.a <= 0.0 && c.x < 1.5) { o.pos = vec4f(0.0, 0.0, -1.0, 1.0); }
   return o;
 }
@@ -55,7 +65,7 @@ fn litAt(p: vec3f, hAbove: f32) -> vec3f {
   let up = vec3f(0.0, 1.0, 0.0);
   let lit = G.sunCol.rgb * 0.35 + ambient(up) * 1.3 + spotL(p, up, G.l0p, G.l0d, G.l0c, 1.0) * 5.0 + spotL(p, up, G.l1p, G.l1d, G.l1c, 1.0) * 5.0 + lampLight(p.xz, 3.0) * 1.5;
   o.col = vec4f(lit, fade * min(1.0, 0.012 / (sz * 0.5) * 1.6));
-  if (fade <= 0.0) { o.pos = vec4f(0.0, 0.0, -1.0, 1.0); }
+  if (fade <= 0.0 || G.groom.w > 0.5) { o.pos = vec4f(0.0, 0.0, -1.0, 1.0); }
   return o;
 }
 @fragment fn fsFlake(in: PV) -> @location(0) vec4f {

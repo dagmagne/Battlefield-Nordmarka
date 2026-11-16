@@ -273,5 +273,9 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
       col = mix(col, c3, asph);
     }
   }
+  if (G.groom.w > 0.5) { // cold snow with relief, sun-warmed slopes, dark asphalt a little warmer, shell craters still warm
+    let tt = 0.085 + 0.5 * (1.0 - n.y) + 0.025 * saturate(ndl) * min(G.sunCol.r, 1.0) + 0.09 * smoothstep(0.3, 0.9, rdv) + 0.3 * scorch;
+    return vec4f(thermal(tt, wp), 1.0);
+  }
   return vec4f(applyFog(col, wp), 1.0);
 }
