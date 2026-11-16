@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, sight: false };
 const keys = new Set();
 const SPD = []; for (let i = 0; i < 200; i++) SPD.push(String(i));
-const CAMN = ['CMDR', 'SIGHT', '', 'FLY'];
+const CAMN = ['CMDR', 'SIGHT', '', 'FLY', 'DRONE'];
 const RNG = []; for (let i = 0; i <= 400; i++) RNG.push(i * 10 + ' m');
 
 export function initUI(api, isTouch) {
@@ -29,6 +29,7 @@ export function initUI(api, isTouch) {
     else if (c === 'KeyF') api.fly();
     else if (c === 'KeyN') api.snow();
     else if (c === 'KeyG') api.smoke();
+    else if (c === 'KeyX') api.drone();
     else if (c === 'KeyR') api.restart();
     else if (c === 'KeyH') showHelp(true);
     else if (c === 'Escape') showMenu(true);
@@ -125,7 +126,7 @@ export function initUI(api, isTouch) {
     if (modalOpen()) { if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; return; }
     if (press(1)) api.smoke(); if (press(2)) api.ammo(-1); if (press(3)) api.cam();
     if (press(4)) api.fly(); if (press(9)) showMenu(true); if (press(8)) api.debug();
-    if (press(12)) api.snow(); if (press(15)) api.tod((api.state().tod + 1) & 3); if (press(14)) api.tod((api.state().tod + 3) & 3);
+    if (press(12)) api.snow(); if (press(13)) api.drone(); if (press(15)) api.tod((api.state().tod + 1) & 3); if (press(14)) api.tod((api.state().tod + 3) & 3);
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0), tr = api.isFly() ? bv(7) - bv(6) : 0;
     gFire = bv(7) > 0.5; gSight = bv(6) > 0.5; gMg = bv(0) > 0.5;
     gTh = Math.max(-1, Math.min(1, -ly)); gSt = -lx; gX = lx; gZ = -ly; gY = tr; gFast = bv(5) > 0.5;
@@ -134,16 +135,17 @@ export function initUI(api, isTouch) {
 
   // ---- per-frame poll (no allocation) ----
   let lSpd = -1, lC = -1, lR = -1;
-  U.poll = (fly) => {
+  U.poll = (fly) => { // 0 tank, 1 free-fly camera, 2 drone
     pollPad();
     const k = (c) => (keys.has(c) ? 1 : 0);
     const f = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown'), r = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
     let jxx = jx, jyy = jy; const jl = Math.hypot(jxx, jyy);
     if (jl < 0.14) { jxx = 0; jyy = 0; } else { const g = (jl - 0.14) / 0.86 / jl; jxx *= g; jyy *= g; }
-    if (fly) { inp.mvZ = f - jyy + gZ; inp.mvX = r + jxx + gX; inp.mvY = k('KeyE') - k('KeyQ') + inp.holdY + gY; inp.th = 0; inp.st = 0; }
+    if (fly) { inp.mvZ = f - jyy + gZ; inp.mvX = r + jxx + gX; inp.mvY = k('KeyE') - k('KeyQ') + inp.holdY + gY; inp.th = 0; inp.st = 0;
+      if (fly === 2) inp.mvY = Math.max(-1, Math.min(1, inp.mvY + k('Space') - k('ShiftLeft') - k('ShiftRight'))); }
     else { inp.th = Math.max(-1, Math.min(1, f - jyy + gTh)); inp.st = Math.max(-1, Math.min(1, -r - jxx * 1.15 + gSt)); inp.mvX = inp.mvZ = inp.mvY = 0; }
     inp.fast = gFast || keys.has('ShiftLeft') || keys.has('ShiftRight');
-    inp.fire = !fly && (mFire || tFire || gFire || keys.has('Enter')); inp.mg = !fly && (gMg || keys.has('Space')); inp.sight = !fly && (mSight || gSight);
+    inp.fire = fly !== 1 && (mFire || tFire || gFire || keys.has('Enter')); inp.mg = !fly && (gMg || keys.has('Space')); inp.sight = !fly && (mSight || gSight);
   };
   U.hud = (kmh, camMode, range) => {
     if (kmh !== lSpd) { lSpd = kmh; $('spd').textContent = SPD[kmh] || '199'; }

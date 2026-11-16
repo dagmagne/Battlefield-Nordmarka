@@ -53,7 +53,7 @@ kbd{margin:0 1px}
 #joy{left:0;top:0;width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:50%;border:2px solid #ffffff55;background:#0b142050;display:none}
 #joy i{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px;border-radius:50%;background:#ffffffd0;box-shadow:0 2px 10px #0006}
 #joyhint{left:calc(var(--sl) + 26px);bottom:calc(var(--sb) + 26px);width:118px;height:118px;border-radius:50%;border:2px dashed #ffffffd0;background:#0b142066;box-shadow:0 0 0 1px #0b142080;display:none;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;text-align:center;transition:opacity .2s}
-.touch #sM,.touch #sK{display:none}
+.touch #sM,.touch #sK,.touch #sD{display:none}
 .touch #joyhint{display:flex}
 #dbg{left:var(--sl);top:calc(var(--st) + 52px);padding:8px 11px;font:11px/1.5 ui-monospace,Menlo,monospace;white-space:pre;display:none}
 #rng{font-size:12px;opacity:.75;min-width:6ch}
@@ -84,7 +84,7 @@ kbd{margin:0 1px}
 <body>
 <canvas id="c" tabindex="0"></canvas>
 <div id="ui">
-  <div id="hud" class="pill"><span><span id="spd">0</span><small>km/h</small></span><span id="sH" class="st on">HULL 100</span><span id="sA" class="st on">APFSDS 20</span><span id="sM" class="st">MG 2000</span><span id="sK" class="st">SMOKE 2</span><span id="rng">0 m</span><span id="sC" class="st">CMDR</span></div>
+  <div id="hud" class="pill"><span><span id="spd">0</span><small>km/h</small></span><span id="sH" class="st on">HULL 100</span><span id="sA" class="st on">APFSDS 20</span><span id="sM" class="st">MG 2000</span><span id="sK" class="st">SMOKE 2</span><span id="sD" class="st">DRONE 5</span><span id="rng">0 m</span><span id="sC" class="st">CMDR</span></div>
   <div id="wave" class="pill">WAVE 1 · 0 KILLS</div>
   <canvas id="map" width="176" height="176"></canvas>
   <div id="over" class="modal"><div class="card pill"><h2 id="ovT"></h2><div id="ovP"></div><button class="go" id="ovGo">Restart (R)</button></div></div>
@@ -103,7 +103,7 @@ kbd{margin:0 1px}
     <button class="btn" id="bDn"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>DOWN</button>
     <button class="btn" id="bUp"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>UP</button>
   </div>
-  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>H</kbd> help</div>
+  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>X</kbd> drone · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
   <div id="help" class="modal"><div class="card pill">
@@ -116,6 +116,7 @@ kbd{margin:0 1px}
       <b><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></b><span>APFSDS (armour) · HEAT-MP (multi-purpose) · HE (soft targets, big blast)</span>
       <b><kbd>Space</kbd></b><span>Coaxial MG3</span>
       <b><kbd>G</kbd></b><span>Smoke grenades — breaks the enemy's line of sight</span>
+      <b><kbd>X</kbd></b><span>Launch an FPV drone (5 per game): mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. Scout with it, or fly into a vehicle and press the left button to detonate its warhead. <kbd>X</kbd> again returns to the tank (the drone is lost). The tank stands still and exposed meanwhile</span>
       <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd></b><span>Time of day · snowfall · free-fly camera</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
       <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight · ✕ MG · ○ smoke · □ ammo · △ camera · Options menu</span>

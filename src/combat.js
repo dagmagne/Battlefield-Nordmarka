@@ -1,10 +1,11 @@
 // Weapons, projectiles, effects, enemy AI and the wave game.
 // Everything is preallocated in initCombat(); update() and its helpers allocate nothing per frame.
 import { clamp } from './math.js';
-import { tankParts, gunMat, LEO, T72, BMP } from './tank.js';
+import { tankParts, droneParts, gunMat, LEO, T72, BMP } from './tank.js';
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
 export const MAXE = 10, MAXG = 760;
+const DRONES = 5, DRONE_T = 75, DRONE_V = 26, DRONE_R = 1500; // drones per game, battery (s), top speed (m/s), radio range (m)
 const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
 // shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade
 const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0]];
@@ -14,6 +15,8 @@ export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
   const S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
+  const D = G.drone = { on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES;
+  let fireWas = false, fireBlock = false;
   let sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i] });
   const map = typeof document !== 'undefined' && document.getElementById('map'), mctx = map && map.getContext ? map.getContext('2d') : null;
@@ -231,6 +234,7 @@ export function initCombat(C) {
     ui.set('sH', 'HULL ' + hp, 'st ' + (hp > 60 ? 'on' : hp > 30 ? 'warn' : 'bad'));
     ui.set('sA', AMMO[G.sel].name + ' ' + G.n[G.sel], 'st ' + (G.n[G.sel] ? 'on' : 'bad'));
     ui.set('sM', 'MG ' + lastMg, 'st'); ui.set('sK', 'SMOKE ' + G.smokeN, 'st');
+    ui.set('sD', D.on ? 'DRONE ' + D.sec + ' s' : 'DRONE ' + G.drones, 'st' + (D.on ? (D.sec > 15 ? ' on' : ' warn') : ''));
     ui.set('wave', G.peace ? 'FREE ROAM' : (G.wave ? 'WAVE ' + G.wave + (G.won ? '' : '/' + WAVES) : 'STAND BY') + ' · ' + G.kills + ' KILLS · ' + G.score);
   }
   function drawMap() {
@@ -238,12 +242,14 @@ export function initCombat(C) {
     c.clearRect(0, 0, Wd, Wd);
     c.strokeStyle = '#ffffff30'; c.lineWidth = 1; c.beginPath(); c.arc(cx, cx, 500 * sc, 0, 6.283); c.stroke();
     c.fillStyle = '#ffffff90'; c.fillRect(cx - 0.5, 3, 1, 6);
-    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || Math.abs(e.x - veh.x) > 900 || Math.abs(e.z - veh.z) > 900) continue; // datalink: everything within 900 m is plotted
-      const x = clamp(cx + (e.x - veh.x) * sc, 4, Wd - 4), y = clamp(cx + (e.z - veh.z) * sc, 4, Wd - 4);
+    const mx = D.on ? D.x : veh.x, mz = D.on ? D.z : veh.z; // the map follows the drone while it flies
+    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || Math.abs(e.x - mx) > 900 || Math.abs(e.z - mz) > 900) continue; // datalink: everything within 900 m is plotted
+      const x = clamp(cx + (e.x - mx) * sc, 4, Wd - 4), y = clamp(cx + (e.z - mz) * sc, 4, Wd - 4);
       c.fillStyle = e.dead ? '#59606a' : e.type ? '#ff9a3d' : '#ff4a3a'; if (e.type) c.fillRect(x - 2.5, y - 2.5, 5, 5); else { c.beginPath(); c.arc(x, y, 3.6, 0, 6.283); c.fill(); } }
-    const a = veh.yaw, t = veh.yaw + veh.turYaw;
-    c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(cx, cx); c.lineTo(cx - Math.sin(t) * 26, cx - Math.cos(t) * 26); c.stroke();
-    c.fillStyle = '#7dffb0'; c.beginPath(); c.moveTo(cx - Math.sin(a) * 7, cx - Math.cos(a) * 7); c.lineTo(cx - Math.sin(a + 2.5) * 5, cx - Math.cos(a + 2.5) * 5); c.lineTo(cx - Math.sin(a - 2.5) * 5, cx - Math.cos(a - 2.5) * 5); c.fill();
+    const a = veh.yaw, t = veh.yaw + veh.turYaw, vx = clamp(cx + (veh.x - mx) * sc, 6, Wd - 6), vy = clamp(cx + (veh.z - mz) * sc, 6, Wd - 6);
+    c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx - Math.sin(t) * 26, vy - Math.cos(t) * 26); c.stroke();
+    c.fillStyle = '#7dffb0'; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7, vy - Math.cos(a) * 7); c.lineTo(vx - Math.sin(a + 2.5) * 5, vy - Math.cos(a + 2.5) * 5); c.lineTo(vx - Math.sin(a - 2.5) * 5, vy - Math.cos(a - 2.5) * 5); c.fill();
+    if (D.on) { const q = D.yaw; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(cx - Math.sin(q) * 8, cx - Math.cos(q) * 8); c.lineTo(cx - Math.sin(q + 2.4) * 5, cx - Math.cos(q + 2.4) * 5); c.lineTo(cx - Math.sin(q - 2.4) * 5, cx - Math.cos(q - 2.4) * 5); c.fill(); }
   }
 
   // ---------- per-frame update ----------
@@ -253,7 +259,8 @@ export function initCombat(C) {
     // main gun
     if (G.rl > 0 && !veh.dead) { G.rl -= dt; if (G.rl <= 0) { G.rl = 0; } }
     R.reload = 1 - G.rl / RELOAD; dryT -= dt;
-    if (inp.fire && !veh.dead && !R.pose) {
+    if (!inp.fire) fireBlock = false;
+    if (inp.fire && !veh.dead && !R.pose && !D.on && !fireBlock) {
       if (G.n[G.sel] <= 0) { if (dryT <= 0) { dryT = 1.5; ui.toast('Out of ' + AMMO[G.sel].name); } }
       else if (G.rl <= 0) {
         G.n[G.sel]--; G.rl = RELOAD; hudDirty = true;
@@ -302,6 +309,7 @@ export function initCombat(C) {
     G.flash[7] *= 1 - Math.min(1, dt * 11);
     R.hitT = Math.max(0, (R.hitT || 0) - dt); R.hurtT = Math.max(0, (R.hurtT || 0) - dt * 1.6);
     if (veh.immob > 0) { veh.immob -= dt; if (veh.immob <= 0) ui.toast('Track repaired'); }
+    updateDrone(dt); fireWas = inp.fire;
     if (hudDirty) hud();
     mapT -= dt; if (mapT <= 0 && !R.simOnly) { mapT = 0.2; drawMap(); }
   };
@@ -313,9 +321,44 @@ export function initCombat(C) {
       fire(0, 6, T[0] * lx + T[4] * ly + T[8] * lz + T[12], T[1] * lx + T[5] * ly + T[9] * lz + T[13], T[2] * lx + T[6] * ly + T[10] * lz + T[14], dx, 0.57, dz, 24 + (k % 4) * 3, 0.03, 1.15 + rnd() * 0.2); }
     ui.toast('Smoke!');
   };
+  // ---------- FPV drone: recon and a one-way attack with a shaped charge ----------
+  function droneEnd(msg) { D.on = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; if (msg) ui.toast(msg); }
+  function droneBoom() {
+    explode(D.x, D.y, D.z, 1.9); splash(D.x, D.y, D.z, 4, 115, 140, 0);
+    const d = Math.hypot(veh.x - D.x, veh.y + 1 - D.y, veh.z - D.z); if (d < 6.5) hurtPlayer(35 * clamp(1 - (d - 2.5) / 4, 0, 1), 1, false);
+    droneEnd(null);
+  }
+  function updateDrone(dt) {
+    if (!D.on) return;
+    if (veh.dead) { droneEnd('Drone link lost'); return; }
+    D.t -= dt; D.spin += dt * 95;
+    const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * 2.6);
+    D.vx += ((fx * inp.mvZ + rx * inp.mvX) * DRONE_V - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * DRONE_V - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * DRONE_V - D.vz) * k;
+    D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y += D.vy * dt; D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);
+    D.tp += (-inp.mvZ * 0.38 - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * 0.38 - D.tr) * Math.min(1, dt * 5); // lean into the motion
+    const gh = hAt(D.x, D.z); let boom = inp.fire && !fireWas;
+    if (D.y < gh + 0.35) { if (Math.hypot(D.vx, D.vy, D.vz) > 9) boom = true; else { D.y = gh + 0.35; D.vy = Math.max(0, D.vy); } }
+    if (D.y < gh + 8 && C.collAt(D.x, D.z)) boom = true;
+    for (let i = 0; i < MAXE && !boom; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, D.x, D.y, D.z)) boom = true; }
+    if (boom) { droneBoom(); return; }
+    if (D.t <= 0) { droneEnd('Drone battery empty — lost'); return; }
+    if (Math.hypot(D.x - veh.x, D.z - veh.z) > DRONE_R) { droneEnd('Drone out of radio range — lost'); return; }
+    const sec = Math.ceil(D.t); if (sec !== D.sec) { D.sec = sec; hudDirty = true; }
+    droneParts(C.dobj, D); C.dobj[131] = 1;
+  }
+  // X: launch a drone from the turret roof, or cut the link to the one in the air (it is lost)
+  G.droneKey = () => {
+    if (D.on) { droneEnd('Drone link cut — back in the tank'); return; }
+    if (veh.dead || cam.mode === 3) return;
+    if (G.drones <= 0) { ui.toast('No drones left'); return; }
+    G.drones--; Object.assign(D, { on: true, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: -0.12, t: DRONE_T, spin: 0, tp: 0, tr: 0, sec: DRONE_T });
+    cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
+    ui.toast('Drone away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank');
+  };
   G.restart = () => {
     for (const e of G.enemies) e.on = false; S.fill(0); CL.fill(0);
-    Object.assign(G, { sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
+    D.on = false; if (cam.mode === 4) cam.mode = 0;
+    Object.assign(G, { drones: DRONES, sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;
     R.snap = true; hudDirty = true; ui.over(null); ui.toast('Stand by — contact expected from the north');
   };

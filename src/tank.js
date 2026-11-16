@@ -251,6 +251,29 @@ export function buildBMP() {
   return b.build();
 }
 
+// ---------- FPV drone with an anti-tank warhead slung underneath (about 0.75 m across) ----------
+// parts: 0 airframe, 1..4 rotors
+export function buildDrone() {
+  const b = new MB(), DARK = [0.03, 0.031, 0.034], GREY = [0.12, 0.125, 0.13], OLV = [0.05, 0.06, 0.035];
+  b.part = 0; b.set(DARK, MAT.paint);
+  b.box(-0.085, 0, -0.17, 0.085, 0.06, 0.17, 0.01, 0.01); b.set(GREY, MAT.metal); b.box(-0.06, 0.06, -0.09, 0.06, 0.11, 0.12); // frame, battery
+  b.set(DARK, MAT.metal); b.box(-0.035, 0.03, -0.215, 0.035, 0.09, -0.17); b.set([0.02, 0.035, 0.05], MAT.glass); poly(b, [[-0.025, 0.04, -0.216], [0.025, 0.04, -0.216], [0.025, 0.08, -0.216], [-0.025, 0.08, -0.216]], [0, 0.06, 0]); // camera
+  b.set([1, 0.05, 0.02], MAT.head); poly(b, [[-0.02, 0.02, 0.171], [0.02, 0.02, 0.171], [0.02, 0.045, 0.171], [-0.02, 0.045, 0.171]], [0, 0.03, 0]);
+  b.set(DARK, MAT.metal); b.cyl(0.05, 0.11, 0.1, 0.07, 0.3, 0.14, 0.006, 0.003, 4);
+  for (let i = 0; i < 4; i++) { const px = i & 1 ? 0.3 : -0.3, pz = i & 2 ? 0.3 : -0.3;
+    b.part = 0; b.set(DARK, MAT.paint); b.cyl(px * 0.2, 0.03, pz * 0.4, px, 0.03, pz, 0.018, 0.016, 6); b.set(GREY, MAT.metal); b.cyl(px, 0.01, pz, px, 0.07, pz, 0.036, 0.03, 10);
+    b.part = i + 1; b.set(DARK, MAT.rubber); b.box(px - 0.2, 0.072, pz - 0.018, px + 0.2, 0.08, pz + 0.018); b.box(px - 0.018, 0.072, pz - 0.2, px + 0.018, 0.08, pz + 0.2); }
+  // warhead: shaped charge with its nose cone, strapped under the frame
+  b.part = 0; b.set(OLV, MAT.rus); b.cyl(0, -0.065, 0.14, 0, -0.065, -0.08, 0.05, 0.05, 12); b.cyl(0, -0.065, -0.08, 0, -0.065, -0.3, 0.05, 0.012, 12); b.cyl(0, -0.065, 0.14, 0, -0.065, 0.24, 0.022, 0.022, 8);
+  b.set(DARK, MAT.rubber); for (const z of [-0.04, 0.09]) b.box(-0.055, -0.12, z - 0.01, 0.055, 0.005, z + 0.01);
+  return b.build();
+}
+export function droneParts(out, d) { // d: {x,y,z,yaw,tp,tr,spin}
+  trs(BM, d.x, d.y, d.z, d.yaw, d.tp, d.tr); out.set(BM, 0);
+  for (let i = 0; i < 4; i++) { const px = i & 1 ? 0.3 : -0.3, pz = i & 2 ? 0.3 : -0.3;
+    trs(T1, px, 0, pz, d.spin * (i === 0 || i === 3 ? 1 : -1), 0, 0); identity(T2); T2[12] = -px; T2[14] = -pz; mul(T3, T1, T2); mul(TM, BM, T3); out.set(TM, 16 * (i + 1)); }
+}
+
 // part matrices: 0 hull, 1 turret (yaw about the ring), 2 gun (pitch about the trunnion, recoil along the bore)
 const T1 = new Float32Array(16), T2 = new Float32Array(16), T3 = new Float32Array(16), BM = new Float32Array(16), TM = new Float32Array(16), GM = new Float32Array(16);
 export function tankParts(out, t, K) { // out: Float32Array(16*8), t: {x,y,z,yaw,pitch,roll,turYaw,gunPitch,recoil}

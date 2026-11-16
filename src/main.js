@@ -16,7 +16,7 @@ import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
-import { buildLeopard, buildT72, buildBMP, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
+import { buildLeopard, buildT72, buildBMP, buildDrone, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
 import { initCombat, MAXE, MAXG } from './combat.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
@@ -178,7 +178,7 @@ async function main() {
     device.queue.writeBuffer(u, 0, d);
     return { vb: mkBuf(mesh.v, U.VERTEX), ib: mkBuf(mesh.i, U.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
-  const groomer = mkObj(buildLeopard());
+  const groomer = mkObj(buildLeopard()), droneO = mkObj(buildDrone());
   const props = mkObj(buildProps(W));
   // enemy vehicles: two shared meshes, one uniform block (part matrices) per slot
   const eMesh = [buildT72(), buildBMP()].map((m) => ({ vb: mkBuf(m.v, U.VERTEX), ib: mkBuf(m.i, U.INDEX), n: m.i.length }));
@@ -463,18 +463,19 @@ async function main() {
 
   // ---------- UI ----------
   const TODN = ['Midday', 'Golden hour', 'Blue hour', 'Night'];
-  const CAMT = ['Commander view', 'Gunner sight', '', 'Free-fly camera'];
+  const CAMT = ['Commander view', 'Gunner sight', '', 'Free-fly camera', 'Drone'];
   let ui = null;
   function setCam(m) {
     if (m === 3 && cam.mode !== 3) { cam.prevMode = cam.mode; cam.yaw = Math.atan2(view[2], view[10]); cam.pitch = Math.asin(clamp(-view[6], -1, 1)); }
     cam.mode = m; R.snap = true; ui.toast(CAMT[m] + (m === 3 && !isTouch ? ' — click to look' : ''));
   }
   const api = {
-    cam() { setCam(cam.mode === 0 ? 1 : 0); },
+    cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
+    drone() { if (R.game) R.game.droneKey(); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
     restart() { if (R.game) R.game.restart(); },
-    fly() { setCam(cam.mode === 3 ? cam.prevMode : 3); },
+    fly() { if (cam.mode !== 4) setCam(cam.mode === 3 ? cam.prevMode : 3); },
     isFly: () => cam.mode === 3,
     snow(v) { R.snow = v === undefined ? 1 - R.snow : v; ui.toast(R.snow ? 'Snowfall on' : 'Snowfall off'); },
     tod(i) { if (i < 0) i = (todIndex + 1) % 4; setTod(i); tshDirty = 2; ui.toast(TODN[i]); },
@@ -485,7 +486,7 @@ async function main() {
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY, collAt, turM, gunM, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY, collAt, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
 
   // ---------- state ----------
@@ -578,13 +579,13 @@ async function main() {
   const AMMO_V = 1650;
   function updateAim(dt) {
     if (R.aimAt) { const q = R.aimAt, ax = q[0] - cam.x, ay = q[1] - cam.y, az = q[2] - cam.z; aim.yaw = Math.atan2(-ax, -az); aim.pitch = Math.atan2(ay, Math.hypot(ax, az)); } // scripted tests
-    else if (cam.mode !== 3 && !R.pose && !veh.dead) {
+    else if (cam.mode < 3 && !R.pose && !veh.dead) {
       const sens = (isTouch ? 0.006 : 0.0028) * cam.fovNow;
       aim.yaw -= inp.lookX * sens; aim.pitch = clamp(aim.pitch - inp.lookY * sens, -0.5, 0.75);
     }
     const cp = Math.cos(aim.pitch), dx = -Math.sin(aim.yaw) * cp, dy = Math.sin(aim.pitch), dz = -Math.cos(aim.yaw) * cp;
     aim.dx = dx; aim.dy = dy; aim.dz = dz;
-    const ox = R.frame < 3 ? veh.x : cam.x, oy = R.frame < 3 ? veh.y + 4 : cam.y, oz = R.frame < 3 ? veh.z : cam.z;
+    const own = R.frame < 3 || cam.mode >= 3, ox = own ? veh.x : cam.x, oy = own ? veh.y + 3.5 : cam.y, oz = own ? veh.z : cam.z; // free-fly and drone cameras do not move the sight line
     let t = 8, tp = 8, hit = false;
     while (t < 3500) { if (oy + dy * t < W.heightAt(ox + dx * t, oz + dz * t)) { hit = true; break; } tp = t; t += Math.max(2, t * 0.035); }
     if (hit) for (let i = 0; i < 7; i++) { const m = (t + tp) / 2; if (oy + dy * m < W.heightAt(ox + dx * m, oz + dz * m)) t = m; else tp = m; }
@@ -621,7 +622,13 @@ async function main() {
     const sens = isTouch ? 0.006 : 0.0045, sight = cam.mode === 1 || (inp.sight && cam.mode === 0);
     if (sight && cam.mode === 0) cam.mode = 1; else if (cam.mode === 1 && cam.held && !inp.sight) cam.mode = 0;
     cam.held = inp.sight;
-    if (cam.mode === 3) {
+    if (cam.mode === 4) { // FPV drone: the mouse turns it, the camera trails just behind and above
+      const D = game.drone; D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.3, 1.1);
+      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
+      const ex = D.x - fx * 2.3, ez = D.z - fz * 2.3, ey = Math.max(D.y - fy * 2.3 + 0.55, W.heightAt(ex, ez) + 0.4), k = R.snap ? 1 : Math.min(1, dt * 18); R.snap = false;
+      cam.x += (ex - cam.x) * k; cam.y += (ey - cam.y) * k; cam.z += (ez - cam.z) * k;
+      lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy - 0.06, cam.z + fz, 0, 1, 0);
+    } else if (cam.mode === 3) {
       cam.yaw -= inp.lookX * sens * 0.7; cam.pitch = clamp(cam.pitch - inp.lookY * sens * 0.7, -1.5, 1.5);
       const cp = Math.cos(cam.pitch), fx = -Math.sin(cam.yaw) * cp, fy = Math.sin(cam.pitch), fz = -Math.cos(cam.yaw) * cp, sp = (inp.fast ? 70 : 14) * dt;
       cam.x = clamp(cam.x + (fx * inp.mvZ + Math.cos(cam.yaw) * inp.mvX) * sp, -1950, 1950); cam.z = clamp(cam.z + (fz * inp.mvZ - Math.sin(cam.yaw) * inp.mvX) * sp, -1950, 1950);
@@ -671,7 +678,7 @@ async function main() {
   function tickFrame(dt, raw) {
     R.time += dt; R.frame++;
     if (updateTod(dt)) tshDirty = 2;
-    ui.poll(cam.mode === 3);
+    ui.poll(cam.mode === 3 ? 1 : cam.mode === 4 ? 2 : 0);
     updateAim(dt);
     simulate(dt);
     hullM.set(tankParts(groomer.d, veh, LEO)); turM.set(turMat()); gunM.set(gunMat());
@@ -687,7 +694,7 @@ async function main() {
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
     const rw = Math.max(8, Math.round(R.w * R.scale)), rh = Math.max(8, Math.round(R.h * R.scale));
-    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * cam.fovNow;
+    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * cam.fovNow * (cam.mode === 4 ? 1.25 : 1);
     perspRZ(proj, fovy, rw / rh, 0.25);
     mul(vp, proj, view); invert(ivp, vp);
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
@@ -702,6 +709,7 @@ async function main() {
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[130] = veh.dead ? Math.min(1, (game.burnP || 0) * 0.5) : 0; groomer.d[131] = 1;
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
+    const droneOn = game.drone.on; if (droneOn) device.queue.writeBuffer(droneO.u, 0, droneO.d);
     for (let i = 0; i < MAXE; i++) if (game.enemies[i].on) device.queue.writeBuffer(eObj[i].u, 0, eObj[i].d);
     if (game.fxN) device.queue.writeBuffer(fxBuf, 0, game.fx, 0, game.fxN * 12);
     for (let i = 0; i < game.blastN; i++) { const o = i * 16, b = game.blasts, x = b[i * 4], z = b[i * 4 + 1], r = b[i * 4 + 2], d = blData;
@@ -734,6 +742,7 @@ async function main() {
       const sp = enc.beginRenderPass(shPass[c]);
       sp.setBindGroup(0, shBG[c]);
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
+      if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!NP) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n); }
       sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3);
@@ -744,6 +753,7 @@ async function main() {
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
     if (cam.mode !== 1 || R.pose) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
+    if (droneOn) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!NP) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
     p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4);
@@ -774,7 +784,7 @@ async function main() {
     }
     const fu = pUData[NB * 2]; fu[0] = sx; fu[1] = sy; fu[2] = 1 / R.w; fu[3] = 1 / R.h; fu[4] = expo; fu[5] = 0.1; fu[6] = R.manual ? 0.37 : R.time; fu[7] = R.scale < 0.99 ? 1 : 0;
     const hudOn = cam.mode !== 3 && !R.pose && !R.nohud;
-    fu[8] = aim.sx; fu[9] = aim.sy; fu[10] = R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
+    fu[8] = cam.mode === 4 ? 9 : aim.sx; fu[9] = aim.sy; fu[10] = R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
     device.queue.writeBuffer(pU[NB * 2], 0, fu);
     finalPass.colorAttachments[0].view = ctx.getCurrentTexture().createView();
     const fp = enc.beginRenderPass(finalPass); fp.setPipeline(finalPipe); fp.setBindGroup(0, finalBG); fp.draw(3); fp.end();
@@ -784,7 +794,7 @@ async function main() {
     if (ri >= 0) { ts.busy[ri] = true; ts.rb[ri].mapAsync(GPUMapMode.READ).then(ts.cb[ri]); }
 
     drs(raw); if (raw * 1000 > R.ftMax) R.ftMax = raw * 1000;
-    ui.hud(Math.min(199, Math.round(Math.abs(veh.v) * 3.6)), cam.mode, Math.round(aim.range / 10) * 10);
+    ui.hud(Math.min(199, Math.round((cam.mode === 4 ? Math.hypot(game.drone.vx, game.drone.vy, game.drone.vz) : Math.abs(veh.v)) * 3.6)), cam.mode, Math.round(aim.range / 10) * 10);
     if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}`); R.ftMax = 0; }
     if (perf && !perf.done) {
       perf.t += raw; if (perf.t > 2 && perf.n < 20000) perf.dt[perf.n++] = raw * 1000;
