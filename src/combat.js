@@ -56,7 +56,7 @@ export function initCombat(C) {
     for (let k = 1; k < n; k++) {
       const f = k / n, x = x0 + dx * f, y = y0 + dy * f, z = z0 + dz * f, g = hAt(x, z);
       if (y < g + 0.4) return true;
-      if (y < g + 10) { const i = clamp(((x + HALF) / WS * HN) | 0, 0, HN - 1), j = clamp(((z + HALF) / WS * HN) | 0, 0, HN - 1); can += W.nrm[(j * HN + i) * 4 + 2] * st; if (can > 9500) return true; }
+      if (R.trees && y < g + 10) { const i = clamp(((x + HALF) / WS * HN) | 0, 0, HN - 1), j = clamp(((z + HALF) / WS * HN) | 0, 0, HN - 1); can += W.nrm[(j * HN + i) * 4 + 2] * st; if (can > 9500) return true; }
     }
     for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1 || CL[o + 3] < 1.2 || CL[o + 3] > 22) continue;
       const t = clamp(((CL[o] - x0) * dx + (CL[o + 1] - y0) * dy + (CL[o + 2] - z0) * dz) / (d * d), 0, 1); if (Math.hypot(x0 + dx * t - CL[o], y0 + dy * t - CL[o + 1], z0 + dz * t - CL[o + 2]) < 10) return true; }

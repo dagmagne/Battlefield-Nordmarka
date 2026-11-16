@@ -206,7 +206,7 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let L = G.sunDir.xyz;
   let ndl = dot(n, L);
   let ndv = saturate(dot(n, v));
-  let canopy = nt.b;
+  let canopy = nt.b * (1.0 - G.lod2.y); // lod2.y = 1 when trees are switched off in the menu
   var sh = shadowSunS(wp, nb, dist, 1) * terrainShadow(p, 0.3);
   sh *= mix(1.0, G.misc.w, saturate(canopy * 1.6) * smoothstep(G.casc.z * 0.6, G.casc.z, dist));
   let gd2 = p - G.groom.xz;

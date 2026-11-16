@@ -69,6 +69,7 @@ async function main() {
   }
   const Q = TIERS[tierName]; R.Q = Q; R.scale = Q.scale;
   R.drs = qs.get('drs') !== '0' && store.gdrs !== '0';
+  R.trees = !qs.has('notrees') && store.gtrees !== '0'; // menu option: trees off = not drawn, not solid, no canopy shade, no cover
 
   const canvas = $('c'), ctx = canvas.getContext('webgpu');
   const cfmt = navigator.gpu.getPreferredCanvasFormat();
@@ -481,8 +482,9 @@ async function main() {
     tod(i) { if (i < 0) i = (todIndex + 1) % 4; setTod(i); tshDirty = 2; ui.toast(TODN[i]); },
     debug(v) { R.debug = v === undefined ? !R.debug : !!v; ui.setDebug(R.debug); },
     quality(v) { try { localStorage.gq = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('q'); location.href = u.href; },
+    trees(v) { R.trees = !!v; try { localStorage.gtrees = v ? '1' : '0'; } catch (e) { /* ignore */ } ui.toast(v ? 'Trees on' : 'Trees off'); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, drs: R.drs, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees` }),
+    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, drs: R.drs, trees: R.trees, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
@@ -507,6 +509,7 @@ async function main() {
   function collide() {
     const C = W.colliders;
     for (let i = 0; i < C.length; i += 3) { const dx = veh.x - C[i], dz = veh.z - C[i + 1], rr = C[i + 2] + LEO.rad, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = (rr - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
+    if (!R.trees) return;
     const cx = Math.floor((veh.x + HALF) / NEAR), cz = Math.floor((veh.z + HALF) / NEAR), T = TT.data;
     for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) {
       if (i < 0 || j < 0 || i >= NCN || j >= NCN) continue;
@@ -707,7 +710,7 @@ async function main() {
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
     GU[O.camPos] = cam.x; GU[O.camPos + 1] = cam.y; GU[O.camPos + 2] = cam.z; GU[O.camPos + 3] = R.time;
     writeTod(GU, O);
-    GU[O.groom] = veh.x; GU[O.groom + 1] = veh.y; GU[O.groom + 2] = veh.z; GU[O.lod2] = Q.casc === 3 ? 1 : 0; GU[O.lod2 + 3] = cam.mode === 0 && !R.pose ? 1.5 : 0;
+    GU[O.groom] = veh.x; GU[O.groom + 1] = veh.y; GU[O.groom + 2] = veh.z; GU[O.lod2] = Q.casc === 3 ? 1 : 0; GU[O.lod2 + 1] = R.trees ? 0 : 1; GU[O.lod2 + 3] = cam.mode === 0 && !R.pose ? 1.5 : 0;
     GU[O.misc + 1] = R.snowAmt; GU[O.screen] = rw; GU[O.screen + 1] = rh; GU[O.groom + 3] = 0; gunMarker();
     if (R.snowAmt > 0.01) { const k = 1 - 0.55 * R.snowAmt; GU[O.sunCol] *= k; GU[O.sunCol + 1] *= k; GU[O.sunCol + 2] *= k; GU[O.fogCol + 3] *= 1 + 5 * R.snowAmt; GU[O.skyHor + 3] = Math.min(1.6, GU[O.skyHor + 3] + R.snowAmt); }
     updateCascades(rw / rh, fovy);
@@ -752,7 +755,7 @@ async function main() {
       if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!NP) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n); }
-      sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3);
+      if (R.trees) { sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3); }
       sp.end();
     }
     const p = enc.beginRenderPass(mainPass);
@@ -763,7 +766,7 @@ async function main() {
     if (droneOn) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!NP) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n); }
-    p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4);
+    if (R.trees) { p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4); }
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
     for (let l = 0; l < NL; l++) {
       p.setBindGroup(1, lvBG[l]);
