@@ -146,7 +146,9 @@ async function main() {
   const tv = new Float32Array((N + 1) * (N + 1) * 2);
   for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) { tv[(j * (N + 1) + i) * 2] = i; tv[(j * (N + 1) + i) * 2 + 1] = j; }
   const mkIdx = (hole) => {
-    const a = [], lo = N / 4 + 1, hi = 3 * N / 4 - 1;
+    // The hole in each coarser ring is one cell smaller than the finer level on every side. With an exact shared edge on one side,
+    // NVIDIA (D3D12) left single-pixel cracks along that seam; the outer 4 fine cells are fully morphed to the coarse grid, so the overlap coincides.
+    const a = [], lo = N / 4 + 2, hi = 3 * N / 4 - 2;
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       if (hole && i >= lo && i <= hi && j >= lo && j <= hi) continue;
       const v = j * (N + 1) + i;

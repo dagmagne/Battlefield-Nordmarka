@@ -23,6 +23,7 @@ fn S(uv: vec2f) -> vec3f { return textureSampleLevel(src, smp, min(uv * U.a.xy, 
   let J = S(uv + t * vec2f(-1.0, -1.0)); let K = S(uv + t * vec2f(1.0, -1.0)); let Ll = S(uv + t * vec2f(-1.0, 1.0)); let M = S(uv + t * vec2f(1.0, 1.0));
   var c = E * 0.125 + (A + C + Gg + I) * 0.03125 + (B + D + F + Hh) * 0.0625 + (J + K + Ll + M) * 0.125;
   if (U.b.w > 0.5) { // first pass: soft knee + firefly clamp
+    c = clamp(c, vec3f(0.0), vec3f(4096.0));
     let l = max(c.r, max(c.g, c.b));
     c *= smoothstep(0.7, 2.2, l * U.b.x) ;
     c = min(c, vec3f(24.0 / U.b.x));
@@ -58,7 +59,7 @@ fn thermalView(uv: vec2f, fp: vec2f, bloom: f32) -> vec3f {
   return mix(mix(vec3f(0.0, 0.035, 0.012), vec3f(0.5, 1.0, 0.55), v), vec3f(v * 0.95 + 0.02), grey) * (1.0 - dot(q, q) * 0.5);
 }
 @fragment fn fsFinal(in: PO) -> @location(0) vec4f {
-  var c = S(in.uv);
+  var c = clamp(S(in.uv), vec3f(0.0), vec3f(4096.0)); // also drops NaN / inf from a bad pixel instead of letting it flash
   let bl = textureSampleLevel(src2, smp, in.uv, 0.0).rgb;
   let q = in.uv - 0.5;
   if (U.b.w > 0.5) { c = thermalView(in.uv, in.pos.xy, bl.r); } else {

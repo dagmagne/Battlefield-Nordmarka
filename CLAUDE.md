@@ -90,6 +90,7 @@ For larger visual milestones, run a **critic subagent that sees only the renders
 - A vehicle hit box is thin where hull and turret meet; main-gun shells are sub-stepped every 0.6 m (MG 1.5 m). Coarser steps let rounds pass through the roofline.
 - The sight ray ranges on a generous sphere around each enemy (`aimHit`), so a displayed range does not mean the round will hit; scripted tests should aim with `__aimAt` at a point inside the hull.
 - Work queued for the renderer during logic-only steps (`__sim`) must survive until a frame is drawn: `blastN` is cleared by the renderer, not by `update`.
+- First run on an NVIDIA card (D3D12) showed a line of flickering black and white single pixels with bloom halos in the snow. Suspected cause: the clipmap rings met on an exact shared edge on one side, and rounding opened pixel cracks to the background. The rings now overlap by a cell on every side (`mkIdx`), and `post.wgsl` clamps HDR values so a NaN or inf pixel cannot flash. Not confirmed on the card that showed it.
 - Never append a `//` comment in the middle of a one-line statement chain in `world.js`: it silently swallows the statements after it (this removed the whole road mask once).
 - Object materials all have some specular, so a "black" surface in direct sun renders mid-grey. Use `MAT.void` for openings that must stay dark.
 - Props that sit on the ground get darkened by the `hAbove` contact term per height texel, which shows as a 2 m staircase on large flat faces; flat snow faces (`MAT.snow`, facing up) skip it.
