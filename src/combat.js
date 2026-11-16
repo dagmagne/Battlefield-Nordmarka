@@ -154,9 +154,9 @@ export function initCombat(C) {
     for (let k = 0; k < 260; k++) {
       const ti = (rnd() * trails.length) | 0, t = trails[ti]; if (t.n < 30) continue;
       const i = 4 + ((rnd() * (t.n - 8)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
-      if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 420) continue;
+      if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380) continue;
       let ok = true; for (const q of G.enemies) if (q.on && Math.hypot(q.x - x, q.z - z) < 45) { ok = false; break; } if (!ok) continue;
-      const sc = (d > 600 && d < 1250 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 600–1250 m away and to the north
+      const sc = (d > 480 && d < 900 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 480–900 m away and to the north
       if (sc > best) { best = sc; bx = x; bz = z; bp = ti; bi = i; }
       if (best > 3.6) break;
     }
@@ -238,7 +238,7 @@ export function initCombat(C) {
     c.clearRect(0, 0, Wd, Wd);
     c.strokeStyle = '#ffffff30'; c.lineWidth = 1; c.beginPath(); c.arc(cx, cx, 500 * sc, 0, 6.283); c.stroke();
     c.fillStyle = '#ffffff90'; c.fillRect(cx - 0.5, 3, 1, 6);
-    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || (!e.dead && e.known <= 0)) continue;
+    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || Math.abs(e.x - veh.x) > 900 || Math.abs(e.z - veh.z) > 900) continue; // datalink: everything within 900 m is plotted
       const x = clamp(cx + (e.x - veh.x) * sc, 4, Wd - 4), y = clamp(cx + (e.z - veh.z) * sc, 4, Wd - 4);
       c.fillStyle = e.dead ? '#59606a' : e.type ? '#ff9a3d' : '#ff4a3a'; if (e.type) c.fillRect(x - 2.5, y - 2.5, 5, 5); else { c.beginPath(); c.arc(x, y, 3.6, 0, 6.283); c.fill(); } }
     const a = veh.yaw, t = veh.yaw + veh.turYaw;
@@ -284,7 +284,9 @@ export function initCombat(C) {
       if (G.state === 0) { G.timer -= dt; if (G.timer <= 0) { G.wave++; const n = Math.min(2 + G.wave, MAXE - 3);
         for (const e of G.enemies) if (e.on && e.dead && Math.hypot(e.x - veh.x, e.z - veh.z) > 500) e.on = false; // recycle distant wrecks
         let made = 0; for (let i = 0; i < n; i++) if (spawn(i > 0 && rnd() < 0.4 ? 1 : 0)) made++;
-        G.state = 1; hudDirty = true; ui.toast(`Wave ${G.wave}: ${made} vehicles approaching`); } }
+        G.state = 1; hudDirty = true; let ax = 0, az = 0; for (const e of G.enemies) if (e.on && !e.dead) { ax += e.x - veh.x; az += e.z - veh.z; }
+        const br = ((Math.atan2(ax, -az) * 57.296 + 360) % 360), dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+        ui.toast(`Wave ${G.wave}: ${made} vehicles from the ${dirs[Math.round(br / 45) % 8]}, ~${Math.round(Math.hypot(ax, az) / made / 50) * 50} m — see the map`); } }
       else if (alive === 0) { G.state = 0; G.timer = 9; G.score += 150 * G.wave; hudDirty = true;
         for (let i = 0; i < 3; i++) G.n[i] = Math.min(AMMO[i].max, G.n[i] + [7, 4, 3][i]); G.mg = Math.min(2000, G.mg + 500); G.smokeN = Math.min(2, G.smokeN + 1); veh.hp = Math.min(100, veh.hp + 25);
         if (G.wave === WAVES && !G.won) { G.won = true; ui.over('Nordmarka held', `All ${WAVES} waves beaten · ${G.kills} vehicles destroyed · score ${G.score}. Press R to start over, or close this and keep fighting.`, true); }
