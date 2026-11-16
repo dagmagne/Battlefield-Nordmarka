@@ -1,11 +1,11 @@
 // Software-WebGPU screenshot helper for containers without a GPU (headless Chromium + SwiftShader). Slow; use small sizes.
-// usage: node tools/cshot.mjs out.png "query" [--w 960 --h 620 --frames 4 --eval "js"] ; several "out query" pairs may be given with --multi
+// usage: node tools/cshot.mjs out.png "query" [--w 960 --h 620 --frames 4 --port 8080 --touch --eval "js"] ; several "out query" pairs may be given with --multi
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 let chromium; try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = require('playwright-core')); }
 const a = process.argv.slice(2);
 const opt = (k, d) => { const i = a.indexOf('--' + k); return i < 0 ? d : a[i + 1]; };
-const w = +opt('w', 960), h = +opt('h', 620), frames = +opt('frames', 4), ev = opt('eval', '');
+const w = +opt('w', 960), h = +opt('h', 620), frames = +opt('frames', 4), ev = opt('eval', ''), port = +opt('port', 8080); // --port: serve a second checkout on another port
 const jobs = []; for (let i = 0; i < a.length && !a[i].startsWith('--'); i += 2) jobs.push([a[i], a[i + 1] || '']);
 const browser = await chromium.launch({ args: ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--enable-features=Vulkan,SkiaGraphite', '--use-vulkan=swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
 let errs = 0;
@@ -14,7 +14,7 @@ for (const [out, query] of jobs) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: touch, isMobile: touch });
   page.on('console', (m) => { const t = m.type(); if (t === 'error' || t === 'warning') { console.log(`[${t}]`, m.text().slice(0, 1200)); if (t === 'error') errs++; } });
   page.on('pageerror', (e) => { console.log('[pageerror]', String(e.stack || e).slice(0, 1200)); errs++; });
-  await page.goto(`http://localhost:8080/index.html?${query}`);
+  await page.goto(`http://localhost:${port}/index.html?${query}`);
   try {
     await page.waitForFunction('window.__ready===true', null, { timeout: 180000 });
     await page.evaluate((n) => window.__step(1 / 60, n), frames);

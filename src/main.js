@@ -528,7 +528,9 @@ async function main() {
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY, collAt, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
+  const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
 
   // ---------- state ----------
