@@ -136,7 +136,8 @@ export function initCombat(C) {
       if (S[o + 8] <= 0 && type === 6) { smokeBurst(x1, y1, z1); continue; }
       S[o] = x1; S[o + 1] = y1; S[o + 2] = z1;
       const T = TRACE[type], nd = T[4]; // tracer: a dotted streak over this frame's travel
-      for (let k = 0; k < nd; k++) { const f = 1 - k / nd * Math.min(1, 22 / len); glow(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, z0 + (z1 - z0) * f, T[3] * (1 - k / nd * 0.6), T[0], T[1], T[2]); }
+      const ts = T[3] * (1 + Math.hypot(x1 - cam.x, y1 - cam.y, z1 - cam.z) * 0.011); // keep tracers a few pixels wide at range
+      for (let k = 0; k < nd; k++) { const f = 1 - k / nd * Math.min(1, 22 / len); glow(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, z0 + (z1 - z0) * f, ts * (1 - k / nd * 0.6), T[0], T[1], T[2]); }
     }
   }
 
@@ -247,7 +248,7 @@ export function initCombat(C) {
 
   // ---------- per-frame update ----------
   G.update = (dt) => {
-    G.fxN = 0; G.blastN = 0;
+    G.fxN = 0; // (blastN is cleared by the renderer once the scorch stamps are drawn)
     const gM = C.gunM;
     // main gun
     if (G.rl > 0 && !veh.dead) { G.rl -= dt; if (G.rl <= 0) { G.rl = 0; } }

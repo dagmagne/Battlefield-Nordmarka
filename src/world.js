@@ -225,6 +225,7 @@ export async function genWorld(tick, Q, startAt) {
   await tick('Computing normals', 0.62);
 
   const kickers = []; // (the turbo-mode lake kickers were removed with the groomer)
+  { let L = null; for (const l of lakes) if (Math.abs(l.x) < PLAY - 150 && Math.abs(l.z) < PLAY - 150 && (!L || l.area > L.area)) L = l; W.playLake = L; } // biggest lake in reach: open ground for the test scenes
   await tick('Computing normals', 0.64);
 
   // ---- normals ----

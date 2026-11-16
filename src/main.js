@@ -577,7 +577,8 @@ async function main() {
   // sight line -> aim point (terrain ray march), then slew turret and gun towards the ballistic solution
   const AMMO_V = 1650;
   function updateAim(dt) {
-    if (cam.mode !== 3 && !R.pose && !veh.dead) {
+    if (R.aimAt) { const q = R.aimAt, ax = q[0] - cam.x, ay = q[1] - cam.y, az = q[2] - cam.z; aim.yaw = Math.atan2(-ax, -az); aim.pitch = Math.atan2(ay, Math.hypot(ax, az)); } // scripted tests
+    else if (cam.mode !== 3 && !R.pose && !veh.dead) {
       const sens = (isTouch ? 0.006 : 0.0028) * cam.fovNow;
       aim.yaw -= inp.lookX * sens; aim.pitch = clamp(aim.pitch - inp.lookY * sens, -0.5, 0.75);
     }
@@ -615,6 +616,7 @@ async function main() {
     const w = vp[3] * px + vp[7] * py + vp[11] * pz + vp[15];
     if (w > 0.1) { aim.sx = (vp[0] * px + vp[4] * py + vp[8] * pz + vp[12]) / w; aim.sy = (vp[1] * px + vp[5] * py + vp[9] * pz + vp[13]) / w; } else { aim.sx = 9; aim.sy = 9; }
   }
+  const chaseP = new Float32Array(5);
   function updateCamera(dt, BM) {
     const sens = isTouch ? 0.006 : 0.0045, sight = cam.mode === 1 || (inp.sight && cam.mode === 0);
     if (sight && cam.mode === 0) cam.mode = 1; else if (cam.mode === 1 && cam.held && !inp.sight) cam.mode = 0;
@@ -642,6 +644,7 @@ async function main() {
       lookAt(view, cam.x + Math.sin(t * 37) * sk, cam.y + Math.sin(t * 43 + 1) * sk, cam.z + Math.sin(t * 29 + 2) * sk, cam.x + aim.dx, cam.y + aim.dy, cam.z + aim.dz, 0, 1, 0);
     }
     inp.lookX = inp.lookY = inp.zoom = 0;
+    if (R.chase) { const q = R.chase, cp = Math.cos(q[1]), P = chaseP; P[0] = veh.x + Math.sin(veh.yaw + q[0]) * cp * q[2]; P[1] = veh.y + 1.6 + Math.sin(q[1]) * q[2]; P[2] = veh.z + Math.cos(veh.yaw + q[0]) * cp * q[2]; P[3] = veh.yaw + q[0]; P[4] = -q[1]; R.pose = P; }
     if (R.pose) { const q = R.pose; cam.x = q[0]; cam.y = q[1]; cam.z = q[2]; const cp = Math.cos(q[4]); lookAt(view, q[0], q[1], q[2], q[0] - Math.sin(q[3]) * cp, q[1] + Math.sin(q[4]), q[2] - Math.cos(q[3]) * cp, 0, 1, 0); }
   }
   function setLight(o, BM, lx, ly, lz, dx, dy, dz, range, outer, inner, r, g, b) {
@@ -724,7 +727,7 @@ async function main() {
     }
     if (stN || game.blastN) { const sp = enc.beginRenderPass(stampPass);
       if (stN) { sp.setPipeline(stampPipe); sp.setVertexBuffer(0, stBuf); sp.draw(6, stN); }
-      if (game.blastN) { sp.setPipeline(blastPipe); sp.setVertexBuffer(0, blBuf); sp.draw(6, game.blastN); }
+      if (game.blastN) { sp.setPipeline(blastPipe); sp.setVertexBuffer(0, blBuf); sp.draw(6, game.blastN); game.blastN = 0; }
       sp.end(); }
     for (let c = 0; c < NC; c++) {
       if (skipCasc(c)) continue;
@@ -803,10 +806,11 @@ async function main() {
   window.__step = (dt, n = 1) => { R.manual = true; for (let i = 0; i < n; i++) tickFrame(dt, dt); return device.queue.onSubmittedWorkDone(); };
   window.__sim = (dt, n = 1) => { R.manual = true; R.simOnly = true; for (let i = 0; i < n; i++) tickFrame(dt, dt); R.simOnly = false; };
   window.__info = () => `tier=${Q.name} ${R.w}x${R.h} scale=${R.scale.toFixed(2)} trees=${W.trees.count} draws=${draws} gpu=${R.gpuMs.toFixed(2)}ms ft=${R.ft.toFixed(2)}`;
-  window.__pose = (q, tod) => { R.pose = q; if (tod) { setTod(tod - 1, true); tshDirty = 1; } };
-  window.__look = (ex, eh, ez, tx, th, tz) => { const ey = W.heightAt(ex, ez) + eh, ty = W.heightAt(tx, tz) + th, dx = tx - ex, dy = ty - ey, dz = tz - ez; R.pose = [ex, ey, ez, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))]; };
-  window.__chase = (yaw, pitch, dist) => { R.pose = null; const cp = Math.cos(pitch), ty = veh.y + 1.6; R.pose = [veh.x + Math.sin(veh.yaw + yaw) * cp * dist, ty + Math.sin(pitch) * dist, veh.z + Math.cos(veh.yaw + yaw) * cp * dist, veh.yaw + yaw, -pitch]; };
-  window.__aim = (yaw, pitch, mode) => { R.pose = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
+  window.__pose = (q, tod) => { R.chase = null; R.pose = q; if (tod) { setTod(tod - 1, true); tshDirty = 1; } };
+  window.__look = (ex, eh, ez, tx, th, tz) => { R.chase = null; const ey = W.heightAt(ex, ez) + eh, ty = W.heightAt(tx, tz) + th, dx = tx - ex, dy = ty - ey, dz = tz - ez; R.pose = [ex, ey, ez, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))]; };
+  window.__chase = (yaw, pitch, dist) => { R.chase = [yaw, pitch, dist]; }; // fixed third-person test camera that follows the hull
+  window.__aimAt = (x, y, z) => { R.aimAt = x === undefined ? null : [x, y, z]; };
+  window.__aim = (yaw, pitch, mode) => { R.pose = null; R.chase = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
   window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; stInit = false; R.snap = true; };
   Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
