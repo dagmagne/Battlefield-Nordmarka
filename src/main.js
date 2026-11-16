@@ -222,7 +222,8 @@ async function main() {
   const treeVB = mkBuf(TM.v, U.VERTEX), treeIB = mkBuf(TM.i, U.INDEX), treeInst = mkBuf(W.trees.data, U.VERTEX);
   const treeBufs = [{ arrayStride: 40, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }] },
     { arrayStride: 32, stepMode: 'instance', attributes: [{ shaderLocation: 3, offset: 0, format: 'float32x4' }, { shaderLocation: 4, offset: 16, format: 'float32x4' }] }];
-  const treeMod = mod(common + treeDefW + treeW, 'tree');
+  // ?tfs=0 (diagnostics): flat-colour tree fragments, to separate shading cost from geometry cost
+  const treeMod = mod(common + treeDefW + (qs.get('tfs') === '0' ? treeW.replace(/let wp\s*=\s*in\.wp;/, 'if (G.lod2.z > -1.0) { return vec4f(0.05, 0.09, 0.05, 1.0); } let wp = in.wp;') : treeW), 'tree');
   const treePipe = device.createRenderPipeline({
     layout: lay01, vertex: { module: treeMod, entryPoint: 'vs', buffers: treeBufs }, fragment: { module: treeMod, entryPoint: 'fs', targets: [{ format: HDR }] },
     primitive: { cullMode: 'none' }, depthStencil: depthGE, multisample: { count: Q.msaa, alphaToCoverageEnabled: Q.msaa > 1 },
@@ -268,10 +269,13 @@ async function main() {
     const sb = maxLod === 4 ? 0 : 4; // triangle statistics: [0..3] main pass per LOD, [4..6] shadow passes per LOD
     const ccx = Math.floor((cam.x + HALF) / NEAR), ccz = Math.floor((cam.z + HALF) / NEAR), rad = Math.ceil(LOD[1] / 0.85 * (1 + BAND) / NEAR) + 1;
     const i0 = Math.max(0, ccx - rad), i1 = Math.min(NCN - 1, ccx + rad), j0 = Math.max(0, ccz - rad), j1 = Math.min(NCN - 1, ccz + rad);
+    const cfx = clamp(Math.floor((cam.x + HALF) / FAR), 0, FCN - 1), cfz = clamp(Math.floor((cam.z + HALF) / FAR), 0, FCN - 1);
     for (let l = simple ? 1 : 0; l < 2; l++) { // simple shadows: the mid model casts for every near tree
       p.setBindGroup(1, lodBG[simple ? 4 : l]);
       const lo = l && !simple ? LOD[0] / 1.15 * (1 - BAND) : -1, hi = LOD[l] / 0.85 * (1 + BAND);
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      // nearest cells first (square rings around the camera), so closer trees fill the depth buffer before farther ones are shaded
+      for (let r = 0; r <= rad; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r, stp = dj === -r || dj === r ? 1 : 2 * r; di <= r; di += stp) {
+        const i = ccx + di, j = ccz + dj; if (i < i0 || i > i1 || j < j0 || j > j1) continue;
         const nc = j * NCN + i, y0 = TT.nearY[nc * 2], y1 = TT.nearY[nc * 2 + 1]; if (y1 < y0) continue;
         const x0 = i * NEAR - HALF, z0 = j * NEAR - HALF, dh = Math.hypot(x0 + 16 - cam.x, z0 + 16 - cam.z);
         const dy = cam.y > y1 ? cam.y - y1 : cam.y < y0 ? y0 - cam.y : 0, dyM = Math.max(Math.abs(cam.y - y0), Math.abs(cam.y - y1));
@@ -286,8 +290,9 @@ async function main() {
       p.setBindGroup(1, lodBG[l]);
       const lo = LOD[l - 1] / 1.15 * (1 - BAND), hi = l === 2 ? LOD[2] / 0.85 * (1 + BAND) : 1e9, P = simple ? TP[7] : TP[4 + l]; // simple shadows: the farthest model casts for everything past the near cells
       const thin = l === 3 && R.treeQ === 2 && thinInst; if (thin) p.setVertexBuffer(1, thinInst);
-      for (let fc = 0; fc < FCN * FCN; fc++) {
-        const c = thin ? thinCnt[fc] : TT.farCnt[fc]; if (!c) continue;
+      for (let r = 0; r < FCN; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r, stp = dj === -r || dj === r ? 1 : 2 * r; di <= r; di += stp) { // near to far, as above
+        const fi = cfx + di, fj = cfz + dj; if (fi < 0 || fj < 0 || fi >= FCN || fj >= FCN) continue;
+        const fc = fj * FCN + fi, c = thin ? thinCnt[fc] : TT.farCnt[fc]; if (!c) continue;
         const x0 = (fc % FCN) * FAR - HALF, z0 = ((fc / FCN) | 0) * FAR - HALF, y0 = TT.farY[fc * 2], y1 = TT.farY[fc * 2 + 1];
         const dh = Math.hypot(x0 + 64 - cam.x, z0 + 64 - cam.z), dmin = Math.max(0, dh - 91), dmax = dh + 91 + Math.abs(cam.y - y0);
         if (dmin >= hi || dmax <= lo) continue;
@@ -695,10 +700,11 @@ async function main() {
     GU[o + 8] = r; GU[o + 9] = g; GU[o + 10] = b; GU[o + 11] = inner;
   }
   // dynamic resolution
-  let dAcc = 0, dN = 0, dCeil = 9, dCeilT = 0, dUp = false;
+  let slowN = 0, dAcc = 0, dN = 0, dCeil = 9, dCeilT = 0, dUp = false;
   function drs(raw) {
     dAcc += raw; dN++; if (dN < 20) return;
     const ft = dAcc / dN * 1000; dAcc = 0; dN = 0; R.ft = ft;
+    if (ft > 40 && !R.manual && R.frame > 200) { if (++slowN === 12) ui.toast('Low frame rate — open MENU and lower Quality or Trees'); } else if (slowN < 12) slowN = 0;
     if (!R.drs || R.manual) return;
     let s = R.scale; dCeilT -= 1; if (dCeilT <= 0) dCeil = 9;
     if (ts && R.gpuMs > 0) { const load = R.gpuMs / 13.0; if (load > 1) s *= Math.max(0.86, 1 / Math.sqrt(load)); else if (load < 0.7 && ft < 18.5) s *= 1.03; if (ft > 24 && load > 0.8) s *= 0.95; }
