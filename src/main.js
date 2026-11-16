@@ -22,6 +22,7 @@ import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { Particles } from './particles.js';
 import { initUI, inp } from './ui.js';
+import { initAudio } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
@@ -523,8 +524,9 @@ async function main() {
     debug(v) { R.debug = v === undefined ? !R.debug : !!v; ui.setDebug(R.debug); },
     quality(v) { try { localStorage.gq = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('q'); location.href = u.href; },
     trees(v) { R.treeSel = v; R.trees = v !== 'off'; if (R.trees) setTreeQ(TREEQ.indexOf(v)); try { localStorage.gtrees = v; } catch (e) { /* ignore */ } ui.toast('Trees: ' + v); },
+    sound(v) { const on = v === undefined ? !audio.on : !!v; audio.setOn(on); try { localStorage.gsnd = on ? '1' : '0'; } catch (e) { /* ignore */ } ui.toast(on ? 'Sound on' : 'Sound off'); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
+    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
@@ -532,6 +534,8 @@ async function main() {
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
   const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
+  let sndOn = !qs.has('mute'); try { if (localStorage.gsnd === '0') sndOn = false; } catch (e) { /* ignore */ }
+  const audio = initAudio({ R, cam, veh, view, game, on: sndOn }); window.__audio = audio;
 
   // ---------- state ----------
   veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z);
@@ -744,6 +748,7 @@ async function main() {
     cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
     emitParticles(dt, BM);
     const pn = parts.update(dt, W.heightAt, 1.3, 0.5);
+    audio.update(dt);
     if (R.simOnly) return; // logic-only step for scripted tests (window.__sim)
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
