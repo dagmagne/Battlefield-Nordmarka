@@ -64,11 +64,11 @@ fn fbm3(p: vec2f) -> f32 { return vn(p) * 0.55 + vn(p * 2.13 + 7.7) * 0.3 + vn(p
 
 // ---------- sky ----------
 fn skyBase(d: vec3f) -> vec3f {
-  let h = max(d.y, 0.0);
+  let h = clamp(d.y, 0.0, 1.0); // pow() of a negative base is NaN on NVIDIA (D3D): keep every base in [0, 1]
   var c = mix(G.skyZen.rgb, G.skyHor.rgb, pow(1.0 - h, 5.0));
   let sd = G.skySun.xyz;
   let cs = max(dot(d, sd), 0.0);
-  let az = dot(normalize(d.xz + vec2f(1e-5, 0.0)), normalize(sd.xz + vec2f(1e-5, 0.0))) * 0.5 + 0.5;
+  let az = saturate(dot(normalize(d.xz + vec2f(1e-5, 0.0)), normalize(sd.xz + vec2f(1e-5, 0.0))) * 0.5 + 0.5); // rounding took this just below 0 looking exactly away from the sun
   c += G.fogSun.rgb * (pow(az, 3.0) * pow(1.0 - h, 9.0) * 0.8 + pow(cs, 10.0) * 0.3 + pow(cs, 90.0) * 0.6);
   return c;
 }
