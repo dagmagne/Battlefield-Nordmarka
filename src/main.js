@@ -54,6 +54,9 @@ async function main() {
   try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { /* fallthrough */ }
   if (!adapter) return fail('No compatible graphics adapter was found (WebGPU may be disabled or the GPU blocklisted). Supported setups:');
   const wantTS = adapter.features.has('timestamp-query');
+  // which GPU the browser actually gave us (laptops with two GPUs often hand out the integrated one)
+  let gpuName = ''; try { const gi = adapter.info || (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : null); if (gi) gpuName = [gi.vendor, gi.architecture, gi.description || gi.device].filter(Boolean).join(' '); } catch (e) { /* not exposed */ }
+  R.gpuName = gpuName || 'unknown GPU';
   const device = await adapter.requestDevice({ requiredFeatures: wantTS ? ['timestamp-query'] : [] });
   device.lost.then((i) => { if (i.reason !== 'destroyed') fail('The graphics device was lost (' + i.message + '). Reload the page to continue.'); });
   device.addEventListener('uncapturederror', (e) => console.error('GPU: ' + e.error.message));
@@ -513,7 +516,7 @@ async function main() {
     quality(v) { try { localStorage.gq = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('q'); location.href = u.href; },
     trees(v) { R.treeSel = v; R.trees = v !== 'off'; if (R.trees) setTreeQ(TREEQ.indexOf(v)); try { localStorage.gtrees = v; } catch (e) { /* ignore */ } ui.toast('Trees: ' + v); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees` }),
+    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
@@ -835,7 +838,7 @@ async function main() {
 
     drs(raw); if (raw * 1000 > R.ftMax) R.ftMax = raw * 1000;
     ui.hud(Math.min(199, Math.round((cam.mode === 4 ? Math.hypot(game.drone.vx, game.drone.vy, game.drone.vz) : Math.abs(veh.v)) * 3.6)), cam.mode, Math.round(aim.range / 10) * 10);
-    if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}\ntree tris ${((triStat[0] + triStat[1] + triStat[2] + triStat[3]) / 1e6).toFixed(2)}M + shadow ${((triStat[4] + triStat[5] + triStat[6]) / 1e6).toFixed(2)}M`); R.ftMax = 0; }
+    if (R.debug && (dbgT += raw) > 0.5) { dbgT = 0; ui.dbgText(`${(1000 / R.ft).toFixed(0)} fps  ${R.ft.toFixed(1)} ms (max ${R.ftMax.toFixed(0)})\ngpu ${R.gpuMs ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'}\ntier ${Q.name}  scale ${(R.scale * 100).toFixed(0)}%\n${rw}×${rh} → ${R.w}×${R.h}  msaa ${Q.msaa}\ndraws ${draws}  particles ${pn}\n${R.gpuName}  trees ${R.treeSel}\ntree tris ${((triStat[0] + triStat[1] + triStat[2] + triStat[3]) / 1e6).toFixed(2)}M + shadow ${((triStat[4] + triStat[5] + triStat[6]) / 1e6).toFixed(2)}M`); R.ftMax = 0; }
     if (perf && !perf.done) {
       perf.t += raw; if (perf.t > 2 && perf.n < 20000) perf.dt[perf.n++] = raw * 1000;
       if (perf.t > 62) { perf.done = true; const st = (a, n) => { const s = Array.from(a.subarray(0, n)).sort((x, y) => x - y); return n ? { avg: +(s.reduce((x, y) => x + y, 0) / n).toFixed(2), p50: +s[n >> 1].toFixed(2), p99: +s[Math.floor(n * 0.99)].toFixed(2), max: +s[n - 1].toFixed(2), n } : null; };
