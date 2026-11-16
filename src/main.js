@@ -68,7 +68,9 @@ async function main() {
   if (!TIERS[tierName]) {
     pref = 'auto';
     const mem = navigator.deviceMemory || 4, small = Math.min(screen.width, screen.height) < 380;
-    tierName = isTouch ? (mem < 4 || small ? 'low' : 'medium') : 'high';
+    // integrated Intel graphics cannot carry the high tier (measured: gen-12lp, 6 fps on high, 23 on low)
+    const igpu = /intel/i.test(gpuName) ? (/gen-?\d/i.test(gpuName) ? 'low' : /lp/i.test(gpuName) ? 'medium' : '') : '';
+    tierName = isTouch ? (mem < 4 || small ? 'low' : 'medium') : igpu || 'high';
   }
   const Q = TIERS[tierName]; R.Q = Q; R.scale = Q.scale;
   R.drs = qs.get('drs') !== '0' && store.gdrs !== '0';
