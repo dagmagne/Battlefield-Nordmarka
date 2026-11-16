@@ -224,22 +224,7 @@ export async function genWorld(tick, Q, startAt) {
   const roadAt = (x, z) => mat[(clamp(Math.round(w2t(z)), 0, HN - 1) * HN + clamp(Math.round(w2t(x)), 0, HN - 1)) * 4 + 1] / 255;
   await tick('Computing normals', 0.62);
 
-  // ---- snow kickers on the biggest lake in reach (turbo mode playground), lips along the lake's long axis ----
-  const kickers = [];
-  { let L = null; for (const l of lakes) if (Math.abs(l.x) < PLAY - 150 && Math.abs(l.z) < PLAY - 150 && (!L || l.area > L.area)) L = l;
-    if (L) for (const [f, side, kh] of [[-0.28, 0.5, 1.8], [-0.02, -0.5, 2.6], [0.22, 0.4, 2.1]]) {
-      const kx = L.x + L.ax * f * L.len - L.az * side * 12, kz = L.z + L.az * f * L.len + L.ax * side * 12, RL = 5 + kh * 2.6;
-      if (W.lakeAt(kx - L.ax * (RL + 4), kz - L.az * (RL + 4)) < 0.9 || W.lakeAt(kx + L.ax * 8, kz + L.az * 8) < 0.9) continue;
-      kickers.push({ x: kx, z: kz, h: kh, yaw: Math.atan2(-L.ax, -L.az) });
-      const R = RL + 10, i0 = Math.floor(w2t(kx - R)), i1 = Math.ceil(w2t(kx + R)), j0 = Math.floor(w2t(kz - R)), j1 = Math.ceil(w2t(kz + R));
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-        const k = j * HN + i, dx = (i + 0.5) * TEX - HALF - kx, dz = (j + 0.5) * TEX - HALF - kz, s = dx * L.ax + dz * L.az, t = Math.abs(-dx * L.az + dz * L.ax);
-        const pr = s <= 0 ? Math.max(0, (s + RL) / RL) ** 2.2 : 1 - smooth(0, 4.5, s), w = 1 - smooth(4.2, 7.5, t);
-        const add = kh * pr * w * (0.92 + 0.08 * pn(s * 0.3, t * 0.3));
-        if (add > 0.01) { H[k] = Math.max(H[k], L.lv + add); mat[k * 4] = Math.max(9, mat[k * 4] * (1 - smooth(0.02, 0.4, add))); }
-      }
-    }
-    W.playLake = L; }
+  const kickers = []; // (the turbo-mode lake kickers were removed with the groomer)
   await tick('Computing normals', 0.64);
 
   // ---- normals ----

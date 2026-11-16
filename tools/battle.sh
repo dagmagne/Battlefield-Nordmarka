@@ -1,14 +1,13 @@
 #!/bin/sh
-# Container check of the combat visuals: tank models, a hit and the wreck on the open lake. usage: tools/battle.sh outdir [tier]
-# (software WebGPU through tools/cshot.mjs; each frame takes several seconds)
+# Container check of the combat visuals on the open lake (software WebGPU through tools/cshot.mjs; several seconds per frame).
+# usage: tools/battle.sh outdir [tier]   -> models, gunner sight, a kill, the wreck, smoke screen, driving
 out=${1:-shots/battle}; q=${2:-medium}; mkdir -p "$out"
-SETUP='const P=__W.PLAY-150, L=__W.lakes.filter((l)=>Math.abs(l.x)<P&&Math.abs(l.z)<P).sort((a,b)=>b.area-a.area)[0]; window.L=L; __tp(L.x-40,L.z,-1.57); const g=__game; g.spawn(0); g.spawn(1); const e=g.enemies[0], b=g.enemies[1]; Object.assign(e,{x:L.x+50,z:L.z-6,yaw:0.5,path:-1,immob:true}); Object.assign(b,{x:L.x+42,z:L.z+26,yaw:2.2,path:-1,immob:true}); __sim(1/60,30);'
 node tools/cshot.mjs "$out/b.png" "w=frogner&nohint&q=$q&drs=0&np&peace" --frames 2 --eval "
-$SETUP __look(L.x+32,2.2,L.z+10,L.x+50,1.2,L.z-6); 1 ||
-__look(L.x+30,2.5,L.z+34,L.x+42,1.2,L.z+26); 1 ||
-__R.pose=null; __ui.poll=()=>{}; const e=__game.enemies[0]; __aim(Math.atan2(-(e.x-__veh.x),-(e.z-__veh.z)),-0.028); __sim(1/60,200); __inp.fire=true; __sim(1/60,2); __inp.fire=false; [__aimS.range,__aimS.ready,__game.n[0]] ||
-__sim(1/60,3); __look(L.x+20,4,L.z+22,L.x+50,1.5,L.z-6); [__game.enemies[0].hp,__game.fxN] ||
-__game.ammo(2); __sim(1/60,400); __R.pose=null; __inp.fire=true; __sim(1/60,2); __inp.fire=false; __sim(1/60,5); __look(L.x+20,4,L.z+22,L.x+50,1.5,L.z-6); [__game.enemies[0].hp,__game.enemies[0].dead,__game.kills] ||
-__sim(1/60,150); 1 ||
-__R.pose=null; __aim(-1.2,0.05,0); __game.smoke(); __sim(1/60,240); 1
-" 2>&1 | tail -12
+const P=__W.PLAY-150, L=__W.lakes.filter((l)=>Math.abs(l.x)<P&&Math.abs(l.z)<P).sort((a,b)=>b.area-a.area)[0]; __tp(L.x-L.ax*110,L.z-L.az*110,0); __ui.poll=()=>{}; const g=__game; g.spawn(0); g.spawn(1); const e=g.enemies[0], b=g.enemies[1]; window.E=e; window.B=b; Object.assign(e,{x:L.x+L.ax*110,z:L.z+L.az*110,yaw:1,path:-1,immob:true}); Object.assign(b,{x:e.x+22,z:e.z+14,yaw:2.4,path:-1,immob:true}); __sim(1/60,20); __look(E.x-9,2.2,E.z+15,E.x,1.2,E.z); 1 ||
+__look(B.x-10,2.4,B.z+9,B.x,1.2,B.z); 1 ||
+__R.pose=null; __aim(Math.atan2(-(E.x-__veh.x),-(E.z-__veh.z)),-0.0079,1); __cam.zoom=1; __sim(1/60,220); [__aimS.range,__aimS.ready] ||
+__inp.fire=true; __sim(1/60,2); __inp.fire=false; __sim(1/60,7); __cam.zoom=0; [__game.kills, E.hp] ||
+__sim(1/60,360); __cam.mode=0; __look(E.x+14,3,E.z+16,E.x,1.5,E.z); 1 ||
+__R.pose=null; __aim(__aimS.yaw+0.6,0.02,0); __sim(1/60,60); __game.smoke(); __sim(1/60,420); 1 ||
+__R.force=[1,0]; __sim(1/60,240); __look(__veh.x+9,2.2,__veh.z-14,__veh.x,1,__veh.z); __veh.v
+" 2>&1 | tail -10

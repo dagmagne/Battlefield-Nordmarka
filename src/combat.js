@@ -63,7 +63,7 @@ export function initCombat(C) {
   function inside(t, K, x, y, z) {
     const dx = x - t.x, dz = z - t.z; if (dx * dx + dz * dz > 22) return 0;
     const dy = y - t.y, c = Math.cos(t.yaw), s = Math.sin(t.yaw), lx = c * dx - s * dz, lz = s * dx + c * dz;
-    if (dy > K.hh && dy < K.th && lx * lx + (lz - K.tz) * (lz - K.tz) < K.tr * K.tr) return 2;
+    if (dy > K.hh - 0.06 && dy < K.th && lx * lx + (lz - K.tz) * (lz - K.tz) < K.tr * K.tr) return 2;
     return dy > 0.15 && dy <= K.hh && Math.abs(lx) < 1.86 && Math.abs(lz) < 3.75 ? 1 : 0;
   }
   const face = (t, yaw, vx, vz) => { const l = Math.hypot(vx, vz) || 1, d = (-Math.sin(yaw) * vx - Math.cos(yaw) * vz) / l; return d < -0.62 ? 0 : d > 0.62 ? 2 : 1; };
@@ -116,7 +116,7 @@ export function initCombat(C) {
       S[o + 8] -= dt;
       const type = S[o + 6], owner = S[o + 7], x0 = S[o], y0 = S[o + 1], z0 = S[o + 2], vx = S[o + 3], vz = S[o + 5];
       const vy = S[o + 4] - GRAV * dt * 0.5; S[o + 4] -= GRAV * dt;
-      const x1 = x0 + vx * dt, y1 = y0 + vy * dt, z1 = z0 + vz * dt, len = Math.hypot(vx, vy, vz) * dt, n = clamp(Math.ceil(len / 1.7), 2, 18);
+      const x1 = x0 + vx * dt, y1 = y0 + vy * dt, z1 = z0 + vz * dt, len = Math.hypot(vx, vy, vz) * dt, n = type === 3 ? clamp(Math.ceil(len / 1.5), 2, 12) : clamp(Math.ceil(len / 0.6), 2, 48);
       let px = x0, py = y0, pz = z0, hit = false;
       for (let k = 1; k <= n && !hit; k++) {
         const f = k / n, qx = x0 + (x1 - x0) * f, qy = y0 + (y1 - y0) * f, qz = z0 + (z1 - z0) * f;
@@ -170,9 +170,9 @@ export function initCombat(C) {
     if (e.dead) { // wreck: burn, then smoulder; a thrown turret comes back down askew
       e.burn += dt; e.burnt = Math.min(1, e.burnt + dt * 0.5);
       if (e.tlV !== 0) { e.tlV -= 13 * dt; e.tl += e.tlV * dt; e.tt += dt * 2.2; e.turYaw += dt * 1.7; if (e.tl <= 0.1 && e.tlV < 0) { e.tl = 0.1; e.tlV = 0; e.tt = 0.16; explode(e.x, e.y + 1.5, e.z, 0.8); } }
-      e.emT += dt * (e.burn < 28 ? 9 : e.burn < 100 ? 3 : 0);
+      e.emT += dt * (e.burn < 28 ? 20 : e.burn < 110 ? 6 : 0);
       if (Math.hypot(e.x - cam.x, e.z - cam.z) > 700) e.emT = 0;
-      while (e.emT >= 1) { e.emT--; if (e.burn < 28 && rnd() < 0.6) parts.emit(e.x + sr() * 1.6, e.y + 1.5 + rnd(), e.z + sr() * 2.4, sr(), 2 + rnd() * 2, sr(), 1.2 + rnd(), 0.6 + rnd() * 0.6, 1.3, 4, 0.1, 0.1, 0.1, 0.8); else parts.emit(e.x + sr() * 1.5, e.y + 2 + rnd(), e.z + sr() * 2, sr(), 2.5 + rnd() * 2, sr(), 5 + rnd() * 4, 0.9 + rnd(), 0.9, 1, 0.1, 0.1, 0.11, 0.55); }
+      while (e.emT >= 1) { e.emT--; if (e.burn < 28 && rnd() < 0.5) parts.emit(e.x + sr() * 1.8, e.y + 1.3 + rnd(), e.z + sr() * 2.6, sr(), 2 + rnd() * 2.5, sr(), 0.9 + rnd() * 0.7, 0.7 + rnd() * 0.8, 1.2, 4, 0.06, 0.06, 0.06, 0.85); else parts.emit(e.x + sr() * 1.5, e.y + 2 + rnd(), e.z + sr() * 2, sr(), 3 + rnd() * 2.5, sr(), 6 + rnd() * 4, 1.2 + rnd(), 1.15, 1, 0.045, 0.045, 0.05, 0.72); }
       if (e.burn < 28 && (R.frame & 3) === idx % 4) glow(e.x, e.y + 1.9, e.z, 2.2 + rnd(), 9, 3.5, 0.8);
     } else {
       const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz);
@@ -321,7 +321,7 @@ export function initCombat(C) {
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const cx = e.x - ox, cy = e.y + 1.3 - oy, cz = e.z - oz, b = cx * dx + cy * dy + cz * dz, q = cx * cx + cy * cy + cz * cz - b * b; if (b > 0 && q < 6.8 && b - 1.5 < t) t = b - Math.sqrt(6.8 - q) * 0.6; }
     return t;
   };
-  G.spawn = spawn; G.los = losBlocked;
+  G.spawn = spawn; G.los = losBlocked; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
   hud();
   return G;
 }

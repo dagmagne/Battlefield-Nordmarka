@@ -676,12 +676,14 @@ async function main() {
     updateGun();
     game.update(dt);
     updateCamera(dt, BM);
+    cam.sightK += ((cam.mode === 1 && !R.pose ? 1 : 0) - cam.sightK) * Math.min(1, dt * 12);
+    cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
+    emitParticles(dt, BM);
+    const pn = parts.update(dt, W.heightAt, 1.3, 0.5);
     if (R.simOnly) return; // logic-only step for scripted tests (window.__sim)
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
     const rw = Math.max(8, Math.round(R.w * R.scale)), rh = Math.max(8, Math.round(R.h * R.scale));
-    cam.sightK += ((cam.mode === 1 && !R.pose ? 1 : 0) - cam.sightK) * Math.min(1, dt * 12);
-    cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
     const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * cam.fovNow;
     perspRZ(proj, fovy, rw / rh, 0.25);
     mul(vp, proj, view); invert(ivp, vp);
@@ -713,8 +715,6 @@ async function main() {
       lvData[0] = Math.floor(cam.x / (2 * c)) * 2 * c - N / 2 * c; lvData[1] = Math.floor(cam.z / (2 * c)) * 2 * c - N / 2 * c; lvData[2] = c; lvData[3] = N;
       device.queue.writeBuffer(lvBuf[l], 0, lvData);
     }
-    emitParticles(dt, BM);
-    const pn = parts.update(dt, W.heightAt, 1.3, 0.5);
     if (pn) device.queue.writeBuffer(partBuf, 0, parts.out, 0, pn * 12);
 
     const enc = device.createCommandEncoder();
@@ -809,7 +809,7 @@ async function main() {
   window.__aim = (yaw, pitch, mode) => { R.pose = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
   window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; stInit = false; R.snap = true; };
-  Object.assign(window, { __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
+  Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none';
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();

@@ -243,20 +243,7 @@ export async function genFantasy(tick, Q) {
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * HN + i, d = Math.hypot((i + 0.5) * TEX - HALF - cabin.x, (j + 0.5) * TEX - HALF - cabin.z); const x = (i + 0.5) * TEX - HALF, z = (j + 0.5) * TEX - HALF, s = lakeS(L0, x, z); if (s >= 1) { if (d > 15) H[k] = lerp(tmp[k], H[k], smooth(55, 75, d)); H[k] = Math.min(H[k], L0.lv + 0.2 + (s - 1) * L0.rx * 0.2 + smooth(60, 75, d) * 50); } }
     }
   }
-  // ---- snow kickers on the big lake (turbo mode playground), lips facing east ----
   const kickers = [];
-  for (const [ox, oz, kh] of [[-150, 75, 1.8], [-80, 85, 2.6], [-5, 70, 2.0], [70, 90, 3.0], [140, 75, 2.2], [-110, -95, 2.4], [-20, -90, 1.6], [60, -85, 2.8]]) {
-    const kx = L0.x + ox, kz = L0.z + oz;
-    if (lakeS(L0, kx - 16, kz) > 0.85 || lakeS(L0, kx + 6, kz) > 0.85) continue;
-    kickers.push({ x: kx, z: kz, h: kh });
-    const RL = 5 + kh * 2.6, i0 = Math.floor(w2t(kx - RL - 2)), i1 = Math.ceil(w2t(kx + 8)), j0 = Math.floor(w2t(kz - 9)), j1 = Math.ceil(w2t(kz + 9));
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      const k = j * HN + i, s = (i + 0.5) * TEX - HALF - kx, t = Math.abs((j + 0.5) * TEX - HALF - kz);
-      const pr = s <= 0 ? Math.max(0, (s + RL) / RL) ** 2.2 : 1 - smooth(0, 4.5, s), w = 1 - smooth(4.2, 7.5, t);
-      const add = kh * pr * w * (0.92 + 0.08 * pn(s * 0.3, t * 0.3));
-      if (add > 0.01) { H[k] = Math.max(H[k], L0.lv + add); mat[k * 4] = Math.max(9, mat[k * 4] * (1 - smooth(0.02, 0.4, add))); }
-    }
-  }
   await tick('Computing normals', 0.68);
 
   // ---- alpine mask + normals ----
