@@ -15,7 +15,7 @@ const MAXQ = MAXI, LOST_T = 40;
 const RIF = 0, RPG = 1, ATG = 2, LDR = 3; // roles: rifleman, RPG gunner, ATGM gunner, ATGM loader (unarmed)
 const QRPG = 0, QATG = 1, QDIS = 2; // squad kinds
 const M_HIDE = 0, M_MOVE = 1, M_FIRE = 2, M_FLEE = 3; // behaviour modes
-const RUN = 4.5, WALK = 1.5, CRAWL = 0.4;
+const RUN = 4.5, WALK = 1.5, CRAWL = 0.4, RPG_N = 4; // RPG_N: rockets per RPG gunner (a gunner and his assistant carry about four)
 const RPG_V = 120, RPG_RL = 8, RPG_R = 250, RPG_G = 0.2; // rocket speed, reload (s), range (m), net gravity left after the motor (× g)
 const RIF_R = 550, ATG_R = 1500, ATG_RL = 24, ATG_V = 250, SEE_RI = 420, SEE_RA = 900, FLOOR = 0.12, HEAR = 150;
 const NIGHT = { night: 0.75 }; // observer type for playerSig: soldiers see poorly in the dark
@@ -31,7 +31,8 @@ export function initInfantry(C, G, h) {
   const HB = new Int32Array(MAXI), LT = new Float32Array(MAXI), SEE = new Float32Array(MAXI), VIS = new Float32Array(MAXI), KN = new Float32Array(MAXI), REL = new Float32Array(MAXI);
   const SPT = new Float32Array(MAXI), LOST = new Float32Array(MAXI), LX = new Float32Array(MAXI), LZ = new Float32Array(MAXI), SUP = new Float32Array(MAXI);
   const TX = new Float32Array(MAXI), TZ = new Float32Array(MAXI), EX = new Float32Array(MAXI), EY = new Float32Array(MAXI), EZ = new Float32Array(MAXI);
-  const BN = new Uint8Array(MAXI), BT = new Float32Array(MAXI), AT = new Float32Array(MAXI), MT = new Float32Array(MAXI), FT = new Float32Array(MAXI);
+  // RK: rockets an RPG gunner still carries
+  const RK = new Uint8Array(MAXI), BN = new Uint8Array(MAXI), BT = new Float32Array(MAXI), AT = new Float32Array(MAXI), MT = new Float32Array(MAXI), FT = new Float32Array(MAXI);
   // squads: kind, state (0 hidden/deploying, 1 engaged/advancing, 2 holding, 3 withdrawing), house, initial size, timer, moving fire team, stand-off, told (toast given)
   const QK = new Int8Array(MAXQ).fill(-1), QS = new Uint8Array(MAXQ), QB = new Int32Array(MAXQ).fill(-1), QI = new Uint8Array(MAXQ), QT = new Float32Array(MAXQ), QA = new Uint8Array(MAXQ), QSO = new Float32Array(MAXQ), QTD = new Uint8Array(MAXQ);
   const I = Object.assign(G.inf, { n: 0, MAXI, sq: SQ, role: RL, mode: MD, see: SEE, vis: VIS, spot: SPT, seen: SEEN, hb: HB, sup: SUP, rel: REL, qk: QK, qs: QS, qb: QB, kills: 0, rockets: 0, atgms: 0, bursts: 0, drawn: 0, hi: -1, lastBy: '' });
@@ -54,7 +55,7 @@ export function initInfantry(C, G, h) {
   function soldier(q, role, x, z, yaw) {
     const i = slot(); if (i < 0) return -1; const o = i * 8;
     d[o] = x; d[o + 1] = hAt(x, z); d[o + 2] = z; d[o + 3] = yaw; d[o + 4] = 0; d[o + 5] = 0; d[o + 6] = 0; d[o + 7] = 1;
-    SQ[i] = q; RL[i] = role; MD[i] = M_HIDE; MI[i] = q >= 0 ? QI[q]++ : 0; BP[i] = 4; SEEN[i] = 0; HB[i] = -1; LT[i] = rnd() * 0.45; SEE[i] = 0; VIS[i] = 0; KN[i] = 0;
+    RK[i] = RPG_N; SQ[i] = q; RL[i] = role; MD[i] = M_HIDE; MI[i] = q >= 0 ? QI[q]++ : 0; BP[i] = 4; SEEN[i] = 0; HB[i] = -1; LT[i] = rnd() * 0.45; SEE[i] = 0; VIS[i] = 0; KN[i] = 0;
     REL[i] = 1 + rnd() * 2; SPT[i] = 0; LOST[i] = 0; LX[i] = x; LZ[i] = z; SUP[i] = 0; TX[i] = x; TZ[i] = z; EX[i] = NaN; BN[i] = 0; BT[i] = 0; AT[i] = 0; MT[i] = 0; FT[i] = 0;
     if (i >= I.n) I.n = i + 1; return i;
   }
@@ -287,7 +288,7 @@ export function initInfantry(C, G, h) {
       const known = SEE[i] >= 1 || KN[i] > 0; if (known) d[o + 3] += wrap(Math.atan2(-dx, -dz) - d[o + 3]) * Math.min(1, dt * 3);
       let pose = SUP[i] > 1.5 && HB[i] < 0 ? 4 : BP[i]; if (md === M_FIRE && known && pose === 0) pose = 5;
       const can = SEE[i] >= 1 && VIS[i] > 0 && !G.peace && !veh.dead && SUP[i] < 3, q = SQ[i];
-      if (role === RPG && can && dist < RPG_R && REL[i] <= 0) { pose = 7; AT[i] += dt; if (AT[i] >= 1.2) { rocket(i, dist); REL[i] = RPG_RL * (0.9 + rnd() * 0.2); AT[i] = 0; FT[i] = 0.7; } }
+      if (role === RPG && can && dist < RPG_R && REL[i] <= 0 && RK[i] > 0) { pose = 7; AT[i] += dt; if (AT[i] >= 1.2) { rocket(i, dist); RK[i]--; REL[i] = RPG_RL * (0.9 + rnd() * 0.2); AT[i] = 0; FT[i] = 0.7; if (!RK[i]) { HB[i] = -1; EX[i] = NaN; flee(i, 60 + rnd() * 40); } } } // out of rockets: the gunner pulls back
       else if (role === ATG && can && VIS[i] > 0.1 && dist < ATG_R && REL[i] <= 0) { pose = 3; AT[i] += dt; if (AT[i] >= 2) { missile(i); REL[i] = ATG_RL * (0.9 + rnd() * 0.3); AT[i] = 0; } }
       else if (role === RIF && can && dist < RIF_R && (md === M_FIRE || (q >= 0 && QS[q] > 0))) { if (pose === 0) pose = 5;
         if (BN[i] > 0) { BT[i] -= dt; if (BT[i] <= 0) { BT[i] = 0.11; BN[i]--; rifle(i, dist); } }
