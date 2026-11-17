@@ -551,7 +551,7 @@ async function main() {
   R.game = game; R.aimHit = game.aimHit;
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
-  let sndOn = qs.has('sound'); try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
+  let sndOn = true; /* on by default; a stored choice (M or the menu) and ?mute win */ try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
   if (qs.has('mute')) sndOn = false;
   const audio = initAudio({ R, cam, veh, view, game, on: sndOn, rec: REC, recM: RECM }); window.__audio = audio;
 
