@@ -65,7 +65,7 @@ export function initSupport(C, G, h) {
       if (!droneAim()) { ui.toast('No target — point the drone camera at the ground'); return; }
       call(P[0], P[2], 'drone');
     } else if (cam.mode < 3) {
-      if (Math.hypot(aim.x - veh.x, aim.z - veh.z) > MAXR - 1) { ui.toast('No target — lay the sight on the ground'); return; }
+      if (!aim.hit || Math.hypot(aim.x - veh.x, aim.z - veh.z) > MAXR - 1) { ui.toast('No target — lay the sight on the ground'); return; } // a sight on the sky has no ground point
       call(aim.x, aim.z, 'sight');
     }
   }

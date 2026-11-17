@@ -54,7 +54,7 @@ const GU = new Float32Array(188);
 const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, therm: 0, thAll: false, gpuMs: 0, ft: 16.7, ftMax: 0, fovK: 1 };
 const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, dist: 13, zoom: 0, fovNow: 1, sightK: 0 };
 // where the player is aiming: world yaw/pitch of the sight line, the point it hits, and the gun's own state
-const aim = { yaw: 0, pitch: 0, x: 0, y: 0, z: 0, range: 800, dx: 0, dy: 0, dz: -1, sx: 9, sy: 9, ready: 0, err: 1, mx: 0, my: 0, mz: 0, gx: 0, gy: 0, gz: -1 };
+const aim = { hit: false, yaw: 0, pitch: 0, x: 0, y: 0, z: 0, range: 800, dx: 0, dy: 0, dz: -1, sx: 9, sy: 9, ready: 0, err: 1, mx: 0, my: 0, mz: 0, gx: 0, gy: 0, gz: -1 };
 const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, dist: 0, trL: 0, trR: 0, yawRate: 0, air: false, vy: 0, airT: 0, gPrev: 0, shake: 0, land: 0, turYaw: 0, gunPitch: 0, recoil: 0, dp: 0, dr: 0, tl: 0, tt: 0, dpV: 0, drV: 0, acc: 0, road: 0, hp: 100, dead: false, immob: 0 };
 const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16), ivp = new Float32Array(16);
 let seed = 12345; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 8) / 16777216; };
@@ -698,7 +698,8 @@ async function main() {
     let t = 8, tp = 8, hit = false;
     while (t < 3500) { if (oy + dy * t < W.heightAt(ox + dx * t, oz + dz * t)) { hit = true; break; } tp = t; t += Math.max(2, t * 0.035); }
     if (hit) for (let i = 0; i < 7; i++) { const m = (t + tp) / 2; if (oy + dy * m < W.heightAt(ox + dx * m, oz + dz * m)) t = m; else tp = m; }
-    t = R.aimHit ? R.aimHit(ox, oy, oz, dx, dy, dz, t) : t;
+    const tr = t; t = R.aimHit ? R.aimHit(ox, oy, oz, dx, dy, dz, t) : t;
+    aim.hit = hit || t < tr - 0.01; // the sight ray met terrain, a building or a vehicle (not the sky)
     aim.x = ox + dx * t; aim.y = oy + dy * t; aim.z = oz + dz * t;
     // ballistic solution from the trunnion (the fire control computer adds the superelevation)
     const B = hullM, tx = B[4] * LEO.gy + B[8] * LEO.gz + B[12], ty = B[5] * LEO.gy + B[9] * LEO.gz + B[13], tz = B[6] * LEO.gy + B[10] * LEO.gz + B[14];

@@ -640,7 +640,7 @@ export function initCombat(C) {
   }
   function steer(a, dx, dy, dz, v, k) { const l = Math.hypot(dx, dy, dz) || 1; a.vx += (dx / l * v - a.vx) * k; a.vy += (dy / l * v - a.vy) * k; a.vz += (dz / l * v - a.vz) * k; }
   function updateAir(dt) {
-    let b0 = -1, b1 = -1, d0 = 1e9, d1 = 1e9; const cy = cam.mode === 4 ? D.yaw : aim.yaw, tankY = veh.y + 1.3;
+    let b0 = -1, b1 = -1, d0 = 1e9, d1 = 1e9, orlan = false; const cy = cam.mode === 4 ? D.yaw : aim.yaw, tankY = veh.y + 1.3;
     for (let i = 0; i < MAXA; i++) { const a = AIR[i]; if (!a.on) continue; const T = ATYPE[a.type], gh = hAt(a.x, a.z);
       a.spin += dt * (a.type === 2 ? 60 : 110);
       if (a.st === 3) { // falling Orlan: trailing smoke, then a crash
@@ -648,6 +648,7 @@ export function initCombat(C) {
         if (rnd() < dt * 30) parts.emit(a.x, a.y, a.z, sr(), 0.5, sr(), 2 + rnd() * 2, 0.6 + rnd() * 0.5, 1.2, 1, 0.12, 0.12, 0.13, 0.6);
         a.x += a.vx * dt; a.y += a.vy * dt; a.z += a.vz * dt; if (a.y < gh + 0.3) { a.on = false; explode(a.x, gh + 0.3, a.z, 0.5); }
       } else if (a.type === 2) { // Orlan: circles the area the tank is in, watching
+        orlan = true;
         a.tx += (veh.x - a.tx) * Math.min(1, dt * 0.03); a.tz += (veh.z - a.tz) * Math.min(1, dt * 0.03);
         const dc = Math.hypot(a.x - a.tx, a.z - a.tz); let gx, gz;
         if (dc > 330) { gx = a.tx; gz = a.tz; } else { a.ang += T.v / 280 * dt; gx = a.tx + Math.sin(a.ang) * 280; gz = a.tz + Math.cos(a.ang) * 280; }
@@ -686,6 +687,7 @@ export function initCombat(C) {
       if (a.type === 0) { a.tp = a.pitch * 0.5 - 0.25; a.tr = 0; droneParts(a.d, a); } else airParts(a.d, a, a.type === 1 ? 0.86 : -0.92);
       a.d[131] = 0;
     }
+    if (!orlan) G.orlan = 0; // no live Orlan, no watcher (a shot-down one stops feeding the artillery)
     // HUD arrows: the two most pressing threats (a Kornet in flight first, then diving or inbound FPV / Lancets), relative to where the view points (strength 1 blinks)
     const TH = G.thr; TH[1] = TH[3] = 0; let n = 0;
     for (let o = 0; o < SN * SS && n < 2; o += SS) if (S[o + 6] === 8 && S[o + 8] > 0 && S[o + 7] === 1) { TH[n * 2] = wrap(Math.atan2(-(S[o] - veh.x), -(S[o + 2] - veh.z)) - cy); TH[n * 2 + 1] = 1; n++; }

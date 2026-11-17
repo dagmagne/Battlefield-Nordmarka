@@ -97,6 +97,10 @@ r = await ev(`(()=>{ const k=SP.st===1 && Math.hypot(SP.tx-__aimS.x, SP.tz-__aim
   G.droneType(2); G.droneKey(); __sim(1/60, 30); document.getElementById('bA2').click(); const d=SP.st===1; const vis=getComputedStyle(document.getElementById('sR')).display!=='none'; if (G.drone.on) G.droneKey(); __sim(1/60, 5); SP.reset(); return {key:k, tankBtn:b, droneBtn:d, pillShown:vis, calls:SP.calls}; })()`);
 check('the B key, the tank-row ARTY button and the drone-row ARTY button call a mission', r.key && r.tankBtn && r.droneBtn && r.pillShown, r);
 await ev('__cam.mode=0; __step(1/60, 4)'); await page.screenshot({ path: `${out}/hud.png` });
+// review fix: a sight on the sky has no ground point; the mission is not spent
+r = await ev(`(()=>{ for (const e of G.enemies) e.on=false; SP.n=1; SP.st=0; const calls=SP.calls, n0=TO.length; __cam.mode=0; __aim(__aimS.yaw, 1.2, 0); __sim(1/60, 30); G.artyKey ? G.artyKey() : __api.arty(); __sim(1/60, 5);
+  return { hit:__aimS.hit, called:SP.calls-calls, n:SP.n, toast:TO.slice(n0).join(' | ') }; })()`);
+check('a sight laid on the sky is refused and the mission is kept', r.hit === false && r.called === 0 && r.n === 1 && /No target/.test(r.toast), r);
 check('no page errors', errs === 0, errs);
 await browser.close();
 console.log(fails ? `${fails} FAILED` : 'all passed');

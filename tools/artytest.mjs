@@ -53,10 +53,10 @@ r = await ev(`(()=>{ __R.god=false; G.peace=true; G.state=0; for (const e of G.e
   check('a tank that stays put takes damage; one that drives away after the ranging round takes much less', r.stay.filter((d) => d > 0).length >= 3 && s > 30 && m < s * 0.35, { ...r, sumStay: +s.toFixed(1), sumMove: +m.toFixed(1) }); }
 
 // 4: no barrage in peace mode or between waves, and one when a wave is on (the same watch time)
-r = await ev(`(()=>{ __R.god=true; A.reset(); const c0=A.calls; const res={};
-  G.peace=true; keep(); G.state=1; G.orlan=20; for (let k=0;k<300;k++){ hush(); __sim(1/60,1); } res.peace=A.calls-c0;
-  G.peace=false; G.state=0; G.timer=1e9; G.orlan=20; for (let k=0;k<300;k++){ hush(); __sim(1/60,1); } res.between=A.calls-c0;
-  keep(); G.state=1; G.orlan=20; for (let k=0;k<300;k++){ hush(); __sim(1/60,1); } res.wave=A.calls-c0;
+r = await ev(`(()=>{ __R.god=true; A.reset(); const c0=A.calls; const res={}; for (const a of G.air) a.on=false; const O=G.airSpawn(2, 0); O.chk=1e9; // a live Orlan whose own visibility check is held off
+  G.peace=true; keep(); G.state=1; for (let k=0;k<300;k++){ hush(); O.chk=1e9; G.orlan=20; __sim(1/60,1); } res.peace=A.calls-c0;
+  G.peace=false; G.state=0; G.timer=1e9; for (let k=0;k<300;k++){ hush(); O.chk=1e9; G.orlan=20; __sim(1/60,1); } res.between=A.calls-c0;
+  keep(); G.state=1; for (let k=0;k<300;k++){ hush(); O.chk=1e9; G.orlan=20; __sim(1/60,1); } res.wave=A.calls-c0; O.on=false;
   G.orlan=0; G.state=0; for (const e of G.enemies) e.on=false; for (let k=0;k<60;k++) __sim(1/60,1); res.cancelled=A.n===0;
   G.peace=true; A.reset(); return res; })()`);
 check('no barrage in peace mode or between waves (one when a wave is on; the wave ending stops it)', r.peace === 0 && r.between === 0 && r.wave === 1 && r.cancelled, r);
@@ -70,6 +70,10 @@ await ev('{ const i0=A.imp; for (let k=0;k<60 && A.imp===i0;k++) __step(1/60,1);
 await ev('__step(1/60,40)'); await page.waitForTimeout(80); await page.screenshot({ path: `${out}/impact-1s.png` });
 await ev('for (let k=0;k<60*12;k++) __sim(1/60,1); __look(A.x+FX*-14-FZ*16, 9, A.z+FZ*-14+FX*16, A.x, 0, A.z); __step(1/60,3)'); await page.waitForTimeout(80); await page.screenshot({ path: `${out}/craters.png` });
 await ev('__R.pose=null');
+// review fix: shooting the watching Orlan down clears its watch, so no new barrage is called on the player afterwards
+r = await ev(`(()=>{ goHome(); for (const a of G.air) a.on=false; A.reset(); G.peace=false; G.state=1; G.timer=1e9; G.orlan=20; const O=G.airSpawn(2, 0); O.x=__veh.x+150; O.z=__veh.z; O.y=__veh.y+150;
+  O.hp=0; O.st=3; O.vx=O.vy=O.vz=0; const calls=A.calls; __sim(1/60, 60*3); A.cool=0; __sim(1/60, 60*2); const out={orlan:G.orlan, calls:A.calls-calls, rep:+G.rep.toFixed(1)}; for (const a of G.air) a.on=false; G.peace=true; G.state=0; return out; })()`);
+check('a shot-down Orlan stops feeding the artillery (watch cleared, no new barrage)', r.orlan === 0 && r.calls === 0, r);
 check('no page errors', errs === 0, errs);
 await browser.close();
 console.log(fails ? `${fails} FAILED` : 'all passed');
