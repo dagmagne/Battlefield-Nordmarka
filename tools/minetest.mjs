@@ -81,6 +81,16 @@ r = await ev(`(()=>{ const RD=__W.roads.filter((t)=>t.n>120&&Math.abs(t.pts[t.n]
   for (let k=0;k<60*90;k++){ __sim(1/60,1); minD=Math.min(minD, Math.hypot(e.x-P[i1*2], e.z-P[i1*2+1])); if (Math.hypot(e.x-__veh.x,e.z-__veh.z)<60) break; }
   return {fieldR:+fr.toFixed(1), minD:+minD.toFixed(1), armed:M.armed(), armed0:hits0, distToPlayer:Math.hypot(e.x-__veh.x,e.z-__veh.z)|0, roadLen:RD.n, stuck:__game.stuck}; })()`);
 check('the enemy skirts its own field (stays outside it) and still closes on the player', !r.err && r.minD > r.fieldR * 0.8 && r.armed === r.armed0 && r.distToPlayer < 400, r);
+// review fixes: a tank in the air over a mine does not set it off; the bomber's marker stops on round colliders like the grenade
+r = await ev(`(()=>{ for (const e of __game.enemies) e.on=false; M.s.fill(0); M.fld.fill(0); __R.force=null; __veh.v=0; __sim(1/60,30);
+  const i=M.at(__veh.x, __veh.z, 2, 0); __sim(1/60, 150); const hp=__veh.hp; __veh.y+=10; __veh.vy=0; __veh.air=true; __veh.v=6; __sim(1/60,1);
+  return {mine:M.s[i], hp0:hp, hp:__veh.hp, immob:+__veh.immob.toFixed(1)}; })()`);
+check('a tank in the air over a mine does not set it off', r.mine === 2 && r.hp === r.hp0, r);
+await ev('M.s.fill(0); __sim(1/60, 120)');
+r = await ev(`(()=>{ const C=__W.colliders; let c=null, bd=1e9; for (let k=0;k<C.length;k+=3) { const d=Math.hypot(C[k]-__veh.x,C[k+1]-__veh.z); if (d<bd && C[k+2]>0.6) { bd=d; c={x:C[k],z:C[k+1]}; } } if (!c) return {err:'no collider'};
+  __game.droneType(1); __game.droneKey(); const D=__game.drone; Object.assign(D,{x:c.x, z:c.z, y:__W.heightAt(c.x,c.z)+40, vx:0,vy:0,vz:0, climb:0, away:true, pitch:-1.5707}); __sim(1/60,10);
+  const out={iy:+(D.iy-__W.heightAt(c.x,c.z)).toFixed(1), iok:D.iok}; __game.droneKey(); __sim(1/60,5); return out; })()`);
+check('the drop marker over a round collider sits where the grenade stops (≈ 9 m up), not on the ground', !r.err && r.iok && r.iy > 5, r);
 check('no page errors', errs === 0, errs);
 await browser.close();
 console.log(fails ? `${fails} FAILED` : 'all passed');
