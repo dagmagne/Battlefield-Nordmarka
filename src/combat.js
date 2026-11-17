@@ -16,8 +16,8 @@ const BOMBS = 3, BOMB_RL = 0.7, LOST_T = 40, NFLD = 6;
 const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5];
 // enemy air: FPV (operator-guided, finds you, dives), Lancet (higher and faster, short warning, smoke breaks its lock), Orlan-10 (circles high and feeds the enemy your position)
 // v cruise, vd dive (m/s), alt above ground, r hit radius (m), dmg range, see: lock-on range, warn: when the HUD arrow and the toast come, bat: battery (s), pc: lock chance per check in the open
-export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6, d0: 30, d1: 45, see: 380, warn: 650, bat: 160, pc: 0.3, score: 25 },
-  { name: 'Lancet', hp: 2, v: 45, vd: 68, alt: 110, r: 0.8, d0: 45, d1: 60, see: 750, warn: 420, bat: 220, pc: 0.45, score: 40 },
+export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6, d0: 25, d1: 40, see: 380, warn: 650, bat: 160, pc: 0.3, score: 25 },
+  { name: 'Lancet', hp: 2, v: 45, vd: 68, alt: 110, r: 0.8, d0: 40, d1: 55, see: 750, warn: 420, bat: 220, pc: 0.45, score: 40 },
   { name: 'Orlan-10', hp: 4, v: 27, vd: 27, alt: 180, r: 1.7, d0: 0, d1: 0, see: 900, warn: 1400, bat: 1e9, pc: 0, score: 60 }];
 const HMG_RATE = 20; // hatch MG3 rounds per second (shares the 7.62 belt with the coax)
 const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
@@ -631,7 +631,7 @@ export function initCombat(C) {
             if (dd < T.see) { const vis = losVis(a.x, a.y, a.z, veh.x, tankY, veh.z), conc = R.trees ? canAt(veh.x, veh.z) / 255 : 0;
               if (vis > 0.2) { a.tx += (veh.x - a.tx) * 0.25; a.tz += (veh.z - a.tz) * 0.25; } // narrowing the search on what it glimpses
               const p = T.pc * vis * (1 - 0.75 * conc) * (1 - 0.5 * Math.min(Math.abs(veh.v) / 8, 1)) * (smk ? (a.type ? 0 : 0.3) : 1) * (1 - dd / T.see * 0.5);
-              if (rnd() < p) { a.st = 2; ui.toast(T.name + ' diving on you — shoot it (Q) or move!'); } } }
+              if (rnd() < p) { a.st = 2; a.warned = true; ui.toast(`${T.name} from the ${dirName(a.x - veh.x, a.z - veh.z)} diving on you — shoot it (Q) or move!`); } } }
         } else { // terminal dive with lead on the tank
           const tof = Math.hypot(dh, tankY - a.y) / T.vd, lx = veh.x - Math.sin(veh.yaw) * veh.v * tof * 0.7, lz = veh.z - Math.cos(veh.yaw) * veh.v * tof * 0.7;
           steer(a, lx - a.x, tankY - a.y, lz - a.z, T.vd, Math.min(1, dt * (a.type ? 2.2 : 3.2)));

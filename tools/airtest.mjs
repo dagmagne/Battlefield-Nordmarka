@@ -35,7 +35,7 @@ check('the hatch MG shoots down an FPV diving on the tank', !r.on && r.hp === r.
 // 2: no defence: the hit
 await ev(`__aimAt(); window.A=G.airSpawn(0, FW-1); { const b=FW-1; A.x=__veh.x+Math.sin(b)*200; A.z=__veh.z-Math.cos(b)*200; A.y=__W.heightAt(A.x,A.z)+25; A.st=2; } window.HP0=__veh.hp; fly(A, 60*15, false);`);
 r = await ev('({on:A.on, hp0:HP0, hp:+__veh.hp.toFixed(1), lost:+(HP0-__veh.hp).toFixed(1)})');
-check('an FPV that gets through does 30–45 hull damage', !r.on && r.lost >= 29 && r.lost <= 46, r);
+check('an FPV that gets through does 25–40 hull damage', !r.on && r.lost >= 24 && r.lost <= 41, r);
 await ev('__veh.hp=100');
 
 // 3: an FPV searching over a still tank in the open finds it
