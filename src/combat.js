@@ -557,8 +557,8 @@ export function initCombat(C) {
         for (let k = 0; k < 8; k++) parts.emit(MX[i] + sr() * 0.4, MY[i] + 0.15, MZ[i] + sr() * 0.4, sr() * 3, 1 + rnd() * 2.5, sr() * 3, 0.5 + rnd() * 0.5, 0.03 + rnd() * 0.04, 0, 0, 1, 1, 1, 0.9);
         C.sfx('hit', MX[i], MY[i], MZ[i], 0.2); continue; }
       if (MA[i] > 0) { MA[i] -= dt; continue; }
-      // pressure fuze: a track rolling over it
-      if (!veh.dead && (Math.abs(veh.v) > 0.2 || Math.abs(veh.yawRate) > 0.05)) { const dx = MX[i] - veh.x, dz = MZ[i] - veh.z;
+      // pressure fuze: a track rolling over it (on the ground: a tank in the air over a crest does not set it off)
+      if (!veh.dead && !veh.air && veh.y - MY[i] < 0.8 && (Math.abs(veh.v) > 0.2 || Math.abs(veh.yawRate) > 0.05)) { const dx = MX[i] - veh.x, dz = MZ[i] - veh.z;
         if (dx * dx + dz * dz < 20) { const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw); if (Math.abs(c * dx - s * dz) < 1.95 && Math.abs(s * dx + c * dz) < 3.9) { mineBoom(i, true); continue; } } }
       if (MR[i] && todCur[1] < 2) { const d = Math.hypot(MX[i] - cam.x, MZ[i] - cam.z); if (d < 450) glow(MX[i] + Math.cos(MW[i]) * 0.3, MY[i] + 0.8, MZ[i] - Math.sin(MW[i]) * 0.3, 0.12 * (1 + d * 0.012) * (0.75 + 0.25 * Math.sin(R.time * 5 + i)), 9, 1.2, 0.3); } // marked, in the dark: a pulsing red light on the picket
     }
@@ -698,9 +698,9 @@ export function initCombat(C) {
       while (mgT >= 1 && G.mg > 0) { mgT--; G.mg--;
         const px = gM[0] * -0.32 + gM[4] * (LEO.gy + 0.15) + gM[8] * -2.4 + gM[12], py = gM[1] * -0.32 + gM[5] * (LEO.gy + 0.15) + gM[9] * -2.4 + gM[13], pz = gM[2] * -0.32 + gM[6] * (LEO.gy + 0.15) + gM[10] * -2.4 + gM[14];
         // the coax follows the sight's aim point (its own fire control: parallax to the sight head and the MG's drop) while the gun is laid near it; otherwise it fires along the bore
-        let cx = aim.x - px, cy = aim.y - py, cz = aim.z - pz; const cl = Math.hypot(cx, cy, cz) || 1, tg = Math.min(cl, 1500) / MGV;
-        if ((cx * aim.gx + cy * aim.gy + cz * aim.gz) / cl < 0.99) { const r = Math.min(aim.range, 1500); cx = aim.gx * cl; cy = (aim.gy + 0.5 * GRAV * r * (1 / (MGV * MGV) - 1 / (R.shellV * R.shellV))) * cl; cz = aim.gz * cl; }
-        fire(0, 3, px, py, pz, cx / cl, cy / cl + 0.5 * GRAV * tg * tg / cl, cz / cl, MGV, 0.0035, 2.2);
+        let cx = aim.x - px, cy = aim.y - py, cz = aim.z - pz; const cl = Math.hypot(cx, cy, cz) || 1, tg = Math.min(cl, 1500) / MGV; let drop = 0.5 * GRAV * tg * tg; // hold-over aiming straight at the point
+        if ((cx * aim.gx + cy * aim.gy + cz * aim.gz) / cl < 0.99) { const r = Math.min(aim.range, 1500); cx = aim.gx * cl; cy = (aim.gy + 0.5 * GRAV * r * (1 / (MGV * MGV) - 1 / (R.shellV * R.shellV))) * cl; cz = aim.gz * cl; drop = 0; } // along the bore: the bore already holds over for the main gun, add only the difference
+        fire(0, 3, px, py, pz, cx / cl, (cy + drop) / cl, cz / cl, MGV, 0.0035, 2.2);
         if ((G.mg & 1) === 0) glow(px + aim.gx * 0.4, py + aim.gy * 0.4, pz + aim.gz * 0.4, 0.7, 26, 14, 4);
         if (rnd() < 0.3) parts.emit(px, py, pz, aim.gx * 3 + sr(), 0.6, aim.gz * 3 + sr(), 0.5, 0.15, 0.6, 1, 0.3, 0.3, 0.31, 0.25);
       }
@@ -732,7 +732,8 @@ export function initCombat(C) {
         planAir(G.wave); const mf = planFields(G.wave); rlAt = G.wave >= 3 && rnd() < 0.55 ? 35 + rnd() * 45 : -1; // minefields ahead; maybe a rocket-laid strike later in the wave
         G.state = 1; hudDirty = true; announce(`Wave ${G.wave} — ${G.plan}: `, mf ? ` · Mines reported on the roads to the ${mf}` : ''); if (more) setTimeout(() => { if (G.state === 1) ui.toast('More enemy movement reported — watch your flanks'); }, 3500); } }
       else {
-        if (pqN > 0) { G.wt += dt; const m = releaseWave(alive); if (m) { alive += m; hudDirty = true; if (annNow) announce('Contact! '); } } // staggered groups and reinforcements
+        G.wt += dt; // the wave clock runs for the whole wave (scheduled strikes come after the last reinforcement too)
+        if (pqN > 0) { const m = releaseWave(alive); if (m) { alive += m; hudDirty = true; if (annNow) announce('Contact! '); } } // staggered groups and reinforcements
         if (alive === 0 && pqN === 0) { G.state = 0; G.timer = 9; G.score += 150 * G.wave; hudDirty = true;
         for (let i = 0; i < 3; i++) G.n[i] = Math.min(AMMO[i].max, G.n[i] + [7, 4, 3][i]); G.mg = Math.min(2000, G.mg + 500); G.smokeN = Math.min(2, G.smokeN + 1); veh.hp = Math.min(100, veh.hp + 25);
         if (G.wave === WAVES && !G.won) { G.won = true; ui.over('Nordmarka held', `All ${WAVES} waves beaten · ${G.kills} vehicles destroyed · score ${G.score}. Press R to start over, or close this and keep fighting.`, true); }
@@ -774,7 +775,8 @@ export function initCombat(C) {
     D.on = false; D.vx = D.vy = D.vz = 0; D.hold = 4.5; D.bx = D.x; D.by = D.y; D.bz = D.z; hudDirty = true; // the camera stays on the blast (see updateCamera), then returns to the tank
   }
   // bomber: where a grenade released now would land (ballistic fall from the drone's height and velocity; ground, roofs and vehicles stop it)
-  const dropHit = (x, y, z) => { if (y < hAt(x, z)) return true; if (y < hAt(x, z) + 4) for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, x, y, z)) return true; } return C.bld.at(x, y, z, 0) >= 0; };
+  // where the grenade stops: the same tests as updateShells (ground, round colliders, vehicles, buildings)
+  const dropHit = (x, y, z) => { if (y < hAt(x, z)) return true; if (y < hAt(x, z) + 9 && C.collAt(x, z)) return true; if (y < hAt(x, z) + 4) for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, x, y, z)) return true; } return C.bld.at(x, y, z, 0) >= 0; };
   function predictDrop() {
     let x = D.x, y = D.y - 0.25, z = D.z, vy = D.vy - 0.3; const h = 0.04; D.iok = false;
     for (let k = 0; k < 400; k++) {
