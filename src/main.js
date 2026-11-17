@@ -26,11 +26,17 @@ import { initUI, inp } from './ui.js';
 import { initAudio } from './audio.js';
 import { REC, RECM } from './sndrec.js';
 import { initMusic } from './music.js';
+import TITLE from './data/title.webp';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
-const music = initMusic(qs); // intro music on the start screen, faded out when the game starts
-const fail = (m) => { music.stop(1); $('load').style.display = 'none'; $('ui').style.display = 'none'; $('err').style.display = 'flex'; $('errp').textContent = m; };
+// title screen art and music (the music button works before the game has loaded; the in-game one goes through api.music)
+$('load').style.backgroundImage = `linear-gradient(180deg,#0b142099 0%,#0b142000 30%,#0b142000 50%,#0b1420e6 100%),url(data:image/webp;base64,${TITLE})`;
+const music = initMusic(qs);
+music.onchange = (on) => { for (const id of ['lMu', 'bMu']) $(id).classList.toggle('on', on); };
+music.onchange(music.on);
+$('lMu').addEventListener('click', (e) => { e.stopPropagation(); music.toggle(); $('lMu').blur(); });
+const fail = (m) => { music.sound(false); $('load').style.display = 'none'; $('ui').style.display = 'none'; $('err').style.display = 'flex'; $('errp').textContent = m; };
 
 // ---------- quality tiers ----------
 const TIERS = {
@@ -541,9 +547,10 @@ async function main() {
     debug(v) { R.debug = v === undefined ? !R.debug : !!v; ui.setDebug(R.debug); },
     quality(v) { try { localStorage.gq = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('q'); location.href = u.href; },
     trees(v) { R.treeSel = v; R.trees = v !== 'off'; if (R.trees) setTreeQ(TREEQ.indexOf(v)); try { localStorage.gtrees = v; } catch (e) { /* ignore */ } ui.toast('Trees: ' + v); },
-    sound(v) { const on = v === undefined ? !audio.on : !!v; audio.setOn(on); try { localStorage.gsnd = on ? '1' : '0'; } catch (e) { /* ignore */ } ui.toast(on ? 'Sound on' : 'Sound off'); },
+    sound(v) { const on = v === undefined ? !audio.on : !!v; audio.setOn(on); music.sound(on); try { localStorage.gsnd = on ? '1' : '0'; } catch (e) { /* ignore */ } ui.toast(on ? 'Sound on' : 'Sound off'); },
+    music(v) { const on = v === undefined ? music.toggle() : (music.set(v), music.on); ui.toast(on ? 'Music on' : 'Music off'); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
+    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
@@ -926,7 +933,7 @@ async function main() {
   window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; stInit = false; R.snap = true; };
   Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
-  $('load').style.display = 'none'; music.stop(4);
+  $('load').style.display = 'none'; music.game();
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();
   if (qs.has('nohud')) { $('ui').style.display = 'none'; R.nohud = true; }
   requestAnimationFrame(frame);

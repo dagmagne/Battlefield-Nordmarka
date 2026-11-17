@@ -30,6 +30,7 @@ export function initUI(api, isTouch) {
     else if (c === 'KeyF') api.fly();
     else if (c === 'KeyN') api.snow();
     else if (c === 'KeyM') api.sound();
+    else if (c === 'KeyU') api.music();
     else if (c === 'KeyG') api.smoke();
     else if (c === 'KeyX') api.drone();
     else if (c === 'KeyR') api.restart();
@@ -98,18 +99,18 @@ export function initUI(api, isTouch) {
   btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bR', api.drone);
   // hold buttons: FIRE (tank), BOOM (drone) and the coax MG
   const holdBtn = (id, fn) => { const b = $(id), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); fn(on); b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
-  holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true));
+  holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true)); btn('bMu', () => api.music());
   btn('mW', () => { const l = new URL(location.href); l.searchParams.delete('w'); l.searchParams.delete('nohint'); location.href = l.href; });
   btn('hGo', () => showHelp(false)); btn('mGo', () => showMenu(false)); btn('mH', () => { showMenu(false); showHelp(true); });
   const hold = (id, v) => { const b = $(id); const set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); inp.holdY = on ? v : 0; b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   inp.holdY = 0; hold('bUp', 1); hold('bDn', -1);
   const seg = (id, fn) => { $(id).addEventListener('click', (e) => { const v = e.target.dataset && e.target.dataset.v; if (v !== undefined) { fn(v); syncMenu(); } }); };
-  seg('mQ', (v) => api.quality(v)); seg('mD', (v) => api.tod(+v)); seg('mN', (v) => api.snow(+v)); seg('mS', (v) => api.sound(+v)); seg('mR', (v) => api.drs(+v)); seg('mF', (v) => api.trees(v)); seg('mB', (v) => api.debug(+v));
+  seg('mQ', (v) => api.quality(v)); seg('mD', (v) => api.tod(+v)); seg('mN', (v) => api.snow(+v)); seg('mS', (v) => api.sound(+v)); seg('mU', (v) => api.music(+v)); seg('mR', (v) => api.drs(+v)); seg('mF', (v) => api.trees(v)); seg('mB', (v) => api.debug(+v));
   for (const m of ['help', 'menu']) $(m).addEventListener('pointerdown', (e) => { if (e.target === $(m)) { showHelp(false); showMenu(false); } });
   function syncMenu() {
     const s = api.state();
     const mark = (id, v) => { for (const b of $(id).children) b.classList.toggle('on', b.dataset.v === String(v)); };
-    mark('mQ', s.quality); mark('mD', s.tod); mark('mN', s.snow ? 1 : 0); mark('mS', s.sound ? 1 : 0); mark('mR', s.drs ? 1 : 0); mark('mF', s.trees); mark('mB', s.debug ? 1 : 0);
+    mark('mQ', s.quality); mark('mD', s.tod); mark('mN', s.snow ? 1 : 0); mark('mS', s.sound ? 1 : 0); mark('mU', s.music ? 1 : 0); mark('mR', s.drs ? 1 : 0); mark('mF', s.trees); mark('mB', s.debug ? 1 : 0);
     $('mI').textContent = s.info;
   }
 

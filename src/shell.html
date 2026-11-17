@@ -13,9 +13,14 @@
 html,body{margin:0;height:100%;background:#0b1420;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:#eef3f8}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
 #load,#err{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at 50% 30%,#1c3350,#0b1420 70%);z-index:20;padding:24px;text-align:center}
+#load{background-color:#0b1420;background-size:cover;background-position:30% 40%;justify-content:flex-end;padding-bottom:max(48px,12vh)}
+#load h1{font-size:clamp(30px,5.5vw,58px)!important;font-weight:750!important;letter-spacing:.04em!important;text-transform:uppercase;text-shadow:0 2px 18px #000c,0 1px 3px #000}
+#load #msg{opacity:.9;text-shadow:0 1px 4px #000}
+#lMu{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right))}
+@media (max-height:500px){#load{padding-bottom:16px;gap:10px}#pick button{width:190px;padding:10px 12px}#pick b{font-size:16px}}
 #pick{display:none;gap:12px;flex-wrap:wrap;justify-content:center;padding:0 16px}
-#pick button{cursor:pointer;width:230px;padding:18px 16px;border-radius:16px;border:1px solid #ffffff2a;background:#ffffff12;color:#eef3f8;font:14px system-ui,sans-serif;display:flex;flex-direction:column;gap:6px;text-align:left}
-#pick button:hover{background:#ffffff26;border-color:#ffffff66}
+#pick button{cursor:pointer;width:230px;padding:18px 16px;border-radius:16px;border:1px solid #ffffff3a;background:#0b1420a8;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#eef3f8;font:14px system-ui,sans-serif;display:flex;flex-direction:column;gap:6px;text-align:left}
+#pick button:hover{background:#1c3350d0;border-color:#ffffff88}
 #pick b{font-size:19px;font-weight:650}
 #pick span{opacity:.75;line-height:1.35}
 #load h1,#err h1{margin:0;font-weight:600;font-size:26px;letter-spacing:.02em}
@@ -64,7 +69,7 @@ kbd{margin:0 1px}
 #dbg{left:var(--sl);top:calc(var(--st) + 52px);padding:8px 11px;font:11px/1.5 ui-monospace,Menlo,monospace;white-space:pre;display:none}
 #rng{font-size:12px;opacity:.75;min-width:6ch}
 .st.warn{background:#e8b339;color:#2b1d00}.st.bad{background:#e2533f;color:#fff}
-#wave{right:calc(var(--sr) + 184px);top:calc(var(--st) + 8px);padding:6px 14px;font-weight:650;font-size:12px;letter-spacing:.08em}
+#wave{right:calc(var(--sr) + 244px);top:calc(var(--st) + 8px);padding:6px 14px;font-weight:650;font-size:12px;letter-spacing:.08em}
 #map{right:var(--sr);bottom:var(--sb);width:176px;height:176px;border-radius:14px;border:1px solid #ffffff2c;background:#0b1420a0}
 .touch #map{bottom:auto;top:calc(var(--st) + 60px);width:104px;height:104px;border-radius:12px}
 .touch #wave{right:auto;left:var(--sl);top:calc(var(--st) + 46px);padding:4px 10px;font-size:10.5px}
@@ -100,6 +105,7 @@ kbd{margin:0 1px}
   <div id="top">
     <button class="btn" id="bD" aria-label="Time of day"><svg viewBox="0 0 24 24"><path d="M3 17h18M6 17a6 6 0 0 1 12 0M12 5v3M4.5 9.5l2 1.8M19.5 9.5l-2 1.8M8 21h8"/></svg>TIME</button>
     <button class="btn" id="bC" aria-label="Camera"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>CAM</button>
+    <button class="btn mbtn" id="bMu" aria-label="Music"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>MUSIC</button>
     <button class="btn" id="bG" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 12h3M11 12h9M4 17h9M17 17h3"/><circle cx="16" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="17" r="2"/></svg>MENU</button>
   </div>
   <div id="joyhint">DRIVE</div>
@@ -119,7 +125,7 @@ kbd{margin:0 1px}
     <button class="btn" id="bUp"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>UP</button>
     <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg>BOOM</button>
   </div>
-  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>M</kbd> sound · <kbd>H</kbd> help</div>
+  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
   <div id="help" class="modal"><div class="card pill">
@@ -134,7 +140,7 @@ kbd{margin:0 1px}
       <b><kbd>G</kbd></b><span>Smoke grenades — breaks the enemy's line of sight, and blinds thermal sights too</span>
       <b><kbd>V</kbd></b><span>Thermal imager in the gunner sight and on the drone: off · white-hot · black-hot. Sees engines, tracks and fires through darkness, haze and dust</span>
       <b><kbd>X</kbd></b><span>Launch an FPV drone (5 per game): mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. Scout with it, or fly into a vehicle and press the left button to detonate its warhead. <kbd>X</kbd> again returns to the tank (the drone is lost). The tank stands still and exposed meanwhile</span>
-      <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd> <kbd>M</kbd></b><span>Time of day · snowfall · free-fly camera · sound on/off</span>
+      <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · free-fly camera · sound · music</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
       <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight · ✕ MG · ○ smoke · □ ammo · △ camera · Options menu</span>
     </div>
@@ -156,6 +162,7 @@ kbd{margin:0 1px}
     <div class="row"><span>Time of day</span><div class="seg" id="mD"><button data-v="0">Midday</button><button data-v="1">Golden</button><button data-v="2">Blue hour</button><button data-v="3">Night</button></div></div>
     <div class="row"><span>Snowfall</span><div class="seg" id="mN"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
     <div class="row"><span>Sound</span><div class="seg" id="mS"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
+    <div class="row"><span>Music</span><div class="seg" id="mU"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
     <div class="row"><span>Trees <span class="note">(lower = faster)</span></span><div class="seg" id="mF"><button data-v="high">High</button><button data-v="medium">Medium</button><button data-v="low">Low</button><button data-v="off">Off</button></div></div>
     <div class="row"><span>Dynamic resolution</span><div class="seg" id="mR"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
     <div class="row"><span>Performance overlay</span><div class="seg" id="mB"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
@@ -165,7 +172,7 @@ kbd{margin:0 1px}
     <button class="go" id="mGo">Close</button>
   </div></div>
 </div>
-<div id="load"><h1>Battlefield Nordmarka</h1><div id="pick">
+<div id="load"><button class="btn mbtn" id="lMu" aria-label="Music"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>MUSIC</button><h1>Battlefield Nordmarka</h1><div id="pick">
 <button data-w="holmenkollen"><b>Holmenkollen</b><span>Real Nordmarka — start by the ski jump</span></button>
 <button data-w="frogner"><b>Frognerseteren</b><span>Real Nordmarka — start at the lodge</span></button>
 <button data-w="fantasi"><b>Fantasi</b><span>The invented forest, lake and three mountains</span></button>
