@@ -551,6 +551,7 @@ async function main() {
     cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
     drone() { if (R.game) R.game.droneKey(); },
     droneType(i) { if (R.game) R.game.droneType(i); },
+    arty() { if (R.game) R.game.support.key(); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },

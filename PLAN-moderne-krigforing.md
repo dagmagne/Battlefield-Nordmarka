@@ -75,6 +75,7 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
 - Varsel: fløytelyd og et første nedslag på avstand.
 - Gjenbruker eksplosjoner, svimerker/krater (`fsBlast`), byggskade (`bldHit` / `splash`) og risting.
 - **Egen artilleristøtte:** én serie per bølge. Tilkalles fra dronen (marker et punkt) eller siktet. Touch-knapp.
+  - **Del B gjort** (`src/support.js`, skalltype 11, tast B / ARTY-knapper / L1, `tools/supporttest.mjs`).
 
 ### Fase 6: Infanteri
 - **Modell:** lavpolygon-soldat bygget prosedyrisk (overkropp, hode med hjelm, armer, ben, våpen), hvite vinteruniformer.

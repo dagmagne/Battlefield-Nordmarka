@@ -4,6 +4,7 @@ import { clamp } from './math.js';
 import { tankParts, wheelParts, droneParts, airParts, gunMat, LEO, T72, BMP, TIGR, BTR, BUGGY, MOTO } from './tank.js';
 import { cur as todCur } from './tod.js';
 import { initMinimap, MAP_M, MAP_PX } from './minimap.js';
+import { initSupport } from './support.js';
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
 export const MAXE = 14, MAXG = 760, MAXM = 48, MAXA = 6; // enemies, glow sprites, mines, enemy air units
@@ -13,7 +14,7 @@ export const DTYPE = [{ name: 'FPV', n: 5, t: 75, v: 26, r: 1500, see: 800, mark
 // grenades per bomber sortie, seconds between drops; a lost contact fades from the map over LOST_T s; NFLD pre-laid minefields enemies know about and drive around
 const BOMBS = 3, BOMB_RL = 0.7, LOST_T = 40, NFLD = 6;
 // mine damage by shell type (radius in m around a ground impact that sets a mine off): APFSDS, HEAT, HE, MG, 125 mm, 30 mm, smoke, VOG
-const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5, 2.5, 0.5];
+const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5, 2.5, 0.5, 0, 8]; // (10: placeholder, 11: own 155 mm artillery)
 // enemy air: FPV (operator-guided, finds you, dives), Lancet (higher and faster, short warning, smoke breaks its lock), Orlan-10 (circles high and feeds the enemy your position)
 // v cruise, vd dive (m/s), alt above ground, r hit radius (m), dmg range, see: lock-on range, warn: when the HUD arrow and the toast come, bat: battery (s), pc: lock chance per check in the open
 export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6, d0: 25, d1: 40, see: 380, warn: 650, bat: 160, pc: 0.3, score: 25 },
@@ -21,9 +22,10 @@ export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6
   { name: 'Orlan-10', hp: 4, v: 27, vd: 27, alt: 180, r: 1.7, d0: 0, d1: 0, see: 900, warn: 1400, bat: 1e9, pc: 0, score: 60 }];
 const HMG_RATE = 20; // hatch MG3 rounds per second (shares the 7.62 belt with the coax)
 const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
-// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber, 8 enemy Kornet ATGM (wire-guided), 9 enemy MG
-const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1], [18, 9, 3, 0.14, 5], [14, 5, 1.5, 0.18, 3]];
-const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0]; // direct-hit damage to a building by shell type (the drone charge does 100)
+// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber, 8 enemy Kornet ATGM (wire-guided), 9 enemy MG,
+// 10 placeholder (enemy artillery, phase 5 part A), 11 own 155 mm artillery round (support.js)
+const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1], [18, 9, 3, 0.14, 5], [14, 5, 1.5, 0.18, 3], [0, 0, 0, 0, 0], [30, 16, 6, 0.55, 8]];
+const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0, 0, 120]; // direct-hit damage to a building by shell type (the drone charge does 100)
 // enemy roles: assault closes in; overwatch takes a high spot with a view and holds; flanker swings wide to come in from the side;
 // raider (BMP) runs fast along the plowed roads to close range
 const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'flanker', 'raider'], PQN = 16;
@@ -147,6 +149,7 @@ export function initCombat(C) {
     if (type === 7) { // VOG from above: the thin roof and the engine deck (rear, local +z) are where it hurts
       const lz = Math.sin(t.yaw) * (x - t.x) + Math.cos(t.yaw) * (z - t.z); deck = zone === 1 && lz > 0.9;
       d = t.type ? 110 : zone === 2 ? 50 : deck ? 85 : 30; if (t.cage && (zone === 2 || deck)) { d *= 0.3; deck = false; } } // the cage catches grenades from above
+    else if (type === 11) d = t.type ? 200 : zone === 2 ? 75 : 60; // own 155 mm round straight onto the vehicle (the splash in support.js adds the rest)
     else if (t.type === 0) { if (type < 3) d = DT72[type][fc] * (zone === 2 && fc === 0 ? 0.85 : 1); }
     else d = type === 0 ? 100 : type === 1 ? 130 : type === 2 ? 110 : type === 3 ? ETYPE[t.type].mgd : 0;
     if (d <= 0) return;
@@ -169,6 +172,7 @@ export function initCombat(C) {
     else if (type === 6) smokeBurst(x, y, z);
     else if (type === 7) { explode(x, y, z, 0.75); splash(x, y, z, 3, 6, 18, owner); }
     else if (type === 8) explode(x, y, z, 1.7);
+    else if (type === 11) G.support.impact(x, y, z, bSkip); // own artillery (support.js)
     else if (type === 9) { if (!t) for (let i = 0; i < 2; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.2 + rnd() * 2, sr() * 2, 0.35, 0.012, 0, 0, 1, 1, 1, 0.9); }
   }
   function smokeBurst(x, y, z) { C.sfx('smoke', x, y, z, 0.5); const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
@@ -229,7 +233,7 @@ export function initCombat(C) {
         if (qy < gh) { let a = 0, b = 1; for (let it = 0; it < 5; it++) { const m = (a + b) / 2; if (py + (qy - py) * m < hAt(px + (qx - px) * m, pz + (qz - pz) * m)) b = m; else a = m; }
           const ix = px + (qx - px) * b, iz = pz + (qz - pz) * b; impact(type, owner, ix, hAt(ix, iz) + 0.05, iz, null, 0, 0); hit = true; break; }
         const bh = C.bld.at(qx, qy, qz, 0);
-        if (bh >= 0) { bSkip = bh; bldHit(bh, BDMG[type], px, py, pz, type === 2); impact(type, owner, px, py, pz, null, 0, 0); bSkip = -1; hit = true; break; }
+        if (bh >= 0) { bSkip = bh; bldHit(bh, BDMG[type], px, py, pz, type === 2 || type === 11); impact(type, owner, px, py, pz, null, 0, 0); bSkip = -1; hit = true; break; }
         if (qy < gh + 9 && type !== 6 && C.collAt(qx, qz)) { impact(type, owner, px, py, pz, null, 0, 0); hit = true; break; }
         if (Math.abs(qx) > HALF || Math.abs(qz) > HALF) { hit = true; break; }
         px = qx; py = qy; pz = qz;
@@ -853,7 +857,7 @@ export function initCombat(C) {
       if (press) { if (D.bombs > 0 && D.rel <= 0) { D.bombs--; D.drops++; D.rel = BOMB_RL; hudDirty = true; const vy = D.vy - 0.3; fire(0, 7, D.x, D.y - 0.25, D.z, D.vx, vy, D.vz, Math.max(0.01, Math.hypot(D.vx, vy, D.vz)), 0, 30); C.sfx('reload', D.x, D.y, D.z, 0.4); if (!D.bombs) ui.toast('Grenades gone — fly back and land on the tank to rearm, or X to cut the link'); }
         else if (!D.bombs) ui.toast('No grenades left — land on the tank'); }
       if (cam.mode === 4) predictDrop(); else D.iok = false;
-    } else if (D.type === 2 && press) ui.toast('Recon drone: unarmed — spotted enemies go on the map');
+    } else if (D.type === 2 && press) ui.toast('Recon drone: unarmed — spotted enemies go on the map · B calls artillery where the camera looks');
     // bomber and recon land back on the tank (on the engine deck, slowly) and are ready again
     const dv = Math.hypot(D.x - veh.x, D.z - veh.z); if (dv > 15) D.away = true;
     if (D.type && D.away && dv < 4.5 && D.y < veh.y + 4.5 && Math.hypot(D.vx, D.vy, D.vz) < 5) { G.dn[D.type]++; droneEnd(D.type === 1 ? 'Bomber landed — rearmed' : 'Recon drone landed'); return; }
@@ -899,6 +903,8 @@ export function initCombat(C) {
   };
   G.airSpawn = airSpawn; G.planAir = planAir;
   G.mines = { x: MX, z: MZ, y: MY, s: MS, r: MR, fld: FLD, lay: layField, at: mineAt, plan: planFields, strike, hit: mineHit, armed: () => { let n = 0; for (let i = 0; i < MAXM; i++) if (MS[i] === 1 || MS[i] === 2) n++; return n; } };
+  // ---- own artillery support (phase 5 part B, support.js): wraps G.update and G.restart ----
+  G.support = initSupport(C, G, { fire, explode, splash, hurtPlayer, bldFx });
   G.spawn = spawn; G.ROLES = ROLES; G.pending = () => pqN; G.bldHit = bldHit; G.los = losBlocked; G.vis = losVis; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
   hud();
   return G;
