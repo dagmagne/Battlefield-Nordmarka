@@ -171,7 +171,7 @@ export function buildLeopard() {
 
 // ---------- T-72B3 ----------
 export const T72 = { ty: 1.32, tz: -0.35, gy: 1.68, gz: -1.3, mz: -6.15, hl: 2.9, hw: 1.43, rad: 2.6, hh: 1.32, th: 2.1, tr: 1.35 };
-export function buildT72() {
+export function buildT72(cage = false) {
   const b = new MB();
   const GRN = [0.03, 0.04, 0.024], DGRN = [0.022, 0.03, 0.019], DARK = [0.03, 0.031, 0.034], STEEL = [0.16, 0.17, 0.17], BRN = [0.1, 0.065, 0.035];
   runningGear(b, 6, 0.375, -2.45, 2.5, DGRN);
@@ -207,6 +207,15 @@ export function buildT72() {
   b.set(DARK, MAT.metal); b.cyl(0.55, 2.16, tz + 0.1, 0.55, 2.36, tz + 0.1, 0.03, 0.03, 6); b.box(0.5, 2.33, tz - 0.4, 0.6, 2.43, tz + 0.5); b.cyl(0.55, 2.38, tz - 0.4, 0.55, 2.4, tz - 1.25, 0.022, 0.022, 6); // NSVT
   b.box(0.5, 1.72, tz - 1.5, 0.95, 2.0, tz - 1.2); b.cyl(-1.0, 2.0, tz + 0.9, -1.05, 4.0, tz + 1.1, 0.009, 0.004, 4);
   b.set([0.1, 0.02, 0.02], MAT.glass); poly(b, [[0.54, 1.75, tz - 1.503], [0.91, 1.75, tz - 1.503], [0.91, 1.97, tz - 1.503], [0.54, 1.97, tz - 1.503]], [0.7, 1.85, 0]); // Luna searchlight
+  if (cage) { // cope cage: welded posts round the turret carrying a slatted roof well above it (against drones dropping in from above)
+    b.set([0.05, 0.05, 0.045], MAT.metal); const Y0 = 1.62, Y1 = 2.78, X = 1.5, Z0 = tz - 1.75, Z1 = tz + 1.65;
+    for (const [x, z] of [[-X, Z0 + 0.1], [X, Z0 + 0.1], [-X, (Z0 + Z1) / 2], [X, (Z0 + Z1) / 2], [-X + 0.1, Z1], [X - 0.1, Z1]]) b.box(x - 0.03, Y0, z - 0.03, x + 0.03, Y1, z + 0.03);
+    b.box(-X, Y1, Z0, X, Y1 + 0.05, Z0 + 0.06); b.box(-X, Y1, Z1 - 0.06, X, Y1 + 0.05, Z1); b.box(-X, Y1, Z0, -X + 0.06, Y1 + 0.05, Z1); b.box(X - 0.06, Y1, Z0, X, Y1 + 0.05, Z1); // roof frame
+    for (let k = 1; k < 9; k++) { const z = Z0 + (Z1 - Z0) * k / 9; b.box(-X, Y1 + 0.01, z - 0.015, X, Y1 + 0.035, z + 0.015); } // slats across
+    for (let k = 1; k < 6; k++) { const x = -X + 2 * X * k / 6; b.box(x - 0.012, Y1 + 0.035, Z0, x + 0.012, Y1 + 0.06, Z1); } // and along
+    for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) { const z = Z0 + 0.3 + k * 0.85; b.at(sx * X, (Y0 + Y1) / 2 + 0.1, z, 0, 0, sx * 0.0); b.box(-0.012, -0.45, -0.35, 0.012, 0.45, 0.35, 0, 0); b.at(0, 0, 0); } // side grilles
+    b.set(DARK, MAT.metal); for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) { const z = Z0 + 0.3 + k * 0.85; for (let j = -2; j <= 2; j++) b.box(sx * X - 0.02, Y0 + 0.25, z + j * 0.14 - 0.008, sx * X + 0.02, Y1 - 0.05, z + j * 0.14 + 0.008); }
+  }
   // --- gun 2A46M ---
   b.part = 2; const gy = T72.gy;
   b.set(GRN, MAT.rus); b.box(-0.3, gy - 0.2, -1.95, 0.3, gy + 0.2, -1.5, 0.03, 0, 0);
@@ -249,6 +258,33 @@ export function buildBMP() {
   b.set(DARK, MAT.metal); b.cyl(0, gy, -0.95, 0, gy, -2.2, 0.05, 0.04, 8, 0); b.cyl(0, gy, -2.2, 0, gy, BMP.mz, 0.035, 0.035, 8); b.cyl(0, gy, BMP.mz + 0.25, 0, gy, BMP.mz, 0.05, 0.05, 8);
   b.cyl(0.14, gy + 0.02, -0.95, 0.14, gy + 0.02, -1.5, 0.02, 0.02, 6);
   return b.build();
+}
+
+// ---------- enemy loitering munition (Lancet-style: a slim body with two cruciform wing sets, pusher prop), nose at -z ----------
+// parts: 0 airframe, 1 propeller
+export function buildLancet() {
+  const b = new MB(), G = [0.2, 0.22, 0.2], DK = [0.04, 0.042, 0.045];
+  b.part = 0; b.set(G, MAT.paint); b.cyl(0, 0, -0.85, 0, 0, 0.75, 0.07, 0.065, 12); b.cyl(0, 0, -0.85, 0, 0, -1.0, 0.07, 0.02, 12); b.cyl(0, 0, 0.75, 0, 0, 0.82, 0.065, 0.03, 10);
+  b.set([0.05, 0.06, 0.08], MAT.glass); b.cyl(0, -0.07, -0.65, 0, -0.07, -0.55, 0.025, 0.025, 8); // seeker window
+  b.set(G, MAT.paint);
+  for (const [z, sp, ch] of [[-0.35, 0.5, 0.2], [0.45, 0.55, 0.24]]) for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + k * Math.PI / 2; b.at(0, 0, z, 0, 0, a); b.box(-0.008, 0.05, -ch / 2, 0.008, sp, ch / 2, 0, 0.04); b.at(0, 0, 0); } // X-wings
+  b.part = 1; b.set(DK, MAT.rubber); b.box(-0.2, -0.015, 0.85, 0.2, 0.015, 0.87); b.box(-0.015, -0.2, 0.85, 0.015, 0.2, 0.87);
+  return b.build();
+}
+// ---------- enemy recon drone (Orlan-10-style: fuselage, high straight wing, conventional tail, nose prop), nose at -z, about 3.1 m span ----------
+export function buildOrlan() {
+  const b = new MB(), G = [0.32, 0.34, 0.3], DK = [0.04, 0.042, 0.045];
+  b.part = 0; b.set(G, MAT.paint); b.box(-0.1, -0.12, -0.75, 0.1, 0.1, 0.55, 0.03, 0.02); b.cyl(0, -0.01, 0.55, 0, 0.02, 1.15, 0.07, 0.035, 10); b.cyl(0, -0.01, -0.75, 0, -0.01, -0.9, 0.09, 0.05, 10);
+  b.box(-1.55, 0.1, -0.35, 1.55, 0.13, -0.08, 0, 0.02); // high wing
+  b.box(-0.5, 0.02, 1.0, 0.5, 0.04, 1.18, 0, 0.02); b.box(-0.01, 0.02, 0.98, 0.01, 0.38, 1.2, 0, 0.06); // tailplane, fin
+  b.set(DK, MAT.metal); b.box(-0.06, -0.2, -0.3, 0.06, -0.12, -0.15); b.set([0.03, 0.04, 0.06], MAT.glass); b.cyl(0, -0.2, -0.25, 0, -0.27, -0.25, 0.05, 0.05, 10); // camera turret
+  b.part = 1; b.set(DK, MAT.rubber); b.box(-0.03, -0.32, -0.93, 0.03, 0.32, -0.91);
+  return b.build();
+}
+// enemy air units: airframe plus one propeller turning about the body's long axis at local z = pz
+export function airParts(out, a, pz) { // a: {x,y,z,yaw,pitch,roll,spin}
+  trs(BM, a.x, a.y, a.z, a.yaw, a.pitch, a.roll); out.set(BM, 0);
+  trs(T1, 0, 0, pz, 0, 0, a.spin); identity(T2); T2[14] = -pz; mul(T3, T1, T2); mul(TM, BM, T3); out.set(TM, 16);
 }
 
 // ---------- anti-tank mine (TM-62 style: a squat olive disc with the fuze well on top), about 0.32 m across ----------

@@ -72,6 +72,7 @@ export function initAudio(o) {
   Object.defineProperty(S, 'state', { get: () => (ac ? ac.state : !AC ? 'unsupported' : 'waiting') });
   const vEnd = new Float64Array(NV), vG = new Float32Array(NV), vSrc = [], vLP = [], vGain = [], vPan = [];
   const best = new Int16Array(3), bd = new Float32Array(3), eV = new Int16Array(3).fill(-1), eSrc = [], eLP = [], eG = [], eP = [];
+  let aLP, aG, aPan; const aS = [], AIR = game.air || [];
   let tSum, tLP, tPan, eLPf, eGain, kLP, kG, cLP, cG, uO1, uO2, uG, mG, dLP, dG, dPan;
   const eL = [], eLG = [], trk = [], dS = [], REC = o.rec || {}, RM = o.recM || {}; // recorded loops: engine layers, tracks, drone rotors
   const recS = [];
@@ -106,6 +107,8 @@ export function initAudio(o) {
     mG = G(0, tSum); loop(B.mg, mG);
     // FPV drone: the recorded rotor loop twice, slightly detuned (the motors never run in step)
     dPan = Pn(bus); dG = G(0, dPan); dLP = F('lowpass', 6000, dG); for (let i = 0; i < 2; i++) dS.push(rec('dr', dLP, i * 0.21));
+    // the nearest enemy drone: the same rotor recording, pitched up for the small FPV and Lancet motors, down for the Orlan's engine
+    aPan = Pn(bus); aG = G(0, aPan); aLP = F('lowpass', 6000, aG); for (let i = 0; i < 2; i++) aS.push(rec('dr', aLP, 0.4 + i * 0.33));
     // three positional enemy engines (a recorded tank on the move), given to the nearest live enemies each frame
     for (let i = 0; i < 3; i++) { eP[i] = Pn(bus); eG[i] = G(0, eP[i]); eLP[i] = F('lowpass', 2000, eG[i]); eSrc[i] = rec('en', eLP[i], i * 0.9); }
     decode();
@@ -191,11 +194,15 @@ export function initAudio(o) {
     let dy = veh.turYaw - tPrev; tPrev = veh.turYaw; dy = Math.abs(Math.atan2(Math.sin(dy), Math.cos(dy)));
     const tr = dt > 0 ? Math.min(1, dy / dt / 0.75) : 0;
     sp(uG.gain, 0.1 * tr, 0.04); sp(uO1.frequency, 180 + 50 * tr); sp(uO2.frequency, 272 + 75 * tr);
-    const mg = game.mgOn ? 0.55 : 0; sp(mG.gain, mg, mg ? 0.004 : 0.025);
+    const mg = game.mgOn || game.hmgOn ? 0.55 : 0; sp(mG.gain, mg, mg ? 0.004 : 0.025);
     S.engine.rate = rpm; S.engine.gain = eg; S.mg = mg;
     // drone (the recon drone is the quiet one)
     if (D.on) { loc(D.x, D.y, D.z); const f = 0.85 + 0.016 * Math.hypot(D.vx, D.vy, D.vz); sp(dS[0].playbackRate, f, 0.08); sp(dS[1].playbackRate, f * 1.027, 0.08);
       sp(dG.gain, (D.type === 2 ? 0.14 : D.type === 1 ? 0.3 : 0.4) / (1 + LD / 25)); sp(dLP.frequency, Math.min(6000, lpf(LD))); sp(dPan.pan, LP); } else sp(dG.gain, 0, 0.03);
+    { let bi = -1, bd2 = 2.25e6; for (let i = 0; i < AIR.length; i++) { const a = AIR[i]; if (!a.on) continue; const d2 = (a.x - cam.x) ** 2 + (a.y - cam.y) ** 2 + (a.z - cam.z) ** 2; if (d2 < bd2) { bd2 = d2; bi = i; } }
+      if (bi >= 0 && aS.length) { const a = AIR[bi], f = a.type === 2 ? 0.55 : a.type === 1 ? 1.25 : 1.12 + 0.012 * Math.hypot(a.vx, a.vy, a.vz); loc(a.x, a.y, a.z);
+        sp(aS[0].playbackRate, f, 0.1); sp(aS[1].playbackRate, f * 1.031, 0.1); sp(aG.gain, (a.type === 2 ? 0.5 : 0.55) / (1 + LD / (a.type === 2 ? 60 : 30))); sp(aLP.frequency, Math.min(6000, lpf(LD))); sp(aPan.pan, LP); }
+      else if (aG) sp(aG.gain, 0, 0.05); }
     // the three nearest live enemy engines (stable assignment, so a voice does not jump between vehicles)
     bd.fill(1e12); best.fill(-1);
     for (let i = 0; i < EN.length; i++) { const e = EN[i]; if (!e.on || e.dead) continue; const d2 = (e.x - cam.x) ** 2 + (e.z - cam.z) ** 2; if (d2 > 1.44e6) continue;
