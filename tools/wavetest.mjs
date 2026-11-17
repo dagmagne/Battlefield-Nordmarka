@@ -1,6 +1,7 @@
 // Headless behaviour test of the enemy waves (logic-only stepping through __sim, no rendering needed):
 // plays through all waves with an invulnerable player, logs per wave the scenario, composition, spawn bearings, roles and
 // how the enemies moved, and fails on NaN positions, vehicles inside buildings or vehicles that stay stuck.
+// Infantry (phase 6): per wave the squads placed and dismounted, soldiers alive/dead and their shots; fails on NaN or a soldier inside a wall.
 // usage: node tools/wavetest.mjs [--port 8080] [--query "w=frogner"] [--waves 7] [--seed N] [--move]
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -17,23 +18,28 @@ page.on('console', (m) => { if (m.type() === 'error') { console.log('[error]', m
 await page.goto(`http://localhost:${port}/${opt("path", "") ? opt("path", "").replace(/^\/+|\/+$/g, "") + "/" : ""}index.html?${query}&nohint&mute&q=low`); // --path: a checkout below the server root
 await page.waitForFunction('window.__ready===true', null, { timeout: 240000 });
 const res = await page.evaluate(async ({ waves, seed, move }) => {
-  const G = __game, R = __R, veh = __veh, B = __bld; R.god = true; __ui.poll = () => {};
+  const G = __game, R = __R, veh = __veh, B = __bld, I = G.inf; R.god = true; __ui.poll = () => {};
   for (let i = 0; i < seed; i++) { G.spawn(0); for (const e of G.enemies) e.on = false; } // spawn() draws from the game's rnd: shifts the stream for a different replay
   const sl = []; G.onStuck = (e) => { let nq = 1e9; for (const q of G.enemies) if (q !== e && q.on) nq = Math.min(nq, Math.hypot(q.x - e.x, q.z - e.z));
     let nb = 99; for (let r = 2; r < 12 && nb === 99; r += 2) for (let k = 0; k < 8; k++) if (B.at(e.x + Math.cos(k * 0.785) * r, e.y + 1.5, e.z + Math.sin(k * 0.785) * r, 0) >= 0) { nb = r; break; }
     sl.push({ role: G.ROLES[e.role], rev: e.rvD > 0 ? 'was reversing' : 'was forward', nq: Math.round(nq), nb, d: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), stN: e.stN, x: Math.round(e.x), z: Math.round(e.z) }); };
-  const toasts = []; const t0 = __ui.toast; __ui.toast = (m) => { toasts.push(m); t0(m); };
+  const toasts = []; const t0 = __ui.toast; __ui.toast = (m) => { toasts.push(m); t0(m); if (/dismounting/.test(m) && info) info.inf.dis++; };
   const brg = (e) => Math.round(((Math.atan2(e.x - veh.x, -(e.z - veh.z)) * 57.3) + 360) % 360);
   const out = []; let bad = [], t = 0, w = 0, info = null; const cur = [];
   const kill = (e) => { const i = G.enemies.indexOf(e); if (cur[i]) cur[i].dead = true; e.dead = true; e.hp = 0; e.state = 3; e.burn = 0.01; e.v = 0; G.kills++; };
   while (G.wave <= waves && t < 4000) {
     __sim(1 / 30, 30); t += 1;
     if (G.wave !== w && G.state === 1) { // a new wave started
-      w = G.wave; info = { wave: w, plan: G.plan, t0: t - 1, units: [] }; out.push(info);
+      w = G.wave; info = { wave: w, plan: G.plan, t0: t - 1, units: [], inf: { rpg: 0, atgm: 0, dis: 0, peak: 0, dead: 0, wall: 0 }, i0: [I.rockets, I.atgms, I.bursts, I.kills] }; out.push(info);
+      for (let q = 0; q < I.qk.length; q++) if (I.qk[q] >= 0) { let live = 0; for (let i = 0; i < I.n; i++) if (I.sq[i] === q && I.d[i * 8 + 7] === 1) live++; if (live && I.qk[q] < 2) info.inf[I.qk[q] ? 'atgm' : 'rpg']++; }
     }
     if (move && G.state === 1) { R.force = [Math.sin(t / 23) > 0 ? 0.6 : -0.4, Math.sin(t / 7) * 0.5]; }
     if (!info) continue;
     const wt = t - info.t0;
+    { let live = 0, dead = 0; for (let i = 0; i < I.n; i++) { const o = i * 8, st = I.d[o + 7]; if (!st) continue; if (st === 2) { dead++; continue; } live++;
+        for (let k = 0; k < 8; k++) if (!isFinite(I.d[o + k])) { bad.push(`soldier NaN w${w} #${i}`); break; }
+        if (I.hb[i] < 0 && B.at(I.d[o], I.d[o + 1] + 1, I.d[o + 2], 0) >= 0) { info.inf.wall++; bad.push(`soldier inside a wall w${w} #${i} at ${Math.round(I.d[o])},${Math.round(I.d[o + 2])}`); } }
+      info.inf.peak = Math.max(info.inf.peak, live); info.inf.dead = dead; }
     for (let i = 0; i < G.enemies.length; i++) { const e = G.enemies[i]; if (!e.on || e.dead) { if (cur[i]) cur[i].dead = true; continue; }
       let u = cur[i]; if (!u || u.dead || u.wave !== w) { u = cur[i] = { wave: w, type: ['T72', 'BMP', 'Tigr', 'BTR', 'Buggy', 'Moto'][e.type], role: G.ROLES[e.role], grp: e.grp, spawnT: wt, b0: brg(e), d0: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), track: [], dmin: 1e9, net: [0, 0], scoots: 0, smoked: false }; info.units.push(u); }
       const d = Math.hypot(e.x - veh.x, e.z - veh.z); u.dmin = Math.min(u.dmin, d);
@@ -53,13 +59,14 @@ const res = await page.evaluate(async ({ waves, seed, move }) => {
     if (G.state === 1 && wt > 240) for (const e of G.enemies) if (e.on && !e.dead) kill(e);
     if (G.state === 0 && G.wave >= waves) break;
   }
-  return { sl, stuck: G.stuck, bad: bad.slice(0, 20), nbad: bad.length, toasts, waves: out.map((o) => ({ wave: o.wave, plan: o.plan, units: o.units.map((u) => ({ ...u, net: u.net.join('/'), track: u.track.slice(0, 14).join(' ') })) })) };
+  return { sl, stuck: G.stuck, bad: bad.slice(0, 20), nbad: bad.length, toasts, waves: out.map((o, j) => ({ wave: o.wave, plan: o.plan, inf: o.inf, shots: (out[j + 1] ? out[j + 1].i0 : [I.rockets, I.atgms, I.bursts, I.kills]).map((v, k) => v - o.i0[k]), units: o.units.map((u) => ({ ...u, net: u.net.join('/'), track: u.track.slice(0, 14).join(' ') })) })) };
 }, { waves, seed, move });
 for (const w of res.waves) {
   console.log(`\n=== wave ${w.wave}: ${w.plan} (${w.units.length} vehicles)`);
+  console.log(`  infantry: ${w.inf.rpg} RPG team(s), ${w.inf.atgm} ATGM team(s), ${w.inf.dis} dismount(s); peak ${w.inf.peak} alive, ${w.inf.dead} dead; rockets/ATGMs/rifle bursts/kills (to the next wave) ${w.shots.join('/')}${w.inf.wall ? '; ' + w.inf.wall + ' inside a wall' : ''}`);
   for (const u of w.units) console.log(`  ${u.type} ${u.role.padEnd(9)} g${u.grp} spawn t+${u.spawnT}s brg ${u.b0}° ${u.d0} m  min ${Math.round(u.dmin)} m  route trail/road ${u.net}  scoot-s ${u.scoots}${u.grazed ? (u.smoked ? '  graze->smoke+reverse' : '  graze->no smoke') : ''}\n      ${u.track}`);
 }
-console.log('\ntoasts:', res.toasts.filter((m) => /Wave|Contact|More|inbound|diving|Orlan|rocket|Artillery|shot down|Hit by|MINE/.test(m)).join('\n        '));
+console.log('\ntoasts:', res.toasts.filter((m) => /Wave|Contact|More|inbound|diving|Orlan|rocket|Artillery|shot down|Hit by|MINE|RPG|dismount|ATGM launch|team/.test(m)).join('\n        '));
 for (const x of res.sl) console.log('  stuck', JSON.stringify(x));
 console.log(`\nstuck events: ${res.stuck}; problems: ${res.nbad}`, res.bad);
 await browser.close();

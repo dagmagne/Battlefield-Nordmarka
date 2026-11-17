@@ -78,7 +78,8 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
 - **Egen artilleristøtte:** én serie per bølge. Tilkalles fra dronen (marker et punkt) eller siktet. Touch-knapp.
   - **Del B gjort** (`src/support.js`, skalltype 11, tast B / ARTY-knapper / L1, `tools/supporttest.mjs`).
 
-### Fase 6: Infanteri
+### Fase 6: Infanteri (del B gjort: logikk og AI)
+- **Del B, logikk og AI: gjort** på `claude/phase-6b-infantry` (`src/infantry.js`, grensesnittet `G.inf`, skalltype 12 for RPG, `tools/inftest.mjs`; se `CLAUDE.md` under Infantry logic). Del A (modell, animasjon og instansiert tegning) gjøres for seg.
 - **Modell:** lavpolygon-soldat bygget prosedyrisk (overkropp, hode med hjelm, armer, ben, våpen), hvite vinteruniformer.
   - Instansiert tegning i ett draw call.
   - Stive lemmer animeres med del-matriser, slik tanken gjør: løpe, gå, knele, ligge, skyte, dø.
