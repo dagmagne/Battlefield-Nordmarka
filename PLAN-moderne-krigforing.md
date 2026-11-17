@@ -1,6 +1,6 @@
 # Plan: moderne krigføring (droner, miner, lette kjøretøy, infanteri)
 
-Status: **fase 1–4 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines`, fase 3 på `claude/phase-3-air`, fase 4 på `claude/phase-4-light`, hver bygget på den forrige; ingen merget; se `CLAUDE.md` under Drones, Minimap, Mines, Enemy air og Light and wheeled vehicles). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
+Status: **fase 1–5 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines`, fase 3 på `claude/phase-3-air`, fase 4 på `claude/phase-4-light`, fase 5 på `claude/phase-5-arty`, hver bygget på den forrige; ingen merget; se `CLAUDE.md` under Drones, Minimap, Mines, Enemy air og Light and wheeled vehicles). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
 miner over alt, små raske angrepsgrupper, og rekognoseringsdroner som leder artilleri.
 Alt skal fortsatt være prosedyrisk og følge reglene i `CLAUDE.md` (ingen allokering per frame, touch-kontroll for alt nytt,
 verifisering med renders og `__sim`-tester, bundle-størrelse rapporteres).
@@ -69,7 +69,7 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
   - Øk `MAXE`, og gi lette kjøretøy egne `ETYPE`-oppføringer (hp, fart, våpen, `night`-faktor for deteksjon).
 - **Nye scenarier** i `planWave`: «Motorisert raid», «ATGM-bakhold».
 
-### Fase 5: Artilleri med rekognoseringsdrone (del A gjort)
+### Fase 5: Artilleri med rekognoseringsdrone (gjort: del A fiendtlig artilleri, del B egen artilleristøtte)
 - **Del A, fiendtlig artilleri: gjort** på `claude/phase-5a-enemy-arty` (`src/arty.js`, granattype 10, lyden `incoming`, `tools/artytest.mjs`; se `CLAUDE.md` under Enemy artillery). Del B (egen artilleristøtte) gjøres for seg.
 - Hvis en Orlan eller en fiende har sett spilleren lenge nok (for eksempel 15 s sammenhengende i `G.rep`), kommer en serie på 4–8 granater mot posisjonen etter 20–40 s.
   - Spredning rundt den observerte posisjonen, ikke den nåværende. Å flytte seg er motmiddelet.
