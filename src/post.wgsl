@@ -107,11 +107,11 @@ fn thermalView(uv: vec2f, fp: vec2f, bloom: f32) -> vec3f {
     let gc = mix(vec3f(1.0, 0.62, 0.1), vec3f(0.35, 1.0, 0.45), U.d.y * step(0.999, U.c.z));
     c = mix(c, vec3f(0.0), (1.0 - smoothstep(1.9, 3.2, abs(gd - 11.0))) * 0.35);
     c = mix(c, gc, ring); c = mix(c, vec3f(1.0, 0.8, 0.3), arc);
-    // incoming drones: red chevrons on a ring round the crosshair, pointing the way to turn (blinking while one dives)
+    // incoming drones: red chevrons on a ring round the crosshair, pointing the way to turn (blinking while one dives); a positive angle means turn left, so -sin maps it to screen x
     for (var k = 0; k < 2; k++) {
       let ang = select(U.e.x, U.e.z, k == 1); let str = select(U.e.y, U.e.w, k == 1);
       if (str > 0.01) {
-        let dir = vec2f(sin(ang), -cos(ang)); let pp = px / s - dir * mix(150.0, 120.0, sb); let al = dot(pp, dir); let ac = abs(dot(pp, vec2f(-dir.y, dir.x)));
+        let dir = vec2f(-sin(ang), -cos(ang)); let pp = px / s - dir * mix(150.0, 120.0, sb); let al = dot(pp, dir); let ac = abs(dot(pp, vec2f(-dir.y, dir.x)));
         let tri = step(-9.0, al) * step(al, 13.0) * step(ac, (13.0 - al) * 0.85) * (1.0 - step(-3.0, al) * step(ac, (5.0 - al) * 0.85) * step(al, 5.0));
         let edge = step(-11.0, al) * step(al, 15.0) * step(ac, (15.5 - al) * 0.85);
         let bl = select(1.0, 0.45 + 0.55 * step(0.5, fract(U.b.z * 4.0)), str > 0.9);

@@ -197,13 +197,12 @@ export function initCombat(C) {
 
   // ---------- projectiles ----------
   // Kornet: the launcher keeps it on the line to the tank while it can see the tank (smoke or cover cut the guidance; then it flies on blind)
-  let guideN = 0;
   function guide(o, dt) {
     S[o + 4] += GRAV * dt; // the motor holds it up
     for (let k = 0; k < 2; k++) { const f = rnd(); parts.emit(S[o] - S[o + 3] * dt * f, S[o + 1] - S[o + 4] * dt * f, S[o + 2] - S[o + 5] * dt * f, sr() * 0.4, 0.2 + rnd() * 0.3, sr() * 0.4, 1.8 + rnd() * 1.2, 0.3 + rnd() * 0.25, 1.4, 1, 0.82, 0.82, 0.84, 0.55); } // a thin grey-white trail
     const li = S[o + 9] - 1; if (li < 0) return; const e = G.enemies[li];
     if (!e || !e.on || e.dead || veh.dead) { S[o + 9] = 0; return; }
-    if ((++guideN & 3) === 0 && losVis(e.x, e.y + 2.2, e.z, veh.x, veh.y + 1.6, veh.z) <= 0.05) { // beam lost: it wanders off its line
+    if (((R.frame + o / SS) & 3) === 0 && losVis(e.x, e.y + 2.2, e.z, veh.x, veh.y + 1.6, veh.z) <= 0.05) { // every 4th frame per missile (its slot sets the phase); beam lost: it wanders off its line
       S[o + 9] = 0; const a = (rnd() < 0.5 ? -1 : 1) * (0.06 + rnd() * 0.07), c = Math.cos(a), sn = Math.sin(a), vx = S[o + 3], vz = S[o + 5];
       S[o + 3] = c * vx - sn * vz; S[o + 5] = sn * vx + c * vz; S[o + 4] += (rnd() * 0.08 - 0.03) * Math.hypot(vx, vz); ui.toast('The ATGM lost its guidance'); return; }
     const dx = veh.x - S[o], dy = veh.y + 1.2 - S[o + 1], dz = veh.z - S[o + 2], d = Math.hypot(dx, dy, dz) || 1, v = Math.hypot(S[o + 3], S[o + 4], S[o + 5]) || 1, k = Math.min(1, dt * 2.2);
