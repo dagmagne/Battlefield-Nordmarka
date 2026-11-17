@@ -25,10 +25,12 @@ import { Particles } from './particles.js';
 import { initUI, inp } from './ui.js';
 import { initAudio } from './audio.js';
 import { REC, RECM } from './sndrec.js';
+import { initMusic } from './music.js';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
-const fail = (m) => { $('load').style.display = 'none'; $('ui').style.display = 'none'; $('err').style.display = 'flex'; $('errp').textContent = m; };
+const music = initMusic(qs); // intro music on the start screen, faded out when the game starts
+const fail = (m) => { music.stop(1); $('load').style.display = 'none'; $('ui').style.display = 'none'; $('err').style.display = 'flex'; $('errp').textContent = m; };
 
 // ---------- quality tiers ----------
 const TIERS = {
@@ -924,7 +926,7 @@ async function main() {
   window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; stInit = false; R.snap = true; };
   Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
-  $('load').style.display = 'none';
+  $('load').style.display = 'none'; music.stop(4);
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();
   if (qs.has('nohud')) { $('ui').style.display = 'none'; R.nohud = true; }
   requestAnimationFrame(frame);

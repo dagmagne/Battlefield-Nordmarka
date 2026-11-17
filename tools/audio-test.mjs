@@ -90,6 +90,26 @@ const nap = (page, ms) => page.waitForTimeout(ms);
   check('runs without AudioContext', r[0] === 'unsupported' && r[1] === 1 && r[2] > 1, r);
   await p.close();
 }
+// 4. intro music: blocked until a gesture (as in a normal browser), starts on picking a world, fades out when the game starts
+{
+  const b2 = await chromium.launch({ args: ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--enable-features=Vulkan,SkiaGraphite', '--use-vulkan=swiftshader', '--ignore-gpu-blocklist', '--no-sandbox', '--autoplay-policy=user-gesture-required'] });
+  const p = await b2.newPage({ viewport: { width: 960, height: 620 } });
+  p.on('pageerror', (e) => { console.log('[pageerror]', String(e).slice(0, 400)); errs++; });
+  let audioOk = true; p.on('console', (m) => { if (m.type() === 'error') { console.log('[error]', m.text().slice(0, 300)); errs++; } });
+  await p.addInitScript(() => { const P = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__mus = this; return P.call(this); }; });
+  await p.goto(`http://localhost:${port}/index.html?q=low&drs=0&np`);
+  await p.waitForSelector('#pick button', { state: 'visible', timeout: 60000 }); await nap(p, 800);
+  const before = await ev(p, '[!!window.__mus, window.__mus ? window.__mus.paused : null]');
+  check('music waits for a gesture on the start screen', before[0] && before[1] === true, before);
+  await p.click('#pick button[data-w="frogner"]'); await nap(p, 1500);
+  const during = await ev(p, '[__mus.paused, +__mus.currentTime.toFixed(2), __mus.duration]');
+  check('music plays after picking a world (during loading)', during[0] === false && during[1] > 0.2 && during[2] > 55, during);
+  await p.waitForFunction('window.__ready===true', null, { timeout: 240000 });
+  await nap(p, 5000);
+  const after = await ev(p, '[__mus.paused, +__mus.volume.toFixed(2)]');
+  check('music fades out and stops once the game runs', after[0] === true, after);
+  await b2.close();
+}
 await browser.close();
 console.log(`${fails} failed check(s), ${errs} page error(s)`);
 process.exit(fails || errs ? 1 : 0);
