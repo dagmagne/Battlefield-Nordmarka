@@ -1,16 +1,17 @@
 // Scripted drive capture: consecutive frames (shimmer check) + sparse frames; optional mp4.
 // usage: node tools/drive.mjs outdir [--video]
 import { chromium } from 'playwright-core';
+import { base, chromeArgs, logAdapter } from './gpu.mjs';
 import { mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 const a = process.argv.slice(2), out = a[0], video = a.includes('--video');
 mkdirSync(out, { recursive: true });
-const browser = await chromium.launch({ channel: 'chrome', headless: false, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--window-size=1728,1117', '--hide-scrollbars'] });
+const browser = await chromium.launch({ channel: 'chrome', headless: false, args: chromeArgs(['--window-size=1728,1117']) });
 const ctx = await browser.newContext({ viewport: { width: 1728, height: 1117 }, deviceScaleFactor: video ? 1 : 2 });
 const page = await ctx.newPage();
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) console.log('[error]', m.text().slice(0, 500)); });
-await page.goto('http://localhost:8080/index.html?nohint&drs=0&tod=1');
-await page.waitForFunction('window.__ready===true', null, { timeout: 90000 });
+await page.goto(`${base}?nohint&drs=0&tod=1`);
+await page.waitForFunction('window.__ready===true', null, { timeout: 90000 }); await logAdapter(page);
 await page.evaluate(`(()=>{const s=__W.start; __tp(s.x,s.z,s.yaw); __R.auto={i:20}; __chase(0.35,0.17,14);})()`);
 const step = (n, dt = 1 / 60) => page.evaluate(([n, dt]) => window.__step(dt, n), [n, dt]);
 const shot = async (name) => { await page.waitForTimeout(60); await page.screenshot({ path: `${out}/${name}.png` }); };

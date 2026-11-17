@@ -15,7 +15,7 @@ Scripted runs with `?nohint` and no `?w` default to Frognerseteren.
 
 **Target platforms: cross-platform.** Windows PC, Mac, phones and iPad, in current Chrome, Edge and Safari. The owner works mainly on a Windows laptop with an NVIDIA card (Edge / Chrome); the Mac-only wording and the M2 Max numbers further down come from the groomer project and are historical. The touch UI (`?touch`) is a first-class part of the game and has to be kept working: anything added for keyboard and mouse needs a touch control too. Check the layout with `tools/cshot.mjs ... --touch --w 852 --h 393` (phone, landscape) and an iPad-sized viewport.
 
-What has actually been run where, so far: Windows + NVIDIA (found the `pow` NaN line, about 50 fps with everything on high), Windows + integrated Intel `gen-12lp` (23 fps on the low tier), iPhone (played, no artefacts reported). Not run in this round: Mac, iPad, Android. Nothing here can listen to sound or measure frame time: both need the owner's machines.
+What has actually been run where, so far: Windows + NVIDIA (found the `pow` NaN line, about 50 fps with everything on high), Windows + integrated Intel `gen-12lp` (23 fps on the low tier), iPhone (played, no artefacts reported). Linux desktop + GTX 1060 6GB (driver 580, Chrome 157): the GPU tools below run here on the real card, so frame and GPU time can now be measured by the agent (see the baseline under Performance discipline). Not run in this round: Mac, iPad, Android. Nothing here can listen to sound: that needs the owner's ears.
 
 Fullscreen: a FULL button in the touch top bar (`#bFs`, `ui.js`) calls `requestFullscreen` and on Android locks the screen to landscape; it is only shown where the browser supports page fullscreen (Android, iPad), because iPhone Safari does not. On iPhone the way to a full screen is Add to Home Screen (`apple-mobile-web-app-capable` is set). Known gaps on touch (no button yet, keyboard only): the thermal sight (V), sound on/off (M; the menu row works), restart (R; the end card's button works), snowfall (N; menu), free-fly (F). The settings menu has grown (a Music row was added) and scrolls on a phone; its Close button is below the fold at 393 px height.
 
@@ -62,7 +62,7 @@ Fullscreen: a FULL button in the touch top bar (`#bFs`, `ui.js`) calls `requestF
 - **`window` globals:** `__ready __step(dt,n) __sim(dt,n) __pose __look __chase __aim(yaw,pitch,mode) __aimAt(x,y,z) __tod __tp(x,z,yaw) __info __waitFrames`, plus `__R __W __cam __veh __aimS __inp __api __ui __game __parts __audio` (`state count played live srcs nodes engine mg master start()`), `__bld` (building records, boxes, states; `__game.bldHit(i, dmg, x, y, z, hot)` damages one) and `__collBench(n)` (time n `collide()` calls). `__step` switches to manual, deterministic stepping; `__sim` steps the logic (physics, combat, particles) without rendering, which is what makes scripted fights affordable. `__R.force=[throttle,steer]` scripts the driving, `__inp.fire` / `__inp.mg` the weapons (set `__ui.poll=()=>{}` first so the poll does not overwrite them), `__game.spawn(type)` adds an enemy, `__R.god` makes the player invulnerable.
 
 ## Verification workflow (always do this, don't just reason about the code)
-All tools drive a **headed** Chrome with the GPU enabled through playwright-core, at 1728×1117 and DPR 2 (MacBook Retina). They were written for the Mac and have not been tried on Windows; the container tools (`cshot`, `battle.sh`, `audio-test.mjs`) are what has been used since the tank conversion.
+All tools drive a **headed** Chrome with the GPU enabled through playwright-core, at 1728×1117 and DPR 2 (MacBook Retina). They were written for the Mac and run on the Linux GTX 1060 machine; not tried on Windows. Shared options live in `tools/gpu.mjs`: `--port N` (or `GPORT`, default 8080), `--path P` (or `GPATH`, a checkout below the server root, e.g. `.claude/worktrees/<name>` when the server serves the main checkout), `--vulkan` (adds `--enable-unsafe-webgpu` and Vulkan for a Chrome without hardware WebGPU; not needed on Chrome 157 / Linux). Every tool prints `[gpu] <adapter>` and warns on SwiftShader or llvmpipe; the container tools (`cshot`, `battle.sh`, `audio-test.mjs`) are what has been used since the tank conversion.
 - `tools/shot.mjs`: single screenshot. `tools/multi.mjs`: a batch of shots in one session.
 - `tools/poses.mjs` with `tools/scenes.mjs`: the 8 fixed verification scenes (real world). Render these after visual changes. The fantasy world has no scene set any more; check it by loading `?w=fantasi`.
 - `tools/drive.mjs outdir [--video]`: scripted drive with consecutive frames (shimmer check), sparse frames and an optional mp4.
@@ -79,7 +79,17 @@ For larger visual milestones, run a **critic subagent that sees only the renders
 
 ### Performance discipline
 - Measure GPU time with timestamp queries, not just frame time. Compare before and after with an **A/B under identical conditions** (stash, build, measure, pop).
-- Other apps on the machine (browser, IDE, WindowServer) skew absolute numbers a lot. Report the load you saw, and don't treat a loaded-machine number as the baseline. The idle baseline on high/native was frame avg 14.2 ms / p99 18.3 ms and GPU avg 12.9 ms / p99 15.4 ms. (That baseline is the groomer on an M2 Max; there is no baseline for the tank game on any machine yet.)
+- Other apps on the machine (browser, IDE, WindowServer) skew absolute numbers a lot. Report the load you saw, and don't treat a loaded-machine number as the baseline. The idle baseline on high/native was frame avg 14.2 ms / p99 18.3 ms and GPU avg 12.9 ms / p99 15.4 ms. (That baseline is the groomer on an M2 Max.)
+- **Tank-game baseline (2026-11-17, Linux, GTX 1060 6GB, driver 580, Chrome 157, adapter `nvidia pascal`; idle desktop, load ≈ 1.3):** `tools/perf.mjs` at 1728×1117 DPR 2 (3456×2234 backing), real world, Frognerseteren, tod=1. Frame times include the ~3 s load hitch in max/avg.
+
+  | run | frame avg / p50 / p99 ms | GPU avg / p50 / p99 ms | DRS scale |
+  |---|---|---|---|
+  | `q=high` (DRS) | 24.5–28.2 / 16.7–33.3 / 33.5–49.9 | 22.7–26.1 / 22.9–26.5 / 28.6–33.4 | 0.6 |
+  | `q=high&drs=0` | 40.9 / 33.4 / 66.7 | 38.2 / 39.2 / 42.5 | 1.0 |
+  | `q=medium` | 18.1 / 16.7 / 16.9 | 10.8 / 10.6 / 13.2 | 0.8 |
+  | `q=medium&drs=0` | 18.1 / 16.7 / 16.8 | 11.2 / 11.1 / 13.7 | 0.8 (tier) |
+
+  Two high runs differed by about 15 %, so use `drs=0` for A/B comparisons. High does not hold 60 fps on this card at this resolution; medium does with headroom.
 
 ## How the work was done (process to keep following)
 1. **The first prompt was a full spec**: the world, groomer, grooming mask, controls, quality tiers and DRS, the verification plan and a "done when the critic gate passes" criterion. Write a working `index.html` early, then iterate in milestones (terrain, then trees, then groomer and mask, then lighting and post, then UI and perf). Overwrite `index.html` and commit after each one.
