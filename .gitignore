@@ -5,3 +5,4 @@ shots
 tools/geo/raw/
 tools/geo/__pycache__/
 .claude/worktrees/
+tools/snd/__pycache__/
