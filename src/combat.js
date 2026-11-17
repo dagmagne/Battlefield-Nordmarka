@@ -2,6 +2,7 @@
 // Everything is preallocated in initCombat(); update() and its helpers allocate nothing per frame.
 import { clamp } from './math.js';
 import { tankParts, droneParts, gunMat, LEO, T72, BMP } from './tank.js';
+import { cur as todCur } from './tod.js';
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
 export const MAXE = 10, MAXG = 760;
@@ -10,13 +11,17 @@ const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
 // shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade
 const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0]];
 const BDMG = [20, 45, 70, 0, 35, 3, 0]; // direct-hit damage to a building by shell type (the drone charge does 100)
-const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1500, burst: 1, name: 'T-72B3' }, { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 950, burst: 5, name: 'BMP-2' }];
+const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1800, burst: 1, night: 0.35, name: 'T-72B3' }, { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2' }];
+// spotting: e.see grows at vis·sig/(1+(d/SEE_R)²)·cue − SEE_FLOOR per second; 1 = detected (turret on, engages), the first shot needs 1 + d/1000.
+// vis: line-of-sight transmittance (foliage optical depth: one e-fold per FOL_L m of full canopy, blocked below 0.1);
+// sig: how conspicuous the Leopard is (moving, firing, concealed under canopy, darkness vs. the sight: night = loss without a muzzle flash).
+const SEE_R = 700, SEE_FLOOR = 0.12, FOL_L = 14, FOL_MAX = 255 * FOL_L * 2.3;
 
 export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
   const SO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
-  const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES;
+  const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES; G.rep = 0; G.spot = false;
   let fireWas = false, fireBlock = false;
   let sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i] });
@@ -52,18 +57,27 @@ export function initCombat(C) {
     const gx = x + dx * 2, gz = z + dz * 2, gh = hAt(gx, gz);
     if (y - gh < 4.5) for (let i = 0; i < 22 * s; i++) { const a = rnd() * 6.283, r = 2 + rnd() * 7; parts.emit(gx + Math.cos(a) * 1.5, gh + 0.3, gz + Math.sin(a) * 1.5, Math.cos(a) * r + dx * 5, 0.5 + rnd() * 2.2, Math.sin(a) * r + dz * 5, 1.4 + rnd() * 1.6, 0.7 + rnd() * 0.9, 1.8, 1, 1.22, 1.22, 1.26, 0.26); }
   }
-  // line of sight: terrain, forest canopy (density raster) and smoke clouds
-  function losBlocked(x0, y0, z0, x1, y1, z1) {
-    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, d = Math.hypot(dx, dy, dz), n = clamp(Math.ceil(d / 10), 6, 110), st = d / n; let can = 0;
-    if (C.bld.seg(x0, y0, z0, x1, y1, z1)) return true; // intact and damaged buildings (rubble does not block)
+  // line of sight as a transmittance 0..1: buildings, terrain and smoke block; foliage below the crowns attenuates
+  function losVis(x0, y0, z0, x1, y1, z1) {
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, d = Math.hypot(dx, dy, dz), n = clamp(Math.ceil(d / 8), 6, 160), st = d / n; let fol = 0;
+    if (C.bld.seg(x0, y0, z0, x1, y1, z1)) return 0; // intact and damaged buildings (rubble does not block)
     for (let k = 1; k < n; k++) {
       const f = k / n, x = x0 + dx * f, y = y0 + dy * f, z = z0 + dz * f, g = hAt(x, z);
-      if (y < g + 0.4) return true;
-      if (R.trees && y < g + 10) { const i = clamp(((x + HALF) / WS * HN) | 0, 0, HN - 1), j = clamp(((z + HALF) / WS * HN) | 0, 0, HN - 1); can += W.nrm[(j * HN + i) * 4 + 2] * st; if (can > 9500) return true; }
+      if (y < g + 0.4) return 0;
+      if (R.trees && y < g + 12) { fol += canAt(x, z) * st; if (fol > FOL_MAX) return 0; }
     }
     for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1 || CL[o + 3] < 1.2 || CL[o + 3] > 22) continue;
-      const t = clamp(((CL[o] - x0) * dx + (CL[o + 1] - y0) * dy + (CL[o + 2] - z0) * dz) / (d * d), 0, 1); if (Math.hypot(x0 + dx * t - CL[o], y0 + dy * t - CL[o + 1], z0 + dz * t - CL[o + 2]) < 10) return true; }
-    return false;
+      const t = clamp(((CL[o] - x0) * dx + (CL[o + 1] - y0) * dy + (CL[o + 2] - z0) * dz) / (d * d), 0, 1); if (Math.hypot(x0 + dx * t - CL[o], y0 + dy * t - CL[o + 1], z0 + dz * t - CL[o + 2]) < 10) return 0; }
+    return Math.exp(-fol / (255 * FOL_L));
+  }
+  const losBlocked = (x0, y0, z0, x1, y1, z1) => losVis(x0, y0, z0, x1, y1, z1) <= 0;
+  const canAt = (x, z) => W.nrm[(clamp(((z + HALF) / WS * HN) | 0, 0, HN - 1) * HN + clamp(((x + HALF) / WS * HN) | 0, 0, HN - 1)) * 4 + 2]; // canopy density 0..255
+  // how conspicuous the player is to an observer of type E (1 = a still tank in the open by day)
+  function playerSig(E) {
+    const sp = Math.min(Math.abs(veh.v), 10) / 10, conc = R.trees ? canAt(veh.x, veh.z) / 255 : 0, dark = clamp((2 - todCur[1]) / 22, 0, 1);
+    const body = (1 + 1.5 * sp) * (1 - conc * (sp > 0.05 ? 0.35 : 0.7)) * (1 - E.night * dark); // motion, snow spray and exhaust; canopy hides a still tank best
+    const shot = G.rl > 0 ? 2 + 4 * G.rl / RELOAD : 0; // muzzle flash and blast cloud for the reload after a main-gun shot
+    return Math.max(body, shot, G.mgOn ? 2 : 0);
   }
   // which part of a vehicle contains the point: 0 none, 1 hull, 2 turret
   function inside(t, K, x, y, z) {
@@ -210,11 +224,15 @@ export function initCombat(C) {
       const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz);
       // perception (staggered line-of-sight checks)
       e.losT -= dt;
-      if (e.losT <= 0) { e.losT = 0.28; e.los = !veh.dead && d < 2200 && !losBlocked(e.x, e.y + 2.2, e.z, veh.x, veh.y + 1.9, veh.z); }
-      if (e.los) { e.see += dt; e.known = Math.max(e.known, d < 1300 ? 12 : 0); } else e.see = Math.max(0, e.see - dt * 0.6);
+      if (e.losT <= 0) { e.losT = 0.28; e.los = !veh.dead && d < 2200 ? losVis(e.x, e.y + 2.2, e.z, veh.x, veh.y + 1.9, veh.z) : 0; }
+      if (e.los > 0) e.see = Math.min(4, e.see + (e.los * playerSig(E) / (1 + d * d / (SEE_R * SEE_R)) * (e.known > 0 ? 1.6 : 1) - SEE_FLOOR) * dt);
+      else e.see -= 0.5 * dt;
+      if (e.see < 0) e.see = 0;
+      if (e.see >= 1) { e.known = Math.max(e.known, 12); if (e.los > 0) G.spot = true; }
+      if (G.rep > 5) e.known = Math.max(e.known, 3); // a contact report from another crew (radio delay) tells it where to look
       e.known -= dt;
-      const engage = e.los && d < E.range && e.see > 0.4;
-      e.state = engage && (d < 700 || e.see > 1) ? 1 : 0;
+      const engage = e.los > 0 && d < E.range && e.see >= 1;
+      e.state = engage ? 1 : 0;
       // movement: follow the trail towards the player, hold at stand-off range once in contact
       let tgt = 0, st = 0;
       if (!e.immob && !(e.state === 1 && d < 650) && d > 70) {
@@ -235,10 +253,10 @@ export function initCombat(C) {
       e.y = (a + b + c + dd) / 4 + 0.02; e.pitch += (Math.atan2((a + b - c - dd) / 2, hl * 2) - e.pitch) * k; e.roll += (Math.atan2((a + c - b - dd) / 2, hw * 2) - e.roll) * k;
       // gunnery: lead, an aim error that settles with each shot, ballistic elevation
       e.errT -= dt;
-      if (e.errT <= 0) { e.errT = 2.2; const sg = (1.1 + d * 0.0042 + Math.abs(veh.v) * 0.22) * (1 + 2.2 / (1 + e.shots)) * (R.easy || 1); e.ex = (rnd() + rnd() + rnd() - 1.5) * sg; e.ey = (rnd() + rnd() + rnd() - 1.5) * sg * 0.45; e.ez = (rnd() + rnd() + rnd() - 1.5) * sg; }
+      if (e.errT <= 0) { e.errT = 2.2; const sg = (1.1 + d * 0.0042 + Math.abs(veh.v) * 0.22) * (1 + (2.2 + d / 700) / (1 + e.shots)) * (R.easy || 1); e.ex = (rnd() + rnd() + rnd() - 1.5) * sg; e.ey = (rnd() + rnd() + rnd() - 1.5) * sg * 0.45; e.ez = (rnd() + rnd() + rnd() - 1.5) * sg; }
       const M = e.d, ox = M[4] * K.gy + M[8] * K.gz + M[12], oy = M[5] * K.gy + M[9] * K.gz + M[13], oz = M[6] * K.gy + M[10] * K.gz + M[14];
       let wx = fx, wy = 0, wz = fz;
-      if (e.see > 0.2 || e.known > 0) {
+      if (e.see > 0.6 || e.known > 0) {
         const tof = d / E.v, tx = veh.x - Math.sin(veh.yaw) * veh.v * tof * 0.85 + e.ex - ox, ty = veh.y + 1.35 + e.ey - oy, tz = veh.z - Math.cos(veh.yaw) * veh.v * tof * 0.85 + e.ez - oz;
         const hd = Math.max(1, Math.hypot(tx, tz)), v2 = E.v * E.v, disc = v2 * v2 - GRAV * (GRAV * hd * hd + 2 * ty * v2), el = disc > 0 ? Math.atan2(v2 - Math.sqrt(disc), GRAV * hd) : 0.3, ce = Math.cos(el);
         wx = tx / hd * ce; wy = Math.sin(el); wz = tz / hd * ce;
@@ -249,7 +267,7 @@ export function initCombat(C) {
       e.turYaw += clamp(dyaw, -E.slew * dt, E.slew * dt); e.gunPitch += clamp(dpt, -0.35 * dt, 0.35 * dt);
       e.rl -= dt; e.recoil *= 1 - Math.min(1, dt * 4.5);
       if (e.burstN > 0) { e.burstT -= dt; if (e.burstT <= 0) { e.burstT = 0.2; e.burstN--; e.fire = true; } }
-      else if (engage && !G.peace && e.rl <= 0 && Math.hypot(dyaw, dpt) < 0.012 && e.see > (e.shots ? 0.6 : 1.6)) { e.rl = E.reload * (0.9 + rnd() * 0.3); e.shots++; e.fire = true; e.burstN = E.burst - 1; e.burstT = 0.2; }
+      else if (engage && !G.peace && e.rl <= 0 && Math.hypot(dyaw, dpt) < 0.012 && e.see >= (e.shots ? 1 : 1 + d * 0.001)) { e.rl = E.reload * (0.9 + rnd() * 0.3); e.shots++; e.fire = true; e.burstN = E.burst - 1; e.burstT = 0.2; }
     }
     tankParts(e.d, e, K); e.d[128] = e.trL; e.d[129] = e.trR; e.d[130] = e.burnt; e.d[131] = 1;
     if (e.fire) { e.fire = false; const M = gunMat(), mx = M[4] * K.gy + M[8] * K.mz + M[12], my = M[5] * K.gy + M[9] * K.mz + M[13], mz = M[6] * K.gy + M[10] * K.mz + M[14], l = -1 / Math.hypot(M[8], M[9], M[10]);
@@ -331,6 +349,7 @@ export function initCombat(C) {
         if (G.wave === WAVES && !G.won) { G.won = true; ui.over('Nordmarka held', `All ${WAVES} waves beaten · ${G.kills} vehicles destroyed · score ${G.score}. Press R to start over, or close this and keep fighting.`, true); }
         else ui.toast(`Wave ${G.wave} cleared — resupplied`); }
     }
+    G.rep = G.spot ? G.rep + dt : 0; G.spot = false; // how long some crew has held the player in sight
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on) updateEnemy(e, dt, i); }
     // vehicles are solid for each other
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz); if (d < 5.6 && d > 0.01) { const k = (5.6 - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
@@ -405,7 +424,7 @@ export function initCombat(C) {
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const cx = e.x - ox, cy = e.y + 1.3 - oy, cz = e.z - oz, b = cx * dx + cy * dy + cz * dz, q = cx * cx + cy * cy + cz * cz - b * b; if (b > 0 && q < 6.8 && b - 1.5 < t) t = b - Math.sqrt(6.8 - q) * 0.6; }
     return t;
   };
-  G.spawn = spawn; G.bldHit = bldHit; G.los = losBlocked; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
+  G.spawn = spawn; G.bldHit = bldHit; G.los = losBlocked; G.vis = losVis; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
   hud();
   return G;
 }
