@@ -191,9 +191,9 @@ export function initAudio(o) {
     sp(uG.gain, 0.1 * tr, 0.04); sp(uO1.frequency, 180 + 50 * tr); sp(uO2.frequency, 272 + 75 * tr);
     const mg = game.mgOn ? 0.55 : 0; sp(mG.gain, mg, mg ? 0.004 : 0.025);
     S.engine.rate = rpm; S.engine.gain = eg; S.mg = mg;
-    // drone
+    // drone (the recon drone is the quiet one)
     if (D.on) { loc(D.x, D.y, D.z); const f = 0.85 + 0.016 * Math.hypot(D.vx, D.vy, D.vz); sp(dS[0].playbackRate, f, 0.08); sp(dS[1].playbackRate, f * 1.027, 0.08);
-      sp(dG.gain, 0.4 / (1 + LD / 25)); sp(dLP.frequency, Math.min(6000, lpf(LD))); sp(dPan.pan, LP); } else sp(dG.gain, 0, 0.03);
+      sp(dG.gain, (D.type === 2 ? 0.14 : D.type === 1 ? 0.3 : 0.4) / (1 + LD / 25)); sp(dLP.frequency, Math.min(6000, lpf(LD))); sp(dPan.pan, LP); } else sp(dG.gain, 0, 0.03);
     // the three nearest live enemy engines (stable assignment, so a voice does not jump between vehicles)
     bd.fill(1e12); best.fill(-1);
     for (let i = 0; i < EN.length; i++) { const e = EN[i]; if (!e.on || e.dead) continue; const d2 = (e.x - cam.x) ** 2 + (e.z - cam.z) ** 2; if (d2 > 1.44e6) continue;

@@ -114,7 +114,8 @@ kbd{margin:0 1px}
   <div id="joy"><i></i></div>
   <div id="acts">
     <div class="r">
-      <button class="btn" id="bX"><svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="M7 8l10 8M17 8L7 16"/></svg>DRONE</button>
+      <button class="btn" id="bX"><svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/><path d="M7 8l10 8M17 8L7 16"/></svg><span id="bXl">FPV</span></button>
+      <button class="btn" id="bY" aria-label="Drone type"><svg viewBox="0 0 24 24"><path d="M4 7h12l-3-3M20 17H8l3 3"/></svg>TYPE</button>
       <button class="btn" id="bK"><svg viewBox="0 0 24 24"><path d="M6 18a4 4 0 0 1 1-7.9A5 5 0 0 1 17 9a4.5 4.5 0 0 1 1 9z"/></svg>SMOKE</button>
       <button class="btn" id="bM"><svg viewBox="0 0 24 24"><path d="M3 12h3M9 12h3M15 12h6M19 9l3 3-3 3"/></svg>MG</button>
       <button class="btn" id="bS"><svg viewBox="0 0 24 24"><path d="M8 21V9l4-6 4 6v12zM8 16h8"/></svg>AMMO</button>
@@ -125,9 +126,9 @@ kbd{margin:0 1px}
     <button class="btn donly" id="bR"><svg viewBox="0 0 24 24"><path d="M9 6l-6 6 6 6M3 12h18"/></svg>TANK</button>
     <button class="btn" id="bDn"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>DOWN</button>
     <button class="btn" id="bUp"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>UP</button>
-    <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg>BOOM</button>
+    <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg><span id="bBl">BOOM</span></button>
   </div>
-  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
+  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>Z</kbd> type · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
   <div id="help" class="modal"><div class="card pill">
@@ -141,18 +142,18 @@ kbd{margin:0 1px}
       <b><kbd>Space</kbd></b><span>Coaxial MG3</span>
       <b><kbd>G</kbd></b><span>Smoke grenades — breaks the enemy's line of sight, and blinds thermal sights too</span>
       <b><kbd>V</kbd></b><span>Thermal imager in the gunner sight and on the drone: off · white-hot · black-hot. Sees engines, tracks and fires through darkness, haze and dust</span>
-      <b><kbd>X</kbd></b><span>Launch an FPV drone (5 per game): mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. Scout with it, or fly into a vehicle and press the left button to detonate its warhead. <kbd>X</kbd> again returns to the tank (the drone is lost). The tank stands still and exposed meanwhile</span>
+      <b><kbd>X</kbd> <kbd>Z</kbd></b><span>Launch a drone; <kbd>Z</kbd> picks the type. Mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. <b>FPV</b> (5): fly into a vehicle, left button detonates. <b>BOMB</b> (2): hovers, the camera tilts straight down, left button drops one of 3 grenades on the marker (roof and engine deck are weak); land on the tank to rearm. <b>RECON</b> (2): climbs to 110 m, 3 min, unarmed; what its camera sees goes on the map. <kbd>X</kbd> again cuts the link (the drone is lost). The tank stands still and exposed meanwhile</span>
       <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · free-fly camera · sound · music</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
-      <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight · ✕ MG · ○ smoke · □ ammo · △ camera · Options menu</span>
+      <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight · ✕ MG · ○ smoke · □ ammo · △ camera · D-pad down drone · L3 drone type · Options menu</span>
     </div>
     <div class="grid" id="hT">
       <b>Left thumb</b><span>Joystick: push to drive, sideways to steer</span>
       <b>Right side</b><span>Drag to look around · pinch to zoom</span>
       <b>FIRE · AMMO</b><span>Fire the main gun · cycle APFSDS / HEAT-MP / HE (the ammo pill at the top shows what is loaded)</span>
       <b>MG · SMOKE</b><span>Hold for the coaxial machine gun · fire the smoke grenades</span>
-      <b>DRONE</b><span>Launch an FPV drone (5 per game): joystick flies, drag turns, UP / DOWN change height, BOOM detonates, TANK returns</span>
-      <b>Map</b><span>Top right: enemies within 900 m (red T-72, orange BMP-2)</span>
+      <b>DRONE · TYPE</b><span>Launch the drone named on the button; TYPE switches FPV / BOMB / RECON. Joystick flies, drag turns (and tilts the bomber camera), UP / DOWN change height, BOOM detonates the FPV, DROP releases a grenade, TANK cuts the link. Land the bomber or recon drone on the tank to get it back</span>
+      <b>Map</b><span>Top right: enemies someone has seen — the crew, the sight, a drone or their own muzzle flash (red T-72, orange BMP-2; hollow = last known position)</span>
       <b>CAM · TIME</b><span>Commander view or gunner sight · time of day</span>
       <b>3-finger tap</b><span>Performance overlay</span>
     </div>

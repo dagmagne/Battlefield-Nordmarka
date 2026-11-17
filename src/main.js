@@ -536,6 +536,7 @@ async function main() {
   const api = {
     cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
     drone() { if (R.game) R.game.droneKey(); },
+    droneType(i) { if (R.game) R.game.droneType(i); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
@@ -709,6 +710,10 @@ async function main() {
     const px = aim.mx + aim.gx * R.shellV * t, py = aim.my + aim.gy * R.shellV * t - 4.905 * t * t, pz = aim.mz + aim.gz * R.shellV * t;
     const w = vp[3] * px + vp[7] * py + vp[11] * pz + vp[15];
     if (w > 0.1) { aim.sx = (vp[0] * px + vp[4] * py + vp[8] * pz + vp[12]) / w; aim.sy = (vp[1] * px + vp[5] * py + vp[9] * pz + vp[13]) / w; } else { aim.sx = 9; aim.sy = 9; }
+    // bomber: the predicted grenade impact replaces the gun marker in the drone view (ring green when a grenade is ready)
+    const D = game.drone; R.dropSx = 9; R.dropSy = 9;
+    if (cam.mode === 4 && D.on && D.type === 1 && D.iok) { const dw = vp[3] * D.ix + vp[7] * D.iy + vp[11] * D.iz + vp[15];
+      if (dw > 0.1) { R.dropSx = (vp[0] * D.ix + vp[4] * D.iy + vp[8] * D.iz + vp[12]) / dw; R.dropSy = (vp[1] * D.ix + vp[5] * D.iy + vp[9] * D.iz + vp[13]) / dw; } }
   }
   const chaseP = new Float32Array(5);
   function updateCamera(dt, BM) {
@@ -717,7 +722,13 @@ async function main() {
     cam.held = inp.sight;
     if (cam.mode === 4) { // FPV drone: the mouse turns it, the camera trails just behind and above
       const D = game.drone;
-      if (D.on) { // rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
+      if (D.on && D.type) { // bomber and recon: the view from the gimbal camera under the airframe, which tilts down to the vertical
+        D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.5707, 0.35);
+        const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
+        cam.x = D.x; cam.z = D.z; cam.y = Math.max(D.y - 0.2, W.heightAt(cam.x, cam.z) + 0.3);
+        if (cp < 0.02) lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, -Math.sin(D.yaw), 0, -Math.cos(D.yaw)); // straight down: up is the heading
+        else lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
+      } else if (D.on) { // rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
         D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.3, 1.1);
         const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
         cam.x = D.x - fx * 2.3; cam.z = D.z - fz * 2.3; cam.y = Math.max(D.y - fy * 2.3 + 0.55, W.heightAt(cam.x, cam.z) + 0.4);
@@ -858,7 +869,7 @@ async function main() {
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
     if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
-    if (droneOn && !hV) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
+    if (droneOn && !hV && !(cam.mode === 4 && game.drone.type)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
       if (BL.dN) { p.setVertexBuffer(0, debO.vb); p.setIndexBuffer(debO.ib, 'uint32'); p.drawIndexed(BL.dN * 36); } }
@@ -892,7 +903,8 @@ async function main() {
     }
     const fu = pUData[NB * 2]; fu[0] = sx; fu[1] = sy; fu[2] = 1 / R.w; fu[3] = 1 / R.h; fu[4] = expo; fu[5] = 0.1; fu[6] = R.manual ? 0.37 : R.time; fu[7] = R.thNow;
     const hudOn = cam.mode !== 3 && !R.pose && !R.nohud && !hX;
-    fu[8] = cam.mode === 4 ? 9 : aim.sx; fu[9] = aim.sy; fu[10] = R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
+    const Dr = game.drone, drop = cam.mode === 4 && Dr.on && Dr.type === 1;
+    fu[8] = cam.mode === 4 ? R.dropSx : aim.sx; fu[9] = cam.mode === 4 ? R.dropSy : aim.sy; fu[10] = drop ? (Dr.bombs ? clamp(1 - Dr.rel / 0.7, 0, 1) : 0) : R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = drop ? (Dr.bombs ? 1 : 0) : aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
     device.queue.writeBuffer(pU[NB * 2], 0, fu);
     finalPass.colorAttachments[0].view = ctx.getCurrentTexture().createView();
     const fp = enc.beginRenderPass(finalPass); fp.setPipeline(finalPipe); fp.setBindGroup(0, finalBG); fp.draw(3); fp.end();

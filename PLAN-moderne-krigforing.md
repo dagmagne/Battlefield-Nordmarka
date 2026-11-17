@@ -1,6 +1,6 @@
 # Plan: moderne krigføring (droner, miner, lette kjøretøy, infanteri)
 
-Status: **ikke startet**. Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
+Status: **fase 1 gjort** (gren `claude/gpu-setup-phase-1-92182d`, ikke merget; se `CLAUDE.md` under Drones og Minimap). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
 miner over alt, små raske angrepsgrupper, og rekognoseringsdroner som leder artilleri.
 Alt skal fortsatt være prosedyrisk og følge reglene i `CLAUDE.md` (ingen allokering per frame, touch-kontroll for alt nytt,
 verifisering med renders og `__sim`-tester, bundle-størrelse rapporteres).
@@ -14,7 +14,7 @@ verifisering med renders og `__sim`-tester, bundle-størrelse rapporteres).
 Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike deler kan gå parallelt med subagenter i hver sin worktree
 (sjekk at worktreen er basert på riktig gren, ikke en gammel `main`).
 
-### Fase 1: Bombedrone, kart med bare sette fiender og rekognoseringsdrone
+### Fase 1: Bombedrone, kart med bare sette fiender og rekognoseringsdrone (gjort)
 - **Dronetyper:** X velger/sender (eller en egen knapp på touch). Typer: `FPV` (dagens selvdestruktive), `Bomber`, `Recon`. HUD-pillen viser type og antall.
 - **Bomber:**
   - Svever (lavere maks fart, stabil hover). Kameraet kan vippes rett ned, og et sikte viser beregnet nedslagspunkt

@@ -33,6 +33,7 @@ export function initUI(api, isTouch) {
     else if (c === 'KeyU') api.music();
     else if (c === 'KeyG') api.smoke();
     else if (c === 'KeyX') api.drone();
+    else if (c === 'KeyZ') api.droneType();
     else if (c === 'KeyR') api.restart();
     else if (c === 'KeyH') showHelp(true);
     else if (c === 'Escape') showMenu(true);
@@ -96,7 +97,7 @@ export function initUI(api, isTouch) {
 
   // ---- buttons ----
   const btn = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); b.blur(); }); };
-  btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bR', api.drone);
+  btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bY', () => api.droneType()); btn('bR', api.drone);
   // hold buttons: FIRE (tank), BOOM (drone) and the coax MG
   const holdBtn = (id, fn) => { const b = $(id), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); fn(on); b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true)); btn('bMu', () => api.music());
@@ -145,7 +146,7 @@ export function initUI(api, isTouch) {
     if (modalOpen()) { if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; return; }
     if (press(1)) api.smoke(); if (press(2)) api.ammo(-1); if (press(3)) api.cam();
     if (press(4)) api.fly(); if (press(9)) showMenu(true); if (press(8)) api.debug();
-    if (press(12)) api.snow(); if (press(13)) api.drone(); if (press(15)) api.tod((api.state().tod + 1) & 3); if (press(14)) api.tod((api.state().tod + 3) & 3);
+    if (press(12)) api.snow(); if (press(13)) api.drone(); if (press(10)) api.droneType(); if (press(15)) api.tod((api.state().tod + 1) & 3); if (press(14)) api.tod((api.state().tod + 3) & 3);
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0), tr = api.isFly() ? bv(7) - bv(6) : 0;
     gFire = bv(7) > 0.5; gSight = bv(6) > 0.5; gMg = bv(0) > 0.5;
     gTh = Math.max(-1, Math.min(1, -ly)); gSt = -lx; gX = lx; gZ = -ly; gY = tr; gFast = bv(5) > 0.5;
@@ -174,6 +175,8 @@ export function initUI(api, isTouch) {
   // rare game-state updates (ammo, hull, wave): only called when something changes
   U.set = (id, text, cls) => { const e = $(id); e.textContent = text; if (cls !== undefined) e.className = cls; };
   U.show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
+  // drone buttons (rare): the DRONE button names the selected type; in flight the action button reads BOOM (FPV), DROP (bomber) or is hidden (recon)
+  U.droneUI = (name, flying) => { $('bXl').textContent = name; $('bBl').textContent = flying === 1 ? 'DROP' : 'BOOM'; $('bB').style.visibility = flying === 2 ? 'hidden' : ''; };
   // end-of-game card (knocked out / victory); `cont` lets the player close it and keep going
   let overCont = false;
   U.over = (title, text, cont) => { overCont = !!cont; $('over').classList.toggle('show', !!title); if (title) { $('ovT').textContent = title; $('ovP').textContent = text; if (document.pointerLockElement) document.exitPointerLock(); } };
