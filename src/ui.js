@@ -100,6 +100,18 @@ export function initUI(api, isTouch) {
   // hold buttons: FIRE (tank), BOOM (drone) and the coax MG
   const holdBtn = (id, fn) => { const b = $(id), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); fn(on); b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true)); btn('bMu', () => api.music());
+  // fullscreen (touch only): Android and iPad support it for the page; iPhone Safari does not, so the button stays hidden there
+  // (on iPhone the way to full screen is Add to Home Screen). On Android the screen is also locked to landscape.
+  { const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, b = $('bFs');
+    const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    if (req && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) b.classList.add('ok');
+    btn('bFs', () => {
+      if (fsEl()) { const x = document.exitFullscreen || document.webkitExitFullscreen; if (x) x.call(document); return; }
+      try { const p = req.call(de, { navigationUI: 'hide' });
+        if (p && p.then) p.then(() => { try { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}); } catch (e) { /* not supported */ } }, () => toast('Fullscreen not available'));
+      } catch (e) { toast('Fullscreen not available'); }
+    });
+    for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => b.classList.toggle('on', !!fsEl())); }
   btn('mW', () => { const l = new URL(location.href); l.searchParams.delete('w'); l.searchParams.delete('nohint'); location.href = l.href; });
   btn('hGo', () => showHelp(false)); btn('mGo', () => showMenu(false)); btn('mH', () => { showMenu(false); showHelp(true); });
   const hold = (id, v) => { const b = $(id); const set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); inp.holdY = on ? v : 0; b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
