@@ -746,7 +746,12 @@ export function initCombat(C) {
       }
     }
     // coaxial MG3: the fire control corrects for its steeper trajectory at the lased range
-    if ((G.mgOn = inp.mg && !veh.dead && G.mg > 0)) {
+    // one MG control: the coax by default; the hatch MG when the view is above what the gun can elevate to or a drone is close to the crosshair (Q / R3 force the hatch MG)
+    let hatch = !!inp.aa;
+    if (!hatch && inp.mg && cam.mode === 0 && !R.pose) { if (aim.pitch > 0.3) hatch = true;
+      else for (let j = 0; j < MAXA; j++) { const q = AIR[j]; if (!q.on || q.st === 3) continue; const qx = q.x - cam.x, qy = q.y - cam.y, qz = q.z - cam.z, ql = Math.hypot(qx, qy, qz); if (ql < 1500 && (qx * aim.dx + qy * aim.dy + qz * aim.dz) / ql > 0.996) { hatch = true; break; } } }
+    G.hmgAuto = hatch;
+    if ((G.mgOn = inp.mg && !hatch && !veh.dead && G.mg > 0)) {
       mgT += dt * 18;
       while (mgT >= 1 && G.mg > 0) { mgT--; G.mg--;
         const px = gM[0] * -0.32 + gM[4] * (LEO.gy + 0.15) + gM[8] * -2.4 + gM[12], py = gM[1] * -0.32 + gM[5] * (LEO.gy + 0.15) + gM[9] * -2.4 + gM[13], pz = gM[2] * -0.32 + gM[6] * (LEO.gy + 0.15) + gM[10] * -2.4 + gM[14];
@@ -760,7 +765,7 @@ export function initCombat(C) {
       if (Math.ceil(G.mg / 50) * 50 !== lastMg) hudDirty = true;
     } else mgT = Math.min(mgT, 1);
     // hatch MG3 on the commander's mount: fires along the view (high elevation, against drones), converging on the aim point
-    if ((G.hmgOn = !!inp.aa && !veh.dead && G.mg > 0 && cam.mode !== 4 && !R.pose)) { const T = C.turM, hx = T[0] * 0.62 + T[4] * 2.72 + T[8] * 0.35 + T[12], hy = T[1] * 0.62 + T[5] * 2.72 + T[9] * 0.35 + T[13], hz = T[2] * 0.62 + T[6] * 2.72 + T[10] * 0.35 + T[14];
+    if ((G.hmgOn = hatch && (inp.mg || inp.aa) && !veh.dead && G.mg > 0 && cam.mode !== 4 && !R.pose)) { const T = C.turM, hx = T[0] * 0.62 + T[4] * 2.72 + T[8] * 0.35 + T[12], hy = T[1] * 0.62 + T[5] * 2.72 + T[9] * 0.35 + T[13], hz = T[2] * 0.62 + T[6] * 2.72 + T[10] * 0.35 + T[14];
       hmgT += dt * HMG_RATE;
       while (hmgT >= 1 && G.mg > 0) { hmgT--; G.mg--;
         let r = aim.range < 1200 ? aim.range : 0; // range: the ground or a building on the sight line, or an air unit close to it

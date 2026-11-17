@@ -32,6 +32,12 @@ await ev('fly(A, 60*12, true)');
 r = null; var r = await ev('({on:A.on, hp0:HP0, hp:__veh.hp, rounds:MG0-G.mg, score:G.score-SC0, dist:Math.hypot(A.x-__veh.x,A.z-__veh.z)|0})');
 check('the hatch MG shoots down an FPV diving on the tank', !r.on && r.hp === r.hp0 && r.score === 25, r);
 
+// 1b: the one MG control (Space) switches to the hatch MG on its own when the crosshair is on a drone
+await ev(`window.A=G.airSpawn(0, FW+0.8); { const b=FW+0.8; A.x=__veh.x+Math.sin(b)*260; A.z=__veh.z-Math.cos(b)*260; A.y=__W.heightAt(A.x,A.z)+30; A.st=2; } window.HP0=__veh.hp; window.AUTO=false;
+  for (let k=0;k<60*12&&A.on&&A.st!==3;k++){ track(A); __inp.mg=true; __sim(1/60,1); if (G.hmgOn) AUTO=true; } __inp.mg=false;`);
+r = await ev('({on:A.on, auto:AUTO, hp0:HP0, hp:__veh.hp})');
+check('Space alone fires the hatch MG at a drone near the crosshair and shoots it down', !r.on && r.auto && r.hp === r.hp0, r);
+
 // 2: no defence: the hit
 await ev(`__aimAt(); window.A=G.airSpawn(0, FW-1); { const b=FW-1; A.x=__veh.x+Math.sin(b)*200; A.z=__veh.z-Math.cos(b)*200; A.y=__W.heightAt(A.x,A.z)+25; A.st=2; } window.HP0=__veh.hp; fly(A, 60*15, false);`);
 r = await ev('({on:A.on, hp0:HP0, hp:+__veh.hp.toFixed(1), lost:+(HP0-__veh.hp).toFixed(1)})');

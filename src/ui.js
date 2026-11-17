@@ -101,7 +101,7 @@ export function initUI(api, isTouch) {
   btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bY', () => api.droneType()); btn('bR', api.drone); btn('bA', api.arty); btn('bA2', api.arty);
   // hold buttons: FIRE (tank), BOOM (drone) and the coax MG
   const holdBtn = (id, fn) => { const b = $(id), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); fn(on); b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
-  holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); holdBtn('bAA', (on) => { tAA = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true)); btn('bMu', () => api.music());
+  holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true)); btn('bMu', () => api.music());
   // fullscreen (touch only): Android and iPad support it for the page; iPhone Safari does not, so the button stays hidden there
   // (on iPhone the way to full screen is Add to Home Screen). On Android the screen is also locked to landscape.
   { const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, b = $('bFs');
