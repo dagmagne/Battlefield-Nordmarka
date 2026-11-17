@@ -2,6 +2,7 @@
 // Everything is preallocated in initCombat(); update() and its helpers allocate nothing per frame.
 import { clamp } from './math.js';
 import { tankParts, droneParts, gunMat, LEO, T72, BMP } from './tank.js';
+import { initMinimap, MAP_M, MAP_PX } from './minimap.js';
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
 export const MAXE = 10, MAXG = 760;
@@ -21,6 +22,7 @@ export function initCombat(C) {
   let sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i] });
   const map = typeof document !== 'undefined' && document.getElementById('map'), mctx = map && map.getContext ? map.getContext('2d') : null;
+  const mm = mctx ? initMinimap(W, C.bld, HALF) : null; // static base map, pre-rendered once
 
   // ---------- small helpers ----------
   const glow = (x, y, z, size, r, g, b) => { if (G.fxN >= MAXG) return; const o = G.fxN++ * 12, f = G.fx; f[o] = x; f[o + 1] = y; f[o + 2] = z; f[o + 3] = size; f[o + 4] = r; f[o + 5] = g; f[o + 6] = b; f[o + 7] = 0; f[o + 8] = 3; f[o + 9] = 0; f[o + 10] = 8; f[o + 11] = 0; };
@@ -269,18 +271,22 @@ export function initCombat(C) {
     ui.set('wave', G.peace ? 'FREE ROAM' : (G.wave ? 'WAVE ' + G.wave + (G.won ? '' : '/' + WAVES) : 'STAND BY') + ' · ' + G.kills + ' KILLS · ' + G.score);
   }
   function drawMap() {
-    if (!mctx) return; const c = mctx, Wd = 176, sc = Wd / 1800, cx = Wd / 2;
-    c.clearRect(0, 0, Wd, Wd);
-    c.strokeStyle = '#ffffff30'; c.lineWidth = 1; c.beginPath(); c.arc(cx, cx, 500 * sc, 0, 6.283); c.stroke();
-    c.fillStyle = '#ffffff90'; c.fillRect(cx - 0.5, 3, 1, 6);
-    const mx = D.on ? D.x : veh.x, mz = D.on ? D.z : veh.z; // the map follows the drone while it flies
+    if (!mctx) return; const c = mctx, Wd = 176, sc = Wd / MAP_M, cx = Wd / 2;
+    const mx0 = D.on ? D.x : veh.x, mz0 = D.on ? D.z : veh.z; // the map follows the drone while it flies
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    let mx = mx0, mz = mz0; if (mm) { mm.draw(c, mx0, mz0); mx = mm.cx; mz = mm.cz; } else c.clearRect(0, 0, MAP_PX, MAP_PX);
+    c.setTransform(MAP_PX / Wd, 0, 0, MAP_PX / Wd, 0, 0); // markers are drawn in CSS pixels
+    c.strokeStyle = '#ffffff38'; c.lineWidth = 1; c.beginPath(); c.arc(cx, cx, 500 * sc, 0, 6.283); c.stroke();
+    c.fillStyle = '#ffffffb0'; c.fillRect(cx - 0.5, 3, 1, 6);
+    c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2;
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || Math.abs(e.x - mx) > 900 || Math.abs(e.z - mz) > 900) continue; // datalink: everything within 900 m is plotted
       const x = clamp(cx + (e.x - mx) * sc, 4, Wd - 4), y = clamp(cx + (e.z - mz) * sc, 4, Wd - 4);
-      c.fillStyle = e.dead ? '#59606a' : e.type ? '#ff9a3d' : '#ff4a3a'; if (e.type) c.fillRect(x - 2.5, y - 2.5, 5, 5); else { c.beginPath(); c.arc(x, y, 3.6, 0, 6.283); c.fill(); } }
+      c.fillStyle = e.dead ? '#59606a' : e.type ? '#ff9a3d' : '#ff4a3a'; c.beginPath(); if (e.type) c.rect(x - 2.6, y - 2.6, 5.2, 5.2); else c.arc(x, y, 3.7, 0, 6.283); c.fill(); c.stroke(); }
     const a = veh.yaw, t = veh.yaw + veh.turYaw, vx = clamp(cx + (veh.x - mx) * sc, 6, Wd - 6), vy = clamp(cx + (veh.z - mz) * sc, 6, Wd - 6);
-    c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx - Math.sin(t) * 26, vy - Math.cos(t) * 26); c.stroke();
-    c.fillStyle = '#7dffb0'; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7, vy - Math.cos(a) * 7); c.lineTo(vx - Math.sin(a + 2.5) * 5, vy - Math.cos(a + 2.5) * 5); c.lineTo(vx - Math.sin(a - 2.5) * 5, vy - Math.cos(a - 2.5) * 5); c.fill();
-    if (D.on) { const q = D.yaw; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(cx - Math.sin(q) * 8, cx - Math.cos(q) * 8); c.lineTo(cx - Math.sin(q + 2.4) * 5, cx - Math.cos(q + 2.4) * 5); c.lineTo(cx - Math.sin(q - 2.4) * 5, cx - Math.cos(q - 2.4) * 5); c.fill(); }
+    c.strokeStyle = '#05080cb0'; c.lineWidth = 3; c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx - Math.sin(t) * 26, vy - Math.cos(t) * 26); c.stroke();
+    c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5; c.stroke();
+    c.fillStyle = '#7dffb0'; c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7, vy - Math.cos(a) * 7); c.lineTo(vx - Math.sin(a + 2.5) * 5, vy - Math.cos(a + 2.5) * 5); c.lineTo(vx - Math.sin(a - 2.5) * 5, vy - Math.cos(a - 2.5) * 5); c.closePath(); c.fill(); c.stroke();
+    if (D.on) { const q = D.yaw, dx = cx + (D.x - mx) * sc, dy = cx + (D.z - mz) * sc; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(dx - Math.sin(q) * 8, dy - Math.cos(q) * 8); c.lineTo(dx - Math.sin(q + 2.4) * 5, dy - Math.cos(q + 2.4) * 5); c.lineTo(dx - Math.sin(q - 2.4) * 5, dy - Math.cos(q - 2.4) * 5); c.closePath(); c.fill(); c.stroke(); }
   }
 
   // ---------- per-frame update ----------

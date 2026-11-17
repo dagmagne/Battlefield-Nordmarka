@@ -169,7 +169,7 @@ export function initBuildings(W, mesh, HALF) {
     if (i < 0 || i >= n || B.st[i] === 2 || d <= 0) return -1;
     B.hp[i] = Math.max(0, B.hp[i] - d);
     const s = B.hp[i] <= 0 ? 2 : B.hp[i] < 0.5 * B.hpM[i] ? 1 : 0; if (s === B.st[i]) return -1;
-    B.st[i] = s; show(i); if (s === 2) debris(i, L[i].col); return s;
+    B.st[i] = s; show(i); if (s === 2) debris(i, L[i].col); if (B.onState) B.onState(i, s); return s;
   };
   // area damage (HE, drone): up to dmax at the wall, falling to 0 at radius r; skip = building already hit directly. Calls f(i, newState) on changes.
   B.splash = (x, y, z, r, dmax, skip, f) => {
@@ -182,6 +182,7 @@ export function initBuildings(W, mesh, HALF) {
         if (d < r) { bstamp[bi] = qid; const s = B.damage(bi, dmax * (1 - d / r)); if (s >= 0 && f) f(bi, s); } } }
   };
   B.restore = () => {
+    if (B.onState) for (const i of B.changed) B.onState(i, 0);
     for (const i of B.changed) { V.set(B.pris[i], B.v0[i] * VS); B.pris[i] = null; if (B.upload) B.upload(B.v0[i], B.v1[i]); }
     B.changed.length = 0; B.st.fill(0); B.hp.set(B.hpM); B.dN = 0; B.dHead = 0;
   };

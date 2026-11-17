@@ -164,7 +164,7 @@ export async function genWorld(tick, Q, startAt) {
   for (let k = 0; k < HN * HN; k++) if (tD[k] < 12 && mat[k * 4] < 128) H[k] = lerp(H[k], tT[k], 1 - smooth(3.4, 10, tD[k]));
 
   // ---- plowed roads + parking lots: mat.G holds the distance to the asphalt edge (0.667 = edge, 6 m ramp) ----
-  const portals = [], parks = [];
+  const portals = [], parks = [], roads = [];
   const gOf = (e) => 255 * clamp(1 - (e + 2) / 6, 0, 1);
   { // parking: least-squares plane through the lot, at most a gentle slope
     const b = blob('park'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let o = 0;
@@ -200,7 +200,7 @@ export async function genWorld(tick, Q, startAt) {
     const rE = new Float32Array(HN * HN).fill(99), rY = new Float32Array(HN * HN);
     for (const [n, w10] of meta.roads) {
       let pts = []; for (let i = 0; i < n; i++, o += 4) pts.push([dv.getInt16(o, true) / 8, dv.getInt16(o + 2, true) / 8]);
-      pts = polish(pts, 3); const m = pts.length, hw = w10 / 20, hs = new Float32Array(m), y = new Float32Array(m), dk = new Float32Array(m), cov = new Uint8Array(m);
+      pts = polish(pts, 3); roads.push({ pts: Float32Array.from(pts.flat()), hw: w10 / 20 }); const m = pts.length, hw = w10 / 20, hs = new Float32Array(m), y = new Float32Array(m), dk = new Float32Array(m), cov = new Uint8Array(m);
       for (let i = 0; i < m; i++) hs[i] = heightAt(pts[i][0], pts[i][1]);
       for (let i = 0; i < m; i++) {
         let s = 0, c = 0; for (let k = Math.max(0, i - 8); k <= Math.min(m - 1, i + 8); k++) { s += hs[k]; c++; }
@@ -313,7 +313,7 @@ export async function genWorld(tick, Q, startAt) {
 
   Object.assign(W, {
     PLAY, MW, TREELINE, name: 'nordmarka',
-    mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM, portals, parks, roadAt,
+    mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM, portals, parks, roads, roadAt,
     trees: { data: td.subarray(0, tc * 8), count: tc, nearStart, nearCnt, nearY, farStart, farCnt, farY },
     start: { x: 0, z: 0, yaw: 0 },
   });
