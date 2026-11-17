@@ -24,6 +24,7 @@ import { initBuildings, DMAX } from './buildings.js';
 import { Particles } from './particles.js';
 import { initUI, inp } from './ui.js';
 import { initAudio } from './audio.js';
+import { REC, RECM } from './sndrec.js';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
@@ -552,7 +553,7 @@ async function main() {
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
   let sndOn = qs.has('sound'); try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
   if (qs.has('mute')) sndOn = false;
-  const audio = initAudio({ R, cam, veh, view, game, on: sndOn }); window.__audio = audio;
+  const audio = initAudio({ R, cam, veh, view, game, on: sndOn, rec: REC, recM: RECM }); window.__audio = audio;
 
   // ---------- state ----------
   veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z);

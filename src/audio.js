@@ -1,5 +1,6 @@
-// Procedural sound: every buffer is synthesised at start-up (no audio files), continuous voices are created once,
-// and update() only sets AudioParams (no per-frame allocation). One-shots go through a fixed pool of 12 voice chains.
+// Sound: the engines, tracks and drone are recorded loops (src/sndrec.js, decoded when the AudioContext starts); every
+// other buffer is synthesised at start-up. Continuous voices are created once and update() only sets AudioParams
+// (no per-frame allocation). One-shots go through a fixed pool of 12 voice chains.
 
 // ---------- synthesis (pure: no browser APIs, so tools/audio-check.mjs can run it in Node) ----------
 // add(): one component into buffer a at time t0 (s); loops (wrap) wrap around the end so they stay seamless, one-shots are cut.
@@ -26,7 +27,7 @@ function fin(a, sr, wrap, del, fb, drive) {
 export function synth(sr) {
   let sd = 7; const rn = () => (sd = Math.imul(sd, 1664525) + 1013904223 | 0) / 2147483648, u = () => rn() * 0.5 + 0.5;
   const B = {};
-  const mk = (name, sec, fn, del, fb, drive) => { const a = new Float32Array(Math.round(sec * sr)), w = 'mg dsl trk'.includes(name); fn((t, amp, dec, f0, f1, att) => add(a, sr, rn, w, t, amp, dec, f0, f1 || 0, att)); B[name] = fin(a, sr, w, del, fb, drive); };
+  const mk = (name, sec, fn, del, fb, drive) => { const a = new Float32Array(Math.round(sec * sr)), w = name === 'mg'; fn((t, amp, dec, f0, f1, att) => add(a, sr, rn, w, t, amp, dec, f0, f1 || 0, att)); B[name] = fin(a, sr, w, del, fb, drive); };
   const parts = (c, t, fs, as, ds, g) => { for (let i = 0; i < fs.length; i++) c(t, as[i] * g, ds[i], fs[i], fs[i] * 0.985); };
   // 120/125 mm report: supersonic crack, muzzle blast body, pressure thump, rolling rumble, echo
   mk('gun', 2.6, (c) => { c(0, 1.3, 0.006, -6000); c(0, 1, 0.22, -500); c(0, 1.2, 0.2, 75, 32); c(0.01, 0.8, 0.9, -160, 0, 0.04); }, 0.37, 0.32, 1.6);
@@ -46,12 +47,6 @@ export function synth(sr) {
     for (let i = 0; i < 60; i++) { const q = u(), t = 2.8 * q * q; c(t, 0.35 * (1 - t / 3.2), 0.02, -1000 - 2500 * u()); }
     for (let i = 0; i < 10; i++) c(u() * 2, 0.4, 0.08, 60 + 30 * u(), 40); }, 0.45, 0.25);
   mk('cr', 1, (c) => { c(0, 1, 0.02, -2500); c(0, 1, 0.1, 75, 45); for (let i = 0; i < 18; i++) c(u() * 0.6, 0.3 * u(), 0.01, -2000 - 3000 * u()); c(0, 0.3, 0.15, 1300, 1250); c(0, 0.25, 0.12, 2200, 2150); });
-  // V12 diesel loop: 30 firing pulses in 0.5 s (60 Hz at idle), uneven cylinders, plus a 30 Hz half-order (whole cycles: seamless)
-  mk('dsl', 0.5, (c) => { for (let k = 0; k < 30; k++) { const t = k / 60, g = (0.7 + 0.3 * rn()) * (k % 6 ? 1 : 1.25); c(t, 0.6 * g, 0.004, -2000); c(t, g, 0.006, 150, 130); c(t, 0.5 * g, 0.012, 70, 60); } });
-  for (let i = 0, a = B.dsl; i < a.length; i++) a[i] = a[i] * 0.85 + 0.12 * Math.sin(6.283 * 30 * i / sr);
-  // track links slapping the sprockets and road wheels: 8 per loop
-  mk('trk', 0.6, (c) => { for (let k = 0; k < 8; k++) { const t = k * 0.075 + u() * 0.006, g = 0.7 + 0.3 * u(); c(t, 0.8 * g, 0.003, -6000); c(t, 0.5 * g, 0.025, 820 + 60 * rn(), 800);
-    c(t, 0.35 * g, 0.018, 1780 + 90 * rn(), 1750); c(t, 0.25 * g, 0.012, 2950, 2900); c(t, 0.6 * g, 0.03, 90, 70); } });
   const nz = B.nz = new Float32Array(sr); for (let i = 0; i < sr; i++) nz[i] = rn() * 0.9;
   return B;
 }
@@ -66,13 +61,15 @@ const lpf = (d) => 200 + 17000 * Math.exp(-d / 250); // air absorption: distant 
 
 export function initAudio(o) {
   const { R, cam, veh, view, game } = o, D = game.drone, EN = game.enemies;
-  let ac = null, B = null, bus, T = 0, LD = 0, LP = 0, rpm = 1, tPrev = veh.turYaw, offT = 0;
-  const S = { on: !!o.on, count: {}, played: {}, live: 0, srcs: 0, nodes: 0, master: 0, engine: { rate: 0, gain: 0 }, mg: 0, start, setOn, update, play };
+  let ac = null, B = null, bus, T = 0, LD = 0, LP = 0, rpm = 0.85, ld = 0, tPrev = veh.turYaw, offT = 0;
+  const S = { on: !!o.on, rec: {}, count: {}, played: {}, live: 0, srcs: 0, nodes: 0, master: 0, engine: { rate: 0, gain: 0 }, mg: 0, start, setOn, update, play };
   const AC = typeof window !== 'undefined' ? window.AudioContext || window.webkitAudioContext : undefined; // webkit prefix: iOS before 14.5
   Object.defineProperty(S, 'state', { get: () => (ac ? ac.state : !AC ? 'unsupported' : 'waiting') });
   const vEnd = new Float64Array(NV), vG = new Float32Array(NV), vSrc = [], vLP = [], vGain = [], vPan = [];
   const best = new Int16Array(3), bd = new Float32Array(3), eV = new Int16Array(3).fill(-1), eSrc = [], eLP = [], eG = [], eP = [];
-  let tSum, tLP, tPan, dsl, eLPf, eGain, rBP, rG, wO, wG, trk, kLP, kG, cLP, cG, uO1, uO2, uG, mG, dO = [], dLP, dG, dPan;
+  let tSum, tLP, tPan, eLPf, eGain, kLP, kG, cLP, cG, uO1, uO2, uG, mG, dLP, dG, dPan;
+  const eL = [], eLG = [], trk = [], dS = [], REC = o.rec || {}, RM = o.recM || {}; // recorded loops: engine layers, tracks, drone rotors
+  const recS = [];
   const raw = AC ? synth(SR) : null; // ~0.1 s at load, so the first click does not hitch
   R.sfx = play;
 
@@ -95,17 +92,38 @@ export function initAudio(o) {
     for (let i = 0; i < NV; i++) { vPan[i] = Pn(bus); vGain[i] = G(0, vPan[i]); vLP[i] = F('lowpass', 18000, vGain[i]); vSrc[i] = null; }
     // the player's tank: everything sums into one bus that is attenuated, filtered and panned as a single source
     tPan = Pn(bus); tLP = F('lowpass', 18000, tPan); tSum = G(0, tLP);
-    eGain = G(0, tSum); eLPf = F('lowpass', 600, eGain); dsl = loop(B.dsl, eLPf);
-    rG = G(0, tSum); rBP = F('bandpass', 300, rG, 0.7); loop(B.nz, rBP);
-    wG = G(0, tSum); wO = osc('sine', 1500, wG);
-    kG = G(0, tSum); kLP = F('lowpass', 1600, kG); trk = loop(B.trk, kLP);
+    // engine: three recorded layers (Leopard 2A4 idle, Leopard running, a heavier engine under load) at a common pitch
+    eGain = G(0, tSum); eLPf = F('lowpass', 2000, eGain);
+    for (let i = 0; i < 3; i++) { eLG[i] = G(0, eLPf); eL[i] = rec('e' + i, eLG[i], i * 0.7); }
+    kG = G(0, tSum); kLP = F('lowpass', 2500, kG); trk.push(rec('tk', kLP, 0));
     cG = G(0, tSum); cLP = F('lowpass', 400, cG); loop(B.nz, cLP, 0.5);
     uG = G(0, tSum); const uLP = F('lowpass', 900, uG); uO1 = osc('sawtooth', 210, uLP); uO2 = osc('sawtooth', 317, uLP);
     mG = G(0, tSum); loop(B.mg, mG);
-    // FPV drone: four detuned rotors
-    dPan = Pn(bus); dG = G(0, dPan); dLP = F('lowpass', 2400, dG); for (let i = 0; i < 4; i++) dO.push(osc('sawtooth', 200, dLP));
-    // three positional enemy engines, given to the nearest live enemies each frame
-    for (let i = 0; i < 3; i++) { eP[i] = Pn(bus); eG[i] = G(0, eP[i]); eLP[i] = F('lowpass', 800, eG[i]); eSrc[i] = loop(B.dsl, eLP[i], i * 0.13); }
+    // FPV drone: the recorded rotor loop twice, slightly detuned (the motors never run in step)
+    dPan = Pn(bus); dG = G(0, dPan); dLP = F('lowpass', 6000, dG); for (let i = 0; i < 2; i++) dS.push(rec('dr', dLP, i * 0.21));
+    // three positional enemy engines (a recorded tank on the move), given to the nearest live enemies each frame
+    for (let i = 0; i < 3; i++) { eP[i] = Pn(bus); eG[i] = G(0, eP[i]); eLP[i] = F('lowpass', 2000, eG[i]); eSrc[i] = rec('en', eLP[i], i * 0.9); }
+    decode();
+  }
+  // a looping source whose buffer arrives once the MP3 is decoded (silent until then; playbackRate can be set at once)
+  function rec(k, dst, off) { const s = ac.createBufferSource(); S.nodes++; s.loop = true; s.connect(dst); s.off = off; s.key = k; recS.push(s); return s; }
+  // decode each MP3, then build the seamless loop: body L after the margin M, its first F seconds cross-faded (equal power)
+  // with the continuation recorded after the body, so the seam lands on continuous material whatever the decoder delay
+  function decode() {
+    for (const k in REC) {
+      const b64 = REC[k], m = RM[k]; if (!b64 || !m) continue;
+      const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const ok = (d) => {
+        const sr = d.sampleRate, x = d.getChannelData(0), m0 = Math.round(RM.M * sr), n = Math.round(m[0] * sr), f = Math.round(m[1] * sr);
+        if (x.length < m0 + n + f) return;
+        const b = ac.createBuffer(1, n, sr), y = b.getChannelData(0);
+        y.set(x.subarray(m0, m0 + n));
+        for (let i = 0; i < f; i++) { const a = 1.5708 * i / f; y[i] = x[m0 + i] * Math.sin(a) + x[m0 + n + i] * Math.cos(a); }
+        S.rec[k] = b.duration;
+        for (const s of recS) if (s.key === k && !s.buffer) { s.buffer = b; s.start(0, s.off % b.duration); }
+      };
+      try { const p = ac.decodeAudioData(u8.buffer, ok, () => {}); if (p && p.catch) p.catch(() => {}); } catch (e) { /* undecodable: stays silent */ }
+    }
   }
   function start() {
     if (!ac) {
@@ -155,13 +173,15 @@ export function initAudio(o) {
     let live = 0; for (let i = 0; i < NV; i++) if (vEnd[i] > T) live++; S.live = live;
     const alive = !veh.dead, av = Math.abs(veh.v), sv = Math.min(1, av / 18), th = Math.abs(veh.throttle) * (alive ? 1 : 0);
     loc(veh.x, veh.y + 1.6, veh.z); sp(tSum.gain, 1 / (1 + LD / 40)); sp(tLP.frequency, lpf(LD)); sp(tPan.pan, LP);
-    rpm += ((1 + 1.9 * sv + 0.55 * th) - rpm) * Math.min(1, dt * 3);
-    const eg = alive ? 0.3 + 0.25 * th + 0.15 * sv : 0;
-    sp(dsl.playbackRate, rpm); sp(eLPf.frequency, 350 + 900 * th + 500 * sv); sp(eGain.gain, eg, 0.15);
-    sp(rBP.frequency, 260 * rpm); sp(rG.gain, alive ? 0.05 + 0.12 * th : 0, 0.15);
-    sp(wO.frequency, 1500 * rpm); sp(wG.gain, alive ? 0.006 + 0.012 * th * sv : 0, 0.2);
-    const kv = alive ? Math.min(1, av / 3) * (veh.air ? 0.3 : 1) : 0;
-    sp(trk.playbackRate, 0.35 + av / 5.5); sp(kG.gain, 0.45 * kv * (0.6 + 0.4 * sv)); sp(kLP.frequency, 1600 + 3500 * veh.road);
+    // rpm (playback rate of the recordings): idle 0.85, about 1.45 at full speed on full throttle; load picks the layer
+    rpm += ((0.85 + 0.4 * sv + 0.2 * th) - rpm) * Math.min(1, dt * 2.5);
+    ld += (cl(0.7 * th + 0.45 * sv, 0, 1) - ld) * Math.min(1, dt * 4);
+    const eg = alive ? 0.55 + 0.25 * ld : 0, x0 = cl(ld * 2, 0, 1), x1 = cl(ld * 2 - 1, 0, 1);
+    sp(eLG[0].gain, Math.cos(1.5708 * x0)); sp(eLG[1].gain, Math.sin(1.5708 * x0) * Math.cos(1.5708 * x1)); sp(eLG[2].gain, 0.8 * Math.sin(1.5708 * x1));
+    for (let i = 0; i < 3; i++) sp(eL[i].playbackRate, rpm * (i === 2 ? 0.92 : 1));
+    sp(eLPf.frequency, 1800 + 5000 * ld); sp(eGain.gain, eg, 0.15);
+    const kv = alive ? Math.min(1, av / 2.5) * (veh.air ? 0.3 : 1) : 0;
+    sp(trk[0].playbackRate, cl(0.45 + av / 9, 0.45, 1.9)); sp(kG.gain, 0.6 * kv * (0.7 + 0.3 * sv)); sp(kLP.frequency, 2500 + 5000 * veh.road);
     sp(cG.gain, 0.25 * kv * Math.min(1, av / 6) * (1 - 0.7 * veh.road)); sp(cLP.frequency, 300 + 250 * sv);
     let dy = veh.turYaw - tPrev; tPrev = veh.turYaw; dy = Math.abs(Math.atan2(Math.sin(dy), Math.cos(dy)));
     const tr = dt > 0 ? Math.min(1, dy / dt / 0.75) : 0;
@@ -169,8 +189,8 @@ export function initAudio(o) {
     const mg = game.mgOn ? 0.55 : 0; sp(mG.gain, mg, mg ? 0.004 : 0.025);
     S.engine.rate = rpm; S.engine.gain = eg; S.mg = mg;
     // drone
-    if (D.on) { loc(D.x, D.y, D.z); const f = 185 + 3.5 * Math.hypot(D.vx, D.vy, D.vz); for (let i = 0; i < 4; i++) sp(dO[i].frequency, f * (1 + (i - 1.5) * 0.013), 0.08);
-      sp(dG.gain, 0.09 / (1 + LD / 25)); sp(dLP.frequency, Math.min(2400, lpf(LD))); sp(dPan.pan, LP); } else sp(dG.gain, 0, 0.03);
+    if (D.on) { loc(D.x, D.y, D.z); const f = 0.85 + 0.016 * Math.hypot(D.vx, D.vy, D.vz); sp(dS[0].playbackRate, f, 0.08); sp(dS[1].playbackRate, f * 1.027, 0.08);
+      sp(dG.gain, 0.4 / (1 + LD / 25)); sp(dLP.frequency, Math.min(6000, lpf(LD))); sp(dPan.pan, LP); } else sp(dG.gain, 0, 0.03);
     // the three nearest live enemy engines (stable assignment, so a voice does not jump between vehicles)
     bd.fill(1e12); best.fill(-1);
     for (let i = 0; i < EN.length; i++) { const e = EN[i]; if (!e.on || e.dead) continue; const d2 = (e.x - cam.x) ** 2 + (e.z - cam.z) ** 2; if (d2 > 1.44e6) continue;
@@ -180,7 +200,7 @@ export function initAudio(o) {
     for (let v = 0; v < 3; v++) { const e = eV[v] >= 0 ? EN[eV[v]] : null;
       if (!e) { sp(eG[v].gain, 0, 0.2); continue; }
       loc(e.x, e.y + 1.5, e.z); const ev = Math.min(1, Math.abs(e.v) / 9);
-      sp(eSrc[v].playbackRate, (e.type ? 1.15 : 0.85) * (1 + 1.4 * ev)); sp(eG[v].gain, (0.3 + 0.25 * ev) / (1 + LD / 40), 0.15); sp(eLP[v].frequency, Math.min(1400, lpf(LD))); sp(eP[v].pan, LP); }
+      sp(eSrc[v].playbackRate, (e.type ? 1.12 : 0.9) * (0.8 + 0.4 * ev)); sp(eG[v].gain, (0.45 + 0.35 * ev) / (1 + LD / 40), 0.15); sp(eLP[v].frequency, Math.min(2500, lpf(LD))); sp(eP[v].pan, LP); }
   }
   return S;
 }

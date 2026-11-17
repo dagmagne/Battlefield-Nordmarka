@@ -29,7 +29,7 @@ const r = await build({
   target: 'es2022',
   write: false,
   plugins: [wgsl],
-  loader: { '.bin': 'base64' },
+  loader: { '.bin': 'base64', '.mp3': 'base64' },
   legalComments: 'none',
 });
 const js = r.outputFiles[0].text;
