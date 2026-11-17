@@ -35,7 +35,7 @@ const res = await page.evaluate(async ({ waves, seed, move }) => {
     if (!info) continue;
     const wt = t - info.t0;
     for (let i = 0; i < G.enemies.length; i++) { const e = G.enemies[i]; if (!e.on || e.dead) { if (cur[i]) cur[i].dead = true; continue; }
-      let u = cur[i]; if (!u || u.dead || u.wave !== w) { u = cur[i] = { wave: w, type: e.type ? 'BMP' : 'T72', role: G.ROLES[e.role], grp: e.grp, spawnT: wt, b0: brg(e), d0: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), track: [], dmin: 1e9, net: [0, 0], scoots: 0, smoked: false }; info.units.push(u); }
+      let u = cur[i]; if (!u || u.dead || u.wave !== w) { u = cur[i] = { wave: w, type: ['T72', 'BMP', 'Tigr', 'BTR', 'Buggy', 'Moto'][e.type], role: G.ROLES[e.role], grp: e.grp, spawnT: wt, b0: brg(e), d0: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), track: [], dmin: 1e9, net: [0, 0], scoots: 0, smoked: false }; info.units.push(u); }
       const d = Math.hypot(e.x - veh.x, e.z - veh.z); u.dmin = Math.min(u.dmin, d);
       if (e.path >= 0) u.net[e.net]++;
       if (e.scT > 0) u.scoots++;

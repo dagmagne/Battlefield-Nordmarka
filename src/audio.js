@@ -59,8 +59,8 @@ export function synth(sr) {
 // ---------- runtime ----------
 // event name -> [buffer, volume a + b*k, reference distance (m), playback rate r0 + rk*k]
 const EV = { gun: ['gun', 1.3, 0, 70, 1, 0], egun: ['gun', 1.2, 0, 70, 0.92, 0], auto: ['s30', 0.8, 0, 35, 1, 0], boom: ['boom', 0.35, 0.35, 70, 1.4, -0.18],
-  hit: ['hit', 0.5, 0.025, 20, 1.15, -0.012], reload: ['rel', 0.5, 0, 10, 1, 0], smoke: ['smk', 0, 0.7, 30, 1.3, -0.3], collapse: ['col', 0.5, 0.25, 90, 1.1, -0.1], crash: ['cr', 0.3, 0.05, 40, 1, 0], whistle: ['whi', 0.9, 0, 400, 1, 0] };
-const NV = 12, SR = 48000;
+  hit: ['hit', 0.5, 0.025, 20, 1.15, -0.012], reload: ['rel', 0.5, 0, 10, 1, 0], smoke: ['smk', 0, 0.7, 30, 1.3, -0.3], collapse: ['col', 0.5, 0.25, 90, 1.1, -0.1], crash: ['cr', 0.3, 0.05, 40, 1, 0], whistle: ['whi', 0.9, 0, 400, 1, 0], atgm: ['smk', 1.1, 0, 70, 0.55, 0], mgb: ['s30', 0.45, 0, 30, 1.7, 0] };
+const NV = 12, SR = 48000, ERATE = [0.9, 1.12, 1.4, 1.22, 1.75, 2.1]; // enemy engine pitch by type: T-72, BMP, Tigr, BTR, buggy, motorcycle
 const cl = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lpf = (d) => 200 + 17000 * Math.exp(-d / 250); // air absorption: distant thunder, close crack
 
@@ -212,7 +212,7 @@ export function initAudio(o) {
     for (let v = 0; v < 3; v++) { const e = eV[v] >= 0 ? EN[eV[v]] : null;
       if (!e) { sp(eG[v].gain, 0, 0.2); continue; }
       loc(e.x, e.y + 1.5, e.z); const ev = Math.min(1, Math.abs(e.v) / 9);
-      sp(eSrc[v].playbackRate, (e.type ? 1.12 : 0.9) * (0.8 + 0.4 * ev)); sp(eG[v].gain, (0.45 + 0.35 * ev) / (1 + LD / 40), 0.15); sp(eLP[v].frequency, Math.min(2500, lpf(LD))); sp(eP[v].pan, LP); }
+      sp(eSrc[v].playbackRate, ERATE[e.type] * (0.8 + 0.4 * ev)); sp(eG[v].gain, (0.45 + 0.35 * ev) / (1 + LD / 40), 0.15); sp(eLP[v].frequency, Math.min(2500, lpf(LD))); sp(eP[v].pan, LP); }
   }
   return S;
 }

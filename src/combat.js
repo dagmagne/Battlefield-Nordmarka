@@ -1,19 +1,19 @@
 // Weapons, projectiles, effects, enemy AI and the wave game.
 // Everything is preallocated in initCombat(); update() and its helpers allocate nothing per frame.
 import { clamp } from './math.js';
-import { tankParts, droneParts, airParts, gunMat, LEO, T72, BMP } from './tank.js';
+import { tankParts, wheelParts, droneParts, airParts, gunMat, LEO, T72, BMP, TIGR, BTR, BUGGY, MOTO } from './tank.js';
 import { cur as todCur } from './tod.js';
 import { initMinimap, MAP_M, MAP_PX } from './minimap.js';
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
-export const MAXE = 10, MAXG = 760, MAXM = 48, MAXA = 6; // enemies, glow sprites, mines, enemy air units
+export const MAXE = 14, MAXG = 760, MAXM = 48, MAXA = 6; // enemies, glow sprites, mines, enemy air units
 // drone types: 0 FPV (one-way shaped charge), 1 bomber (hovers, drops VOG grenades, lands back on the tank to rearm), 2 recon (high, long, quiet, unarmed)
 // n per game, battery t (s), top speed v (m/s), radio range r (m), spotting range see (m), how long a sighting stays on the map mark (s), climb after launch (m above ground)
 export const DTYPE = [{ name: 'FPV', n: 5, t: 75, v: 26, r: 1500, see: 800, mark: 20, climb: 0 }, { name: 'BOMB', n: 2, t: 120, v: 14, r: 1500, see: 900, mark: 25, climb: 30 }, { name: 'RECON', n: 2, t: 180, v: 18, r: 2200, see: 1500, mark: 40, climb: 110 }];
 // grenades per bomber sortie, seconds between drops; a lost contact fades from the map over LOST_T s; NFLD pre-laid minefields enemies know about and drive around
 const BOMBS = 3, BOMB_RL = 0.7, LOST_T = 40, NFLD = 6;
 // mine damage by shell type (radius in m around a ground impact that sets a mine off): APFSDS, HEAT, HE, MG, 125 mm, 30 mm, smoke, VOG
-const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5];
+const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5, 2.5, 0.5];
 // enemy air: FPV (operator-guided, finds you, dives), Lancet (higher and faster, short warning, smoke breaks its lock), Orlan-10 (circles high and feeds the enemy your position)
 // v cruise, vd dive (m/s), alt above ground, r hit radius (m), dmg range, see: lock-on range, warn: when the HUD arrow and the toast come, bat: battery (s), pc: lock chance per check in the open
 export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6, d0: 25, d1: 40, see: 380, warn: 650, bat: 160, pc: 0.3, score: 25 },
@@ -21,14 +21,22 @@ export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6
   { name: 'Orlan-10', hp: 4, v: 27, vd: 27, alt: 180, r: 1.7, d0: 0, d1: 0, see: 900, warn: 1400, bat: 1e9, pc: 0, score: 60 }];
 const HMG_RATE = 20; // hatch MG3 rounds per second (shares the 7.62 belt with the coax)
 const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
-// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber
-const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1]];
-const BDMG = [20, 45, 70, 0, 35, 3, 0, 25]; // direct-hit damage to a building by shell type (the drone charge does 100)
+// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber, 8 enemy Kornet ATGM (wire-guided), 9 enemy MG
+const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1], [18, 9, 3, 0.14, 5], [14, 5, 1.5, 0.18, 3]];
+const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0]; // direct-hit damage to a building by shell type (the drone charge does 100)
 // enemy roles: assault closes in; overwatch takes a high spot with a view and holds; flanker swings wide to come in from the side;
 // raider (BMP) runs fast along the plowed roads to close range
 const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'flanker', 'raider'], PQN = 16;
 const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1800, burst: 1, night: 0.35, name: 'T-72B3' }, { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2' }];
+// enemy types: tracked T-72 and BMP, then the wheeled and light ones (phase 4). mgd: damage per coax / hatch MG round, score, sfx and muzzle size of the weapon,
+// wheels: K.ax axles get rolling parts; map: minimap marker (0 tank circle, 1 square, 2 ATGM diamond, 3 small dot)
+const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1800, burst: 1, night: 0.35, name: 'T-72B3', mgd: 0, score: 100, sfx: 'egun', mz: 1, spread: 0.0016, map: 0 },
+  { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2', mgd: 3, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1 },
+  { K: TIGR, hp: 30, vmax: 15, slew: 0.6, v: 250, shell: 8, reload: 22, range: 2000, burst: 1, night: 0.6, name: 'Tigr-M Kornet', mgd: 0.5, turn: 0.9, score: 70, sfx: 'atgm', mz: 0.6, spread: 0, map: 2, wheels: 1 },
+  { K: BTR, hp: 50, vmax: 16, slew: 0.7, v: 960, shell: 5, reload: 3.4, range: 1200, burst: 5, night: 0.8, name: 'BTR-82A', mgd: 0.15, turn: 0.75, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1, wheels: 1 },
+  { K: BUGGY, hp: 16, vmax: 21, slew: 1.4, v: 850, shell: 9, reload: 2.6, range: 750, burst: 8, night: 0.9, name: 'assault buggy', mgd: 6, turn: 1.3, score: 25, sfx: 'mgb', mz: 0.12, spread: 0.008, map: 3, wheels: 1 },
+  { K: MOTO, hp: 8, vmax: 23, slew: 2, v: 850, shell: 9, reload: 3.2, range: 500, burst: 5, night: 0.95, name: 'motorcycle team', mgd: 8, turn: 1.8, score: 15, sfx: 'mgb', mz: 0.1, spread: 0.01, map: 3, wheels: 1 }];
+const T72T = 0, BMPT = 1, TIGRT = 2, BTRT = 3, BUGT = 4, MOTOT = 5;
 // spotting: e.see grows at vis·sig/(1+(d/SEE_R)²)·cue − SEE_FLOOR per second; 1 = detected (turret on, engages), the first shot needs 1 + d/1000.
 // vis: line-of-sight transmittance (foliage optical depth: one e-fold per FOL_L m of full canopy, blocked below 0.1);
 // sig: how conspicuous the Leopard is (moving, firing, concealed under canopy, darkness vs. the sight: night = loss without a muzzle flash).
@@ -63,7 +71,8 @@ export function initCombat(C) {
   function fire(owner, type, x, y, z, dx, dy, dz, v, spread, life) {
     let i = sNext; for (let k = 0; k < SN; k++) { if (S[i * SS + 8] <= 0) break; i = (i + 1) % SN; } sNext = (i + 1) % SN;
     const o = i * SS; dx += sr() * spread; dy += sr() * spread; dz += sr() * spread; const l = v / Math.hypot(dx, dy, dz);
-    S[o] = x; S[o + 1] = y; S[o + 2] = z; S[o + 3] = dx * l; S[o + 4] = dy * l; S[o + 5] = dz * l; S[o + 6] = type; S[o + 7] = owner; S[o + 8] = life;
+    S[o] = x; S[o + 1] = y; S[o + 2] = z; S[o + 3] = dx * l; S[o + 4] = dy * l; S[o + 5] = dz * l; S[o + 6] = type; S[o + 7] = owner; S[o + 8] = life; S[o + 9] = 0;
+    return o;
   }
   function explode(x, y, z, s) {
     C.sfx('boom', x, y, z, s);
@@ -109,17 +118,17 @@ export function initCombat(C) {
   }
   // which part of a vehicle contains the point: 0 none, 1 hull, 2 turret
   function inside(t, K, x, y, z) {
-    const dx = x - t.x, dz = z - t.z; if (dx * dx + dz * dz > 22) return 0;
+    const dx = x - t.x, dz = z - t.z, bx = K.bx || 1.86, bz = K.bz || 3.75; if (dx * dx + dz * dz > (bz + 0.6) * (bz + 0.6)) return 0;
     const dy = y - t.y, c = Math.cos(t.yaw), s = Math.sin(t.yaw), lx = c * dx - s * dz, lz = s * dx + c * dz;
-    if (dy > K.hh - 0.06 && dy < K.th && lx * lx + (lz - K.tz) * (lz - K.tz) < K.tr * K.tr) return 2;
-    return dy > 0.15 && dy <= K.hh && Math.abs(lx) < 1.86 && Math.abs(lz) < 3.75 ? 1 : 0;
+    if (K.tr && dy > K.hh - 0.06 && dy < K.th && lx * lx + (lz - K.tz) * (lz - K.tz) < K.tr * K.tr) return 2;
+    return dy > 0.15 && dy <= K.hh && Math.abs(lx) < bx && Math.abs(lz) < bz ? 1 : 0;
   }
   const face = (t, yaw, vx, vz) => { const l = Math.hypot(vx, vz) || 1, d = (-Math.sin(yaw) * vx - Math.cos(yaw) * vz) / l; return d < -0.62 ? 0 : d > 0.62 ? 2 : 1; };
 
   // ---------- damage ----------
   const DT72 = [[60, 110, 140], [28, 75, 110], [22, 24, 30]];
   function kill(e) {
-    e.dead = true; e.hp = 0; e.burn = 0.01; e.state = 3; e.v = 0; e.seen = true; e.lx = e.x; e.lz = e.z; G.kills++; G.score += e.type ? 60 : 100; hudDirty = true;
+    e.dead = true; e.hp = 0; e.burn = 0.01; e.state = 3; e.v = 0; e.seen = true; e.lx = e.x; e.lz = e.z; G.kills++; G.score += ETYPE[e.type].score; hudDirty = true;
     explode(e.x, e.y + 1.4, e.z, 2.4); explode(e.x, e.y + 0.4, e.z, 1.2);
     if (e.type === 0 && rnd() < 0.45) e.tlV = 7 + rnd() * 5; // ammunition cook-off throws the turret
     ui.toast(ETYPE[e.type].name + ' destroyed'); R.hitT = 0.6;
@@ -132,14 +141,14 @@ export function initCombat(C) {
     if (veh.hp <= 0) { veh.dead = true; veh.tl = 0.12; veh.tt = 0.14; explode(veh.x, veh.y + 1.6, veh.z, 2.6); G.burnP = 0.01; ui.over('Your Leopard was knocked out', `Wave ${G.wave} · ${G.kills} vehicles destroyed · score ${G.score}`); }
   }
   function hitVehicle(type, t, zone, fc, x, y, z) {
-    if (t === veh) { const d = type === 4 ? [16, 30, 44][fc] * (zone === 2 ? 0.8 : 1) : type === 5 ? [1.5, 4, 7][fc] : 0; if (d) hurtPlayer(d, fc, y - veh.y < 0.95); return; }
+    if (t === veh) { const d = type === 4 ? [16, 30, 44][fc] * (zone === 2 ? 0.8 : 1) : type === 5 ? [1.5, 4, 7][fc] : type === 8 ? [38, 50, 62][fc] : type === 9 ? 0.3 : 0; if (d) hurtPlayer(d, fc, y - veh.y < 0.95); if (type === 8) ui.toast(fc === 0 ? 'ATGM hit on the front armour!' : 'ATGM hit!'); return; }
     if (t.dead) return;
     let d = 0, deck = false;
     if (type === 7) { // VOG from above: the thin roof and the engine deck (rear, local +z) are where it hurts
       const lz = Math.sin(t.yaw) * (x - t.x) + Math.cos(t.yaw) * (z - t.z); deck = zone === 1 && lz > 0.9;
       d = t.type ? 110 : zone === 2 ? 50 : deck ? 85 : 30; if (t.cage && (zone === 2 || deck)) { d *= 0.3; deck = false; } } // the cage catches grenades from above
     else if (t.type === 0) { if (type < 3) d = DT72[type][fc] * (zone === 2 && fc === 0 ? 0.85 : 1); }
-    else d = type === 0 ? 100 : type === 1 ? 130 : type === 2 ? 110 : 3;
+    else d = type === 0 ? 100 : type === 1 ? 130 : type === 2 ? 110 : type === 3 ? ETYPE[t.type].mgd : 0;
     if (d <= 0) return;
     t.hp -= d * (0.85 + rnd() * 0.3); t.known = 15; t.spotT = Math.max(t.spotT, 10); if (type !== 3 || R.hitT < 0.1) R.hitT = 0.3;
     if ((type < 3 && fc === 1 && y - t.y < 0.95 && rnd() < 0.4) || deck) t.immob = true;
@@ -159,6 +168,8 @@ export function initCombat(C) {
     else if (type === 3) { if (t) glow(x, y, z, 0.5, 20, 12, 4); else for (let i = 0; i < 3; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.5 + rnd() * 2.5, sr() * 2, 0.4 + rnd() * 0.3, 0.012 + rnd() * 0.015, 0, 0, 1, 1, 1, 0.9); }
     else if (type === 6) smokeBurst(x, y, z);
     else if (type === 7) { explode(x, y, z, 0.75); splash(x, y, z, 3, 6, 18, owner); }
+    else if (type === 8) explode(x, y, z, 1.7);
+    else if (type === 9) { if (!t) for (let i = 0; i < 2; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.2 + rnd() * 2, sr() * 2, 0.35, 0.012, 0, 0, 1, 1, 1, 0.9); }
   }
   function smokeBurst(x, y, z) { C.sfx('smoke', x, y, z, 0.5); const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
 
@@ -185,10 +196,24 @@ export function initCombat(C) {
   }
 
   // ---------- projectiles ----------
+  // Kornet: the launcher keeps it on the line to the tank while it can see the tank (smoke or cover cut the guidance; then it flies on blind)
+  let guideN = 0;
+  function guide(o, dt) {
+    S[o + 4] += GRAV * dt; // the motor holds it up
+    for (let k = 0; k < 2; k++) { const f = rnd(); parts.emit(S[o] - S[o + 3] * dt * f, S[o + 1] - S[o + 4] * dt * f, S[o + 2] - S[o + 5] * dt * f, sr() * 0.4, 0.2 + rnd() * 0.3, sr() * 0.4, 1.8 + rnd() * 1.2, 0.3 + rnd() * 0.25, 1.4, 1, 0.82, 0.82, 0.84, 0.55); } // a thin grey-white trail
+    const li = S[o + 9] - 1; if (li < 0) return; const e = G.enemies[li];
+    if (!e || !e.on || e.dead || veh.dead) { S[o + 9] = 0; return; }
+    if ((++guideN & 3) === 0 && losVis(e.x, e.y + 2.2, e.z, veh.x, veh.y + 1.6, veh.z) <= 0.05) { // beam lost: it wanders off its line
+      S[o + 9] = 0; const a = (rnd() < 0.5 ? -1 : 1) * (0.06 + rnd() * 0.07), c = Math.cos(a), sn = Math.sin(a), vx = S[o + 3], vz = S[o + 5];
+      S[o + 3] = c * vx - sn * vz; S[o + 5] = sn * vx + c * vz; S[o + 4] += (rnd() * 0.08 - 0.03) * Math.hypot(vx, vz); ui.toast('The ATGM lost its guidance'); return; }
+    const dx = veh.x - S[o], dy = veh.y + 1.2 - S[o + 1], dz = veh.z - S[o + 2], d = Math.hypot(dx, dy, dz) || 1, v = Math.hypot(S[o + 3], S[o + 4], S[o + 5]) || 1, k = Math.min(1, dt * 2.2);
+    S[o + 3] += (dx / d * v - S[o + 3]) * k; S[o + 4] += (dy / d * v - S[o + 4]) * k; S[o + 5] += (dz / d * v - S[o + 5]) * k; const n = v / (Math.hypot(S[o + 3], S[o + 4], S[o + 5]) || 1); S[o + 3] *= n; S[o + 4] *= n; S[o + 5] *= n;
+  }
   function updateShells(dt) {
     for (let i = 0; i < SN; i++) {
       const o = i * SS; if (S[o + 8] <= 0) continue;
       S[o + 8] -= dt;
+      if (S[o + 6] === 8) guide(o, dt);
       const type = S[o + 6], owner = S[o + 7], x0 = S[o], y0 = S[o + 1], z0 = S[o + 2], vx = S[o + 3], vz = S[o + 5];
       const vy = S[o + 4] - GRAV * dt * 0.5; S[o + 4] -= GRAV * dt;
       const x1 = x0 + vx * dt, y1 = y0 + vy * dt, z1 = z0 + vz * dt, len = Math.hypot(vx, vy, vz) * dt, n = type === 3 ? clamp(Math.ceil(len / 1.5), 2, 12) : clamp(Math.ceil(len / 0.6), 2, 48);
@@ -287,7 +312,8 @@ export function initCombat(C) {
     e.cage = type === 0 && G.wave >= 3 && rnd() < 0.4; // cope cage over the turret on some T-72s
     Object.assign(e, { on: true, dead: false, type, x: bx, z: bz, y: hAt(bx, bz), pitch: 0, roll: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: E.hp, state: 0, rl: 3 + rnd() * 4, path: bp, pi: bi, burn: 0, burnt: 0, see: 0, losT: rnd() * 0.3, los: false, known: 0, shots: 0, burstN: 0, immob: false, evalT: 0, errT: 0,
       role, grp, brg: dir ? brg : brgOf(bx, bz), side: rnd() < 0.5 ? -1 : 1, ph: 0, net: bn, gx: veh.x, gz: veh.z, scT: 0, shL: 0, hpL: E.hp, retT: 0, smk: 1, revT: 0, stN: 0, cT: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: bx, stZ: bz, wantT: 0,
-      hold: role === RAID ? 230 + rnd() * 150 : role === FLK ? 300 + rnd() * 200 : type ? 320 + rnd() * 160 : 400 + rnd() * 250 });
+      hold: type >= BUGT ? 110 + rnd() * 140 : role === RAID ? 230 + rnd() * 150 : role === FLK ? 300 + rnd() * 200 : type ? 320 + rnd() * 160 : 400 + rnd() * 250 });
+    if (type === TIGRT || type >= BUGT) e.smk = 0; // no smoke dischargers on the light vehicles
     if (role === OVW) pickSpot(e, brgOf(bx, bz), 650, 1000);
     if (role === FLK && G.lastAxis === G.lastAxis && Math.abs(wrap(e.brg - G.lastAxis)) > 0.3) e.side = wrap(e.brg - G.lastAxis) > 0 ? 1 : -1; // keep swinging away from the main axis
     if (grp >= 0 && !ga) { GA[grp * 3] = bx; GA[grp * 3 + 1] = bz; GA[grp * 3 + 2] = 1; }
@@ -361,11 +387,15 @@ export function initCombat(C) {
     for (let k = 0; k < 40; k++) { const a = w === 1 && k < 20 ? (rnd() - 0.5) * 1.2 : rnd() * 6.283 - 3.1416; // wave 1 comes from the north if it can
       const sc = Math.min(1, feas(a) / 40) + rnd() * 0.5 - (G.lastAxis === G.lastAxis && Math.abs(wrap(a - G.lastAxis)) < 1.1 ? 1 : 0); if (sc > best) { best = sc; ax = a; } }
     G.lastAxis = ax; const fp = feas(ax + 1.45), fm = feas(ax - 1.45), sd = fp > 15 && fm > 15 ? (rnd() < 0.5 ? -1 : 1) : fp >= fm ? 1 : -1, n = Math.min(2 + w, 7), B = () => rnd() < 0.5 ? 1 : 0;
-    if (!G.bag || !G.bag.length) { G.bag = ['platoon', 'raid', 'pincer', 'echelon']; for (let i = 3; i > 0; i--) { const j = (rnd() * (i + 1)) | 0, t = G.bag[i]; G.bag[i] = G.bag[j]; G.bag[j] = t; } }
+    if (!G.bag || !G.bag.length) { G.bag = ['platoon', 'raid', 'pincer', 'echelon', 'motor', 'atgm']; for (let i = G.bag.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0, t = G.bag[i]; G.bag[i] = G.bag[j]; G.bag[j] = t; } }
     const sc = w === 1 ? 'probe' : w === WAVES ? 'final' : G.bag.pop(); pqN = 0; GA.fill(0);
     if (sc === 'probe') { pq(0, -1, 0, OVW, ax, 0, 0); pq(0, -1, 1, ASL, ax, 0, 0); pq(0, -1, 1, n > 3 ? RAID : ASL, ax + sd * 0.3, 0, 0); for (let i = 3; i < n; i++) pq(0, -1, B(), ASL, ax, 0, 0); return 'Recon in force'; }
     if (sc === 'platoon') { pq(0, -1, 0, OVW, ax, 0, 0); for (let i = 1; i < n - 1; i++) pq(0, -1, 0, ASL, ax, 0, 0); pq(0, -1, 1, ASL, ax, 0, 0); pq(30 + rnd() * 20, 1, 1, RAID, ax + sd * 0.6, 1, 1); return 'Tank platoon with escort'; }
-    if (sc === 'raid') { for (let i = 0; i < n; i++) { const ow = i === n - 1 && n > 4; pq(i < 2 ? 0 : 6 + i * 4, -1, ow ? 0 : 1, ow ? OVW : RAID, ax + (i & 1 ? 0.25 : -0.25), 0, 0); } return 'BMP raid on the roads'; }
+    if (sc === 'raid') { for (let i = 0; i < n; i++) { const ow = i === n - 1 && n > 4; pq(i < 2 ? 0 : 6 + i * 4, -1, ow ? 0 : rnd() < 0.4 ? BTRT : BMPT, ow ? OVW : RAID, ax + (i & 1 ? 0.25 : -0.25), 0, 0); } return 'BMP raid on the roads'; }
+    if (sc === 'motor') { const k = 3 + Math.min(2, w >> 1); for (let i = 0; i < k; i++) pq(i * 2.5, -1, rnd() < 0.5 ? BUGT : MOTOT, RAID, ax + sr() * 0.5, 0, 0); // a swarm of buggies and bikes down the roads
+      pq(4, -1, BTRT, RAID, ax + sd * 0.3, 0, 0); pq(0, -1, TIGRT, OVW, ax - sd * 0.4, 1, 0); if (w >= 4) pq(35 + rnd() * 15, 1, T72T, ASL, ax, 2, 1); return 'Motorised raid'; }
+    if (sc === 'atgm') { pq(0, -1, TIGRT, OVW, ax + 0.35, 0, 0); pq(0, -1, TIGRT, OVW, ax - 0.35, 0, 0); pq(0, -1, rnd() < 0.5 ? BTRT : BMPT, ASL, ax, 1, 0); if (w >= 3) pq(0, -1, BMPT, ASL, ax, 1, 0);
+      const t = 40 + rnd() * 20; pq(t, 1, T72T, FLK, ax + sd * 1.3, 2, 1); pq(t, 1, T72T, FLK, ax + sd * 1.3, 2, 0); return 'ATGM ambush'; }
     if (sc === 'pincer') { const f = Math.ceil(n / 2); pq(0, -1, 0, OVW, ax, 0, 0); for (let i = 1; i < f; i++) pq(0, -1, B(), ASL, ax, 0, 0);
       const t = 14 + rnd() * 14; for (let i = f; i < n; i++) pq(t, -1, i === f ? 0 : B(), FLK, ax + sd * 1.45, 1, 1); return 'Pincer'; }
     if (sc === 'echelon') { const f = Math.max(2, n - 3); for (let i = 0; i < f; i++) pq(0, -1, i ? B() : 0, i ? ASL : OVW, ax, 0, 0);
@@ -422,9 +452,9 @@ export function initCombat(C) {
       // movement: role-driven (see drive())
       drive(e, E, d, dt); const tgt = e.tgt, st = e.st;
       for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = e.x - q.x, qz = e.z - q.z, qd = Math.hypot(qx, qz); if (qd < 7 && qd > 0.01) { const k = (7 - qd) / qd * (q.dead ? 1 : 0.5); e.x += qx * k; e.z += qz * k; } }
-      e.v += (tgt - e.v) * Math.min(1, dt * 0.9); const yr = st * 0.55 * (Math.abs(e.v) > 0.5 || tgt !== 0 ? 1 : 0);
+      e.v += (tgt - e.v) * Math.min(1, dt * (E.wheels ? 1.4 : 0.9)); const yr = st * (E.turn || 0.55) * (Math.abs(e.v) > 0.5 || tgt !== 0 ? 1 : 0);
       e.yaw += yr * dt; e.x = clamp(e.x - Math.sin(e.yaw) * e.v * dt, -PLAY, PLAY); e.z = clamp(e.z - Math.cos(e.yaw) * e.v * dt, -PLAY, PLAY);
-      for (let s = -1; s <= 1; s++) { const px = e.x - Math.sin(e.yaw) * 1.8 * s, pz = e.z - Math.cos(e.yaw) * 1.8 * s; if (C.solid(px, pz, 1.9, SO)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; if (SO[4] > 0) { e.cnx = SO[2]; e.cnz = SO[3]; e.cT = 1.2; } } } // buildings and colliders are solid
+      for (let s = -1; s <= 1; s++) { const cs = K.cs || 1.8, px = e.x - Math.sin(e.yaw) * cs * s, pz = e.z - Math.cos(e.yaw) * cs * s; if (C.solid(px, pz, K.cr || 1.9, SO)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; if (SO[4] > 0) { e.cnx = SO[2]; e.cnz = SO[3]; e.cT = 1.2; } } } // buildings and colliders are solid
       if (C.bld.rubble(e.x, e.z)) e.v = Math.min(e.v, 4.5);
       e.trL += (e.v + yr * 1.43) * dt; e.trR += (e.v - yr * 1.43) * dt;
       const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw), hl = K.hl, hw = K.hw;
@@ -448,11 +478,12 @@ export function initCombat(C) {
       if (e.burstN > 0) { e.burstT -= dt; if (e.burstT <= 0) { e.burstT = 0.2; e.burstN--; e.fire = true; } }
       else if (engage && !G.peace && e.rl <= 0 && Math.hypot(dyaw, dpt) < 0.012 && e.see >= (e.shots ? 1 : 1 + d * 0.001)) { e.rl = E.reload * (0.9 + rnd() * 0.3); e.shots++; e.fire = true; e.burstN = E.burst - 1; e.burstT = 0.2; }
     }
-    tankParts(e.d, e, K); e.d[128] = e.trL; e.d[129] = e.trR; e.d[130] = e.burnt; e.d[131] = 1;
+    tankParts(e.d, e, K); if (K.ax) wheelParts(e.d, e, K); e.d[128] = e.trL; e.d[129] = e.trR; e.d[130] = e.burnt; e.d[131] = 1;
     if (e.fire) { e.fire = false; if (d2p(e) < 2500) e.spotT = Math.max(e.spotT, 8); const M = gunMat(), mx = M[4] * K.gy + M[8] * K.mz + M[12], my = M[5] * K.gy + M[9] * K.mz + M[13], mz = M[6] * K.gy + M[10] * K.mz + M[14], l = -1 / Math.hypot(M[8], M[9], M[10]);
-      C.sfx(e.type ? 'auto' : 'egun', mx, my, mz, 1);
-      const E2 = ETYPE[e.type]; fire(1, E2.shell, mx, my, mz, M[8] * l, M[9] * l, M[10] * l, E2.v, e.type ? 0.004 : 0.0016, 4);
-      muzzle(mx, my, mz, M[8] * l, M[9] * l, M[10] * l, e.type ? 0.3 : 1); e.recoil = e.type ? 0.05 : 0.3; e.known = 14; }
+      const E2 = ETYPE[e.type]; C.sfx(E2.sfx, mx, my, mz, 1);
+      const so = fire(1, E2.shell, mx, my, mz, M[8] * l, M[9] * l, M[10] * l, E2.v, E2.spread, E2.shell === 8 ? 10 : E2.shell === 9 ? 2 : 4);
+      if (E2.shell === 8) { S[so + 9] = idx + 1; ui.toast(`ATGM launch from the ${dirName(e.x - veh.x, e.z - veh.z)}! Smoke or cover breaks its guidance`); } // wire-guided: the launcher steers it while it sees the tank
+      muzzle(mx, my, mz, M[8] * l, M[9] * l, M[10] * l, E2.mz); e.recoil = e.type ? 0.05 : 0.3; e.known = 14; }
   }
 
   // ---------- HUD ----------
@@ -489,8 +520,8 @@ export function initCombat(C) {
     // only what has been seen (crew, sight, drones, muzzle flashes): fresh contacts solid, lost ones as a hollow marker at the last known position that fades out
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || !e.seen) continue;
       const fresh = e.dead || e.spotT > 0, ex = e.dead ? e.x : e.lx, ez = e.dead ? e.z : e.lz; if ((!fresh && e.lostT > LOST_T) || Math.abs(ex - mx) > 900 || Math.abs(ez - mz) > 900) continue;
-      const x = clamp(cx + (ex - mx) * sc, 4, Wd - 4), y = clamp(cx + (ez - mz) * sc, 4, Wd - 4), col = e.dead ? '#59606a' : e.type ? '#ff9a3d' : '#ff4a3a';
-      c.beginPath(); if (e.type) c.rect(x - 2.6, y - 2.6, 5.2, 5.2); else c.arc(x, y, 3.7, 0, 6.283);
+      const x = clamp(cx + (ex - mx) * sc, 4, Wd - 4), y = clamp(cx + (ez - mz) * sc, 4, Wd - 4), mk = ETYPE[e.type].map, col = e.dead ? '#59606a' : ['#ff4a3a', '#ff9a3d', '#ffd23f', '#ffb070'][mk];
+      c.beginPath(); if (mk === 1) c.rect(x - 2.6, y - 2.6, 5.2, 5.2); else if (mk === 2) { c.moveTo(x, y - 4); c.lineTo(x + 3.4, y); c.lineTo(x, y + 4); c.lineTo(x - 3.4, y); c.closePath(); } else if (mk === 3) c.arc(x, y, 2.3, 0, 6.283); else c.arc(x, y, 3.7, 0, 6.283);
       if (fresh) { c.fillStyle = col; c.fill(); c.stroke(); }
       else { c.globalAlpha = 0.25 + 0.75 * (1 - e.lostT / LOST_T); c.strokeStyle = '#05080c90'; c.lineWidth = 3; c.stroke(); c.strokeStyle = col; c.lineWidth = 1.4; c.stroke(); c.globalAlpha = 1; c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2; } }
     const a = veh.yaw, t = veh.yaw + veh.turYaw, vx = clamp(cx + (veh.x - mx) * sc, 6, Wd - 6), vy = clamp(cx + (veh.z - mz) * sc, 6, Wd - 6);
@@ -528,7 +559,7 @@ export function initCombat(C) {
     for (let m = 0; m < want; m++) { let best = -1e9, px = 0, pz = 0, ux = 0, uz = 0;
       for (let k = 0; k < 300; k++) { const n = k % 3 ? 1 : 0, L = NETS[n]; if (!L.length) continue; const t = L[(rnd() * L.length) | 0]; if (!t || t.n < 12) continue;
         const i = 3 + ((rnd() * (t.n - 6)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
-        if (d < 120 || d > 380 || Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || inField(x, z, 60)) continue;
+        if (d < 120 || d > 380 || Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || inField(x, z, 60) || Math.abs(wrap(brgOf(x, z) - G.lastAxis)) > 1.2) continue; // only ahead, towards the enemy
         const sc = 2 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - G.lastAxis)) / 1.1) + (n ? 1 : 0) + rnd() * 0.6 - Math.abs(d - 230) / 300;
         if (sc > best) { best = sc; px = x; pz = z; const ex = t.pts[i * 2 + 2] - t.pts[i * 2 - 2], ez = t.pts[i * 2 + 3] - t.pts[i * 2 - 1], l = Math.hypot(ex, ez) || 1; ux = ex / l; uz = ez / l; } }
       if (best > -1e9) { const n0 = layField(px, pz, ux, uz); if (n0) { laid += n0; bx = px; bz = pz; } } }
@@ -651,10 +682,11 @@ export function initCombat(C) {
       if (a.type === 0) { a.tp = a.pitch * 0.5 - 0.25; a.tr = 0; droneParts(a.d, a); } else airParts(a.d, a, a.type === 1 ? 0.86 : -0.92);
       a.d[131] = 0;
     }
-    // HUD arrows: the two most pressing FPV / Lancet threats, relative to where the view points (strength 1 = diving)
-    const TH = G.thr; TH[1] = TH[3] = 0;
-    if (b0 >= 0) { const a = AIR[b0]; TH[0] = wrap(Math.atan2(-(a.x - veh.x), -(a.z - veh.z)) - cy); TH[1] = a.st === 2 ? 1 : 0.6; }
-    if (b1 >= 0) { const a = AIR[b1]; TH[2] = wrap(Math.atan2(-(a.x - veh.x), -(a.z - veh.z)) - cy); TH[3] = a.st === 2 ? 1 : 0.6; }
+    // HUD arrows: the two most pressing threats (a Kornet in flight first, then diving or inbound FPV / Lancets), relative to where the view points (strength 1 blinks)
+    const TH = G.thr; TH[1] = TH[3] = 0; let n = 0;
+    for (let o = 0; o < SN * SS && n < 2; o += SS) if (S[o + 6] === 8 && S[o + 8] > 0 && S[o + 7] === 1) { TH[n * 2] = wrap(Math.atan2(-(S[o] - veh.x), -(S[o + 2] - veh.z)) - cy); TH[n * 2 + 1] = 1; n++; }
+    if (b0 >= 0 && n < 2) { const a = AIR[b0]; TH[n * 2] = wrap(Math.atan2(-(a.x - veh.x), -(a.z - veh.z)) - cy); TH[n * 2 + 1] = a.st === 2 ? 1 : 0.6; n++; }
+    if (b1 >= 0 && n < 2) { const a = AIR[b1]; TH[n * 2] = wrap(Math.atan2(-(a.x - veh.x), -(a.z - veh.z)) - cy); TH[n * 2 + 1] = a.st === 2 ? 1 : 0.6; }
     // this wave's raids
     for (let q = 0; q < 6; q++) if (AQY[q] >= 0 && G.state === 1 && G.wt >= AQT[q] && !veh.dead) { if (AQY[q] === 2) { let has = false; for (const a of AIR) if (a.on && a.type === 2) has = true; if (has) { AQY[q] = -1; continue; } } airSpawn(AQY[q], AQB[q]); AQY[q] = -1; }
   }
