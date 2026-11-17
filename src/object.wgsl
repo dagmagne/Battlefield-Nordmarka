@@ -70,11 +70,20 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     emis = vec3f(1.0, 0.24, 0.035) * hole * (0.015 + night * 0.2) * smoothstep(0.3, 0.8, vn(wp.xz * 2.3 + wp.y * 2.9));
     spec = 0.05 * (1.0 - soot); gloss = 20.0;
   }
-  else if (m == 24u || m == 26u) { // soldier: winter overall (24) and webbing, gloves, boots (26); creases fixed to the part
+  else if (m >= 24u && m <= 28u && m != 25u) { // soldier: overall 24, chest rig and straps 26, pack and boots 27, gloves 28 (pattern fixed to the part)
     let q = in.lp;
     let crease = vn(vec2f(q.y * 23.0 + q.x * 7.0, q.z * 19.0 + q.x * 11.0)) * 0.6 + vn(vec2f(q.x * 61.0 - q.y * 13.0, q.z * 57.0 + q.y * 17.0)) * 0.4;
-    alb *= 0.86 + 0.2 * crease;
-    spec = 0.025; gloss = 10.0; snowy = select(0.35, 0.0, m == 26u);
+    let weave = vn(vec2f(q.x * 260.0 + q.z * 90.0, q.y * 240.0)) - 0.5;
+    alb *= (0.84 + 0.22 * crease + 0.06 * weave) * (0.9 + 0.14 * vn(vec2f(q.x * 7.0 + q.y * 3.0, q.z * 7.0 - q.y * 5.0) + in.col.r * 37.0)); // creases, weave, worn patches
+    if (m == 24u) {
+      let hs = (0.5 - abs(fract(q.y * 4.3) - 0.5)) / 4.3;
+      let seam = 1.0 - 0.2 * (1.0 - smoothstep(0.0025, 0.006, abs(q.x))) - 0.12 * (1.0 - smoothstep(0.002, 0.005, hs));
+      let gh = textureLoad(heightTex, vec2i(clamp((wp.xz + G.world.x) * 0.5, vec2f(0.0), vec2f(2047.0))), 0).r;
+      let dirt = (1.0 - smoothstep(0.05, 0.5, wp.y - gh)) * (0.5 + 0.5 * vn(q.xz * 31.0 + q.y * 17.0));
+      alb = mix(alb * seam, vec3f(0.48, 0.45, 0.4), dirt * 0.45);
+    }
+    alb = min(alb, vec3f(0.74));
+    spec = select(0.025, 0.04, m == 27u); gloss = 10.0;
   }
   else if (m == 25u) { alb *= 0.92 + 0.12 * vn(in.lp.xy * 70.0); spec = 0.06; gloss = 24.0; } // soldier: face
   else if (m == 18u) { // Norwegian flag
@@ -102,7 +111,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   if (isG < 0.5) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }
   if (G.groom.w > 0.5) { // thermal sight: heated houses, hot engine deck and running gear, burning wrecks
     var th = 0.24;
-    if (m == 2u) { th = 0.1; } else if (m == 24u) { th = mix(0.16, 0.76, in.aux); } else if (m == 26u) { th = mix(0.15, 0.62, in.aux); } else if (m == 25u) { th = mix(0.17, 1.05, in.aux); } else if (m == 7u) { th = 0.42; } else if (m == 6u || m == 10u) { th = 0.9; } else if (m == 12u || m == 22u) { th = 0.15; } else if (m == 23u) { th = 0.32; }
+    if (m == 2u) { th = 0.1; } else if (m == 24u || m == 26u) { th = mix(0.15, select(0.78, 0.66, m == 26u) - 0.2 * (1.0 - smoothstep(0.3, 1.1, hAbove)), in.aux); } else if (m == 27u) { th = mix(0.13, 0.4, in.aux); } else if (m == 28u) { th = mix(0.15, 0.95, in.aux); } else if (m == 25u) { th = mix(0.17, 1.05, in.aux); } else if (m == 7u) { th = 0.42; } else if (m == 6u || m == 10u) { th = 0.9; } else if (m == 12u || m == 22u) { th = 0.15; } else if (m == 23u) { th = 0.32; }
     if (isG > 0.5) {
       th = 0.36 + 0.1 * vn(in.lp.xz * 2.1 + in.lp.y * 3.0);
       if (m == 8u || m == 9u || m == 14u) { th = 0.8; }
