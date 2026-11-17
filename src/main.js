@@ -548,7 +548,10 @@ async function main() {
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
   const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
-  let sndOn = !qs.has('mute'); try { if (localStorage.gsnd === '0') sndOn = false; } catch (e) { /* ignore */ }
+  // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
+  // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
+  let sndOn = qs.has('sound'); try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
+  if (qs.has('mute')) sndOn = false;
   const audio = initAudio({ R, cam, veh, view, game, on: sndOn }); window.__audio = audio;
 
   // ---------- state ----------

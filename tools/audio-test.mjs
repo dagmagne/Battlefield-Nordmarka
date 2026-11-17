@@ -13,7 +13,8 @@ async function open(query, init) {
   page.on('console', (m) => { if (m.type() === 'error') { console.log('[error]', m.text().slice(0, 400)); errs++; } });
   page.on('pageerror', (e) => { console.log('[pageerror]', String(e).slice(0, 400)); errs++; });
   if (init) await page.addInitScript(init);
-  await page.goto(`http://localhost:${port}/index.html?w=frogner&nohint&q=low&drs=0&np&${query}`);
+  // sound is opt-in by default now, so the tests ask for it (a stored choice and ?mute still win)
+  await page.goto(`http://localhost:${port}/index.html?w=frogner&nohint&q=low&drs=0&np&sound&${query}`);
   await page.waitForFunction('window.__ready===true', null, { timeout: 240000 });
   await page.evaluate(() => window.__sim(1 / 60, 1)); // manual stepping: stop the render loop
   return page;
