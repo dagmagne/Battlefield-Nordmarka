@@ -229,6 +229,8 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let ll = localLights(wp, n, 0.15) + lampLight(p, 0.0);
   if (scorch > 0.01) { let sc = smoothstep(0.08, 0.75, scorch + (fbm3(p * 0.9) - 0.5) * 0.5); // soot and thrown earth around impacts (only where a shell has landed)
     alb = mix(alb, mix(vec3f(0.035, 0.032, 0.03), vec3f(0.16, 0.12, 0.08), vn(p * 2.3)), sc * 0.93); }
+  if (scorch > 0.01) { let dg = smoothstep(0.015, 0.16, scorch) * (1.0 - smoothstep(0.45, 0.8, scorch)); // dug-over snow: a grey, lumpy patch (freshly buried mines, crater rims)
+    alb *= 1.0 - dg * (0.12 + 0.3 * smoothstep(0.35, 0.75, vn(p * 3.7) * 0.6 + vn(p * 8.9) * 0.4)); }
   var col = alb * (sun * dif + ambient(n) * ao + ll);
   // subsurface-ish glow on shadow terminator
   col += alb * G.sunCol.rgb * sh * vec3f(0.3, 0.5, 0.8) * 0.06 * saturate(1.0 - abs(ndl) * 4.0) * snowy;

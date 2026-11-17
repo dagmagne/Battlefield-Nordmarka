@@ -1,6 +1,6 @@
 # Plan: moderne krigføring (droner, miner, lette kjøretøy, infanteri)
 
-Status: **fase 1 gjort** (gren `claude/gpu-setup-phase-1-92182d`, ikke merget; se `CLAUDE.md` under Drones og Minimap). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
+Status: **fase 1 og 2 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines` som bygger på den; ingen av dem merget; se `CLAUDE.md` under Drones, Minimap og Mines). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
 miner over alt, små raske angrepsgrupper, og rekognoseringsdroner som leder artilleri.
 Alt skal fortsatt være prosedyrisk og følge reglene i `CLAUDE.md` (ingen allokering per frame, touch-kontroll for alt nytt,
 verifisering med renders og `__sim`-tester, bundle-størrelse rapporteres).
@@ -34,7 +34,7 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
   - Bølgevarselet sier fortsatt retning og avstand.
 - **Test:** `__sim`-scenario der fiender bare dukker opp på kartet etter at de er sett. Bombedronen treffer et stillestående T-72-mål fra 40 m høyde.
 
-### Fase 2: Miner og beltetreff
+### Fase 2: Miner og beltetreff (gjort)
 - **Minefelt:** noen bølger (ny scenariotype eller tillegg) legger felt på veier og veikryss foran spilleren.
   - Minene er skjult under snøen. Et ferskt felt vises bare som svak forstyrrelse i snømasken (stemples i `maskA`, som spor/svimerker).
   - Termisk sikt viser minene svakt.

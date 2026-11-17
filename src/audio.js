@@ -50,6 +50,8 @@ export function synth(sr) {
     for (let i = 0; i < 60; i++) { const q = u(), t = 2.8 * q * q; c(t, 0.35 * (1 - t / 3.2), 0.02, -1000 - 2500 * u()); }
     for (let i = 0; i < 10; i++) c(u() * 2, 0.4, 0.08, 60 + 30 * u(), 40); }, 0.45, 0.25);
   mk('cr', 1, (c) => { c(0, 1, 0.02, -2500); c(0, 1, 0.1, 75, 45); for (let i = 0; i < 18; i++) c(u() * 0.6, 0.3 * u(), 0.01, -2000 - 3000 * u()); c(0, 0.3, 0.15, 1300, 1250); c(0, 0.25, 0.12, 2200, 2150); });
+  // rocket salvo overhead: a falling whine over a rushing roar, then the cassette bursting far up
+  mk('whi', 3, (c) => { c(0, 0.5, 1.6, 1500, 620, 0.5); c(0, 0.45, 1.5, 2300, 980, 0.6); c(0, 0.7, 1.2, -1600, 0, 0.7); c(2.3, 0.7, 0.05, -3500); c(2.3, 0.5, 0.4, -300, 0, 0.01); }, 0.5, 0.2);
   const nz = B.nz = new Float32Array(sr); for (let i = 0; i < sr; i++) nz[i] = rn() * 0.9;
   return B;
 }
@@ -57,7 +59,7 @@ export function synth(sr) {
 // ---------- runtime ----------
 // event name -> [buffer, volume a + b*k, reference distance (m), playback rate r0 + rk*k]
 const EV = { gun: ['gun', 1.3, 0, 70, 1, 0], egun: ['gun', 1.2, 0, 70, 0.92, 0], auto: ['s30', 0.8, 0, 35, 1, 0], boom: ['boom', 0.35, 0.35, 70, 1.4, -0.18],
-  hit: ['hit', 0.5, 0.025, 20, 1.15, -0.012], reload: ['rel', 0.5, 0, 10, 1, 0], smoke: ['smk', 0, 0.7, 30, 1.3, -0.3], collapse: ['col', 0.5, 0.25, 90, 1.1, -0.1], crash: ['cr', 0.3, 0.05, 40, 1, 0] };
+  hit: ['hit', 0.5, 0.025, 20, 1.15, -0.012], reload: ['rel', 0.5, 0, 10, 1, 0], smoke: ['smk', 0, 0.7, 30, 1.3, -0.3], collapse: ['col', 0.5, 0.25, 90, 1.1, -0.1], crash: ['cr', 0.3, 0.05, 40, 1, 0], whistle: ['whi', 0.9, 0, 400, 1, 0] };
 const NV = 12, SR = 48000;
 const cl = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lpf = (d) => 200 + 17000 * Math.exp(-d / 250); // air absorption: distant thunder, close crack

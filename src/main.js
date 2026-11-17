@@ -16,8 +16,8 @@ import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
-import { buildLeopard, buildT72, buildBMP, buildDrone, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
-import { initCombat, MAXE, MAXG } from './combat.js';
+import { buildLeopard, buildT72, buildBMP, buildDrone, buildMine, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
+import { initCombat, MAXE, MAXG, MAXM } from './combat.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { initBuildings, DMAX } from './buildings.js';
@@ -205,6 +205,16 @@ async function main() {
   BL.upload = (v0, v1) => device.queue.writeBuffer(props.vb, v0 * 56, propsMesh.v, v0 * 14, (v1 - v0) * 14);
   const debO = { vb: device.createBuffer({ size: DMAX * 24 * 56, usage: U.VERTEX | U.COPY_DST }), ib: mkBuf(BL.di, U.INDEX) }; // rubble debris boxes
   BL.debUpload = (k, n) => device.queue.writeBuffer(debO.vb, k * 24 * 56, BL.dv, k * 24 * 14, n * 24 * 14);
+  // mines on the surface: MAXM copies of one small mesh in a vertex buffer; a copy is rewritten (moved or collapsed) only when a mine changes
+  const mineT = buildMine(), mNV = mineT.v.length / 14, mNI = mineT.i.length, mineV = new Float32Array(MAXM * mNV * 14), mineI = new Uint32Array(MAXM * mNI);
+  for (let k = 0; k < MAXM; k++) for (let j = 0; j < mNI; j++) mineI[k * mNI + j] = mineT.i[j] + k * mNV;
+  const mineO = { vb: device.createBuffer({ size: mineV.byteLength, usage: U.VERTEX | U.COPY_DST }), ib: mkBuf(mineI, U.INDEX), n: 0, on: new Uint8Array(MAXM) };
+  // surface: the mine lies on the snow; marked: a red-flagged picket stands beside it (a marked buried mine shows only its top)
+  const mineMesh = (k, x, y, z, yaw, surface, marked) => { const o = k * mNV * 14, c = Math.cos(yaw), s = Math.sin(yaw), T = mineT.v, show = surface || marked;
+    for (let j = 0; j < mNV; j++) { const a = j * 14, b = o + a; for (let q = 0; q < 14; q++) mineV[b + q] = T[a + q];
+      if (j < mineT.nm ? !show : !marked) { mineV[b] = mineV[b + 1] = mineV[b + 2] = 0; continue; }
+      mineV[b] = x + c * T[a] + s * T[a + 2]; mineV[b + 1] = y - (j < mineT.nm && !surface ? 0.11 : 0.03) + T[a + 1]; mineV[b + 2] = z - s * T[a] + c * T[a + 2]; mineV[b + 3] = c * T[a + 3] + s * T[a + 5]; mineV[b + 5] = -s * T[a + 3] + c * T[a + 5]; }
+    device.queue.writeBuffer(mineO.vb, o * 4, mineV, o, mNV * 14); if (mineO.on[k] !== (show ? 1 : 0)) { mineO.on[k] = show ? 1 : 0; mineO.n += show ? 1 : -1; } };
   // enemy vehicles: two shared meshes, one uniform block (part matrices) per slot
   const eMesh = [buildT72(), buildBMP()].map((m) => ({ vb: mkBuf(m.v, U.VERTEX), ib: mkBuf(m.i, U.INDEX), n: m.i.length }));
   const eObj = []; for (let i = 0; i < MAXE; i++) { const u = device.createBuffer({ size: 528, usage: U.UNIFORM | U.COPY_DST }); eObj.push({ u, d: new Float32Array(132), bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) }); }
@@ -557,7 +567,7 @@ async function main() {
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
@@ -859,7 +869,8 @@ async function main() {
       if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
-        if (BL.dN) { sp.setVertexBuffer(0, debO.vb); sp.setIndexBuffer(debO.ib, 'uint32'); sp.drawIndexed(BL.dN * 36); } }
+        if (BL.dN) { sp.setVertexBuffer(0, debO.vb); sp.setIndexBuffer(debO.ib, 'uint32'); sp.drawIndexed(BL.dN * 36); }
+        if (mineO.n && c === 0) { sp.setVertexBuffer(0, mineO.vb); sp.setIndexBuffer(mineO.ib, 'uint32'); sp.drawIndexed(MAXM * mNI); } }
       if (R.trees) { sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3, c + 1); }
       }
       sp.end();
@@ -872,7 +883,8 @@ async function main() {
     if (droneOn && !hV && !(cam.mode === 4 && game.drone.type)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
-      if (BL.dN) { p.setVertexBuffer(0, debO.vb); p.setIndexBuffer(debO.ib, 'uint32'); p.drawIndexed(BL.dN * 36); } }
+      if (BL.dN) { p.setVertexBuffer(0, debO.vb); p.setIndexBuffer(debO.ib, 'uint32'); p.drawIndexed(BL.dN * 36); }
+      if (mineO.n) { p.setVertexBuffer(0, mineO.vb); p.setIndexBuffer(mineO.ib, 'uint32'); p.drawIndexed(MAXM * mNI); } }
     if (R.trees) { p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4, 0); }
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
     for (let l = 0; l < NL && !hT; l++) {
