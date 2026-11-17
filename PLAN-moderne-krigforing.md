@@ -98,6 +98,14 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
   - LOD: langt unna bare en enkel figur eller sprite.
 - **Test:** RPG-lag i et hus engasjerer spilleren på kort hold. HE i huset nøytraliserer dem. Verifiser i termisk sikt og dagslys.
 
+### Fase 6b: Realismeløft for soldatene (bestilt av eieren, etter fase 6)
+Mål: så naturtro soldater som mulig innenfor reglene (prosedyrisk, ingen eksterne modeller eller mocap).
+- Myk, sammenhengende kropp i stedet for stive deler: tverrsnitt (bryst, skuldre, lår, legger) med klesvolum, 3–6k trekanter nær, GPU-skinning med vektede ben. Ingen åpne ledd.
+- Klær og utstyr i shaderen: stoffstruktur, folder ved ledd, vinterkamuflasje (hvit med grått), vest og lommer, hjelmtrekk, snø på skuldrene, våte knær etter å ha ligget.
+- Bevegelse: gangart fra biomekaniske kurver, fot-IK mot terrenget, armer som holder våpenet (IK), pusting, rekyl, myke overganger, kaste seg ned og reise seg.
+- Kulde: pustedamp, balaklava eller skibriller.
+- Alternativ eieren kan velge: en egen soldatmodell med animasjoner (glTF) som unntak, som musikken (koster 1–3 MB).
+
 ### Fase 7: EW og fiberoptisk drone
 - **EW-kjøretøy (Pole-21-lignende):** lager en jammesone (cirka 600–800 m).
   - Inne i sonen: dronebildet får støy (`post.wgsl`), radiorekkevidden krymper, og til slutt mister du linken.
