@@ -1,7 +1,7 @@
 // Tiny procedural mesh builder. Vertex = pos3 nrm3 col3 mat1 uv2 part1 pad1 (14 floats).
 import { trs, identity } from './math.js';
 export const VS = 14;
-export const MAT = { paint: 0, wood: 1, snow: 2, stone: 3, glass: 4, metal: 5, lamp: 6, window: 7, bar: 8, rubber: 9, head: 10, beacon: 11, rock: 12, sign: 13, wheel: 14, finisher: 15, wire: 16, plank: 17, flag: 18, void: 19, camo: 20, rus: 21, rubble: 22, charred: 23 };
+export const MAT = { paint: 0, wood: 1, snow: 2, stone: 3, glass: 4, metal: 5, lamp: 6, window: 7, bar: 8, rubber: 9, head: 10, beacon: 11, rock: 12, sign: 13, wheel: 14, finisher: 15, wire: 16, plank: 17, flag: 18, void: 19, camo: 20, rus: 21, rubble: 22, charred: 23, cloth: 24, skin: 25, gear: 26 };
 export class MB {
   constructor() { this.v = []; this.i = []; this.c = [1, 1, 1]; this.mat = 0; this.part = 0; this.m = new Float32Array(16); identity(this.m); }
   at(x, y, z, yaw = 0, pitch = 0, roll = 0) { trs(this.m, x, y, z, yaw, pitch, roll); return this; }

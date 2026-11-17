@@ -9,6 +9,7 @@ import { initSupport } from './support.js';
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
 export const MAXE = 14, MAXG = 760, MAXM = 48, MAXA = 6; // enemies, glow sprites, mines, enemy air units
+export const MAXI = 40; // infantry slots (phase 6)
 // drone types: 0 FPV (one-way shaped charge), 1 bomber (hovers, drops VOG grenades, lands back on the tank to rearm), 2 recon (high, long, quiet, unarmed)
 // n per game, battery t (s), top speed v (m/s), radio range r (m), spotting range see (m), how long a sighting stays on the map mark (s), climb after launch (m above ground)
 export const DTYPE = [{ name: 'FPV', n: 5, t: 75, v: 26, r: 1500, see: 800, mark: 20, climb: 0 }, { name: 'BOMB', n: 2, t: 120, v: 14, r: 1500, see: 900, mark: 25, climb: 30 }, { name: 'RECON', n: 2, t: 180, v: 18, r: 2200, see: 1500, mark: 40, climb: 110 }];
@@ -56,6 +57,8 @@ export function initCombat(C) {
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i],
     role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, cage: false, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
   const AIR = []; for (let i = 0; i < MAXA; i++) AIR.push({ on: false, type: 0, st: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, tp: 0, tr: 0, spin: 0, hp: 0, t: 0, chk: 0, tx: 0, tz: 0, ang: 0, warned: false, seen: false, d: C.aobj ? C.aobj[i] : new Float32Array(132) });
+  // infantry (phase 6), read by the soldier renderer: n = slots in use; per soldier 8 floats [x, y, z, yaw, pose, phase, aim, state]
+  G.inf = { n: 0, d: new Float32Array(MAXI * 8) };
   G.air = AIR; G.thr = new Float32Array(4); G.orlan = 0; // HUD threat arrows (angle, strength) ×2; seconds an Orlan has held the player in view
   const AQT = new Float32Array(6), AQY = new Int8Array(6).fill(-1), AQB = new Float32Array(6); // this wave's air raids: time, type, bearing
   // pending spawns of the current wave (staggered groups, reinforcements): preallocated, filled by planWave on a wave start
