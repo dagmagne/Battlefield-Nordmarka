@@ -1,3 +1,4 @@
+import { WALK_V, RUN_V } from './soldier.js';
 // Infantry logic and AI (phase 6, part B). A pool of MAXI soldiers in squads:
 //  - RPG teams (2–3 men) hidden in houses along the roads or at forest edges 120–350 m ahead at a wave start; they fire RPG
 //    rockets (shell type 12) at the tank inside 250 m once they see it. An HE round into their house kills or scatters them.
@@ -218,7 +219,8 @@ export function initInfantry(C, G, h) {
     const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
     let nx = clamp(x + ux * sp * dt, -PLAY, PLAY), nz = clamp(z + uz * sp * dt, -PLAY, PLAY);
     if (C.solid(nx, nz, 0.4, SO)) { nx = SO[0]; nz = SO[1]; }
-    d[o] = nx; d[o + 2] = nz; d[o + 1] = hAt(nx, nz); d[o + 3] += wrap(Math.atan2(-ux, -uz) - d[o + 3]) * Math.min(1, dt * 8); d[o + 5] += dt;
+    d[o] = nx; d[o + 2] = nz; d[o + 1] = hAt(nx, nz); d[o + 3] += wrap(Math.atan2(-ux, -uz) - d[o + 3]) * Math.min(1, dt * 8);
+    d[o + 5] += dt * sp / (sp > 2.6 ? RUN_V : WALK_V); // the gait clock follows ground speed so planted feet don't slide (soldier.js)
     return false;
   }
   function squadTick(q, dt) {

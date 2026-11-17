@@ -1,6 +1,6 @@
 # Plan: moderne krigføring (droner, miner, lette kjøretøy, infanteri)
 
-Status: **fase 1–5 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines`, fase 3 på `claude/phase-3-air`, fase 4 på `claude/phase-4-light`, fase 5 på `claude/phase-5-arty`, hver bygget på den forrige; ingen merget; se `CLAUDE.md` under Drones, Minimap, Mines, Enemy air og Light and wheeled vehicles). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
+Status: **fase 1–6 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines`, fase 3 på `claude/phase-3-air`, fase 4 på `claude/phase-4-light`, fase 5 på `claude/phase-5-arty`, fase 6 på `claude/phase-6-infantry`, hver bygget på den forrige; ingen merget; se `CLAUDE.md` under Drones, Minimap, Mines, Enemy air og Light and wheeled vehicles). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
 miner over alt, små raske angrepsgrupper, og rekognoseringsdroner som leder artilleri.
 Alt skal fortsatt være prosedyrisk og følge reglene i `CLAUDE.md` (ingen allokering per frame, touch-kontroll for alt nytt,
 verifisering med renders og `__sim`-tester, bundle-størrelse rapporteres).
@@ -78,7 +78,8 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
 - **Egen artilleristøtte:** én serie per bølge. Tilkalles fra dronen (marker et punkt) eller siktet. Touch-knapp.
   - **Del B gjort** (`src/support.js`, skalltype 11, tast B / ARTY-knapper / L1, `tools/supporttest.mjs`).
 
-### Fase 6: Infanteri (del B gjort: logikk og AI)
+### Fase 6: Infanteri (gjort: del A modell og tegning, del B logikk og AI)
+- **Del A, soldatmodell og tegning: gjort** på `claude/phase-6a-soldiers` (`src/soldier.js`, `soldier.wgsl`, `soldiershadow.wgsl`; grensesnittet `G.inf` og testkroken `__infDemo`; se `CLAUDE.md` under Infantry rendering). Del B (logikk og AI) gjøres for seg og fyller `G.inf`.
 - **Del B, logikk og AI: gjort** på `claude/phase-6b-infantry` (`src/infantry.js`, grensesnittet `G.inf`, skalltype 12 for RPG, `tools/inftest.mjs`; se `CLAUDE.md` under Infantry logic). Del A (modell, animasjon og instansiert tegning) gjøres for seg.
 - **Modell:** lavpolygon-soldat bygget prosedyrisk (overkropp, hode med hjelm, armer, ben, våpen), hvite vinteruniformer.
   - Instansiert tegning i ett draw call.
