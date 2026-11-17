@@ -5,7 +5,7 @@
 import { MB, MAT, VS } from './mesh.js';
 import { trs, mul } from './math.js';
 
-export const PARTS = 13, IST = PARTS * 16 + 4; // floats per instance: 13 part matrices + (heat, 0, 0, 0)
+export const PARTS = 13, IST = PARTS * 16 + 4; // floats per instance: 13 part matrices + (heat, tint seed, warmth seed, 0)
 // parts: 0 pelvis, 1 torso, 2 head, 3/4 upper arm L/R, 5/6 forearm+hand L/R, 7/8 thigh L/R, 9/10 shin+boot L/R, 11 rifle, 12 RPG-7
 // Walk and run cycles in cycles per second at their matching ground speed: advance `phase` by dt * speed / WALK_V (or RUN_V)
 // seconds-equivalent and the planted foot does not slide.
@@ -15,9 +15,12 @@ const LOD_FAR = 120, MAX_D = 650;
 // bind skeleton (metres): pelvis origin = hip-joint centre; joints relative to their parent part
 const HIPX = 0.095, WAIST = 0.10, NECK = 0.47, SHX = 0.195, SHY = 0.395, UA = 0.29, FA = 0.31, TH = 0.42, SH = 0.42, ANK = 0.085;
 
-const WHITE = [0.76, 0.78, 0.80], WHITE2 = [0.70, 0.72, 0.74], VEST = [0.56, 0.58, 0.59], HELM = [0.84, 0.85, 0.86], BOOT = [0.055, 0.05, 0.045];
-const GLOVE = [0.30, 0.30, 0.29], SKIN = [0.60, 0.43, 0.34], EYE = [0.07, 0.05, 0.04], GUN = [0.035, 0.035, 0.038], FURN = [0.045, 0.04, 0.036], MAG = [0.17, 0.075, 0.045];
+// winter overall a little warm and worn, greyer chest rig, a distinct pack, olive gloves, grey-brown boots, dark wood on the AK
+const WHITE = [0.72, 0.71, 0.67], VEST = [0.36, 0.37, 0.34], STRAP = [0.27, 0.28, 0.25], PACK = [0.5, 0.51, 0.45], HELM = [0.79, 0.78, 0.74], BOOT = [0.15, 0.13, 0.11];
+const GLOVE = [0.24, 0.25, 0.17], SKIN = [0.60, 0.43, 0.34], EYE = [0.07, 0.05, 0.04], GUN = [0.035, 0.035, 0.038], FURN = [0.055, 0.036, 0.025], MAG = [0.15, 0.07, 0.045];
 const TUBE = [0.085, 0.095, 0.065], WOOD = [0.27, 0.15, 0.07], WARH = [0.20, 0.22, 0.13];
+const RS = 0.87; // AK-74 built at 1.01 m, scaled to 0.88 m
+export const RIF_PTS = { butt: [0, -0.06 * RS, 0.33 * RS], comb: [0, 0.012 * RS, 0.1 * RS], muzzle: -0.68 * RS };
 
 // loft along local Y: rings [y, rx, rz, ox, oz, col?, mat?]; smooth normals; caps 1 = close bottom, 2 = top, 3 = both
 function loft(b, R, seg, caps = 3) {
@@ -50,29 +53,30 @@ function hexa(b, P) {
   b.quad(e, h, g, f); b.quad(a, bb, c, d); b.quad(d, c, g, h); b.quad(bb, a, e, f); b.quad(a, d, h, e); b.quad(c, bb, f, g);
 }
 
-// lo = 1: distant LOD (same parts and matrices, ~200 triangles)
+// lo = 1: distant LOD (same parts and matrices, ~230 triangles)
 export function buildSoldier(lo = 0) {
-  const b = new MB(), S = lo ? 4 : 9, SL = lo ? 4 : 6, CL = MAT.cloth, GR = MAT.gear;
+  const b = new MB(), S = lo ? 4 : 9, SL = lo ? 4 : 6, CL = MAT.cloth, GR = MAT.gear, PK = MAT.pack, GV = MAT.glove;
   b.at(0, 0, 0);
-  // 0 pelvis
+  // 0 pelvis: tapers into the thighs (no flat seat block), a grey belt
   b.part = 0; b.set(WHITE, CL);
-  if (lo) loft(b, [[-0.13, 0.08, 0.07], [0.0, 0.17, 0.12], [0.17, 0.15, 0.105]], 4, 1);
-  else { loft(b, [[-0.15, 0.06, 0.05], [-0.11, 0.125, 0.095], [-0.04, 0.165, 0.115], [0.04, 0.17, 0.12], [0.12, 0.16, 0.112], [0.18, 0.15, 0.105]], S, 1);
-    b.set(VEST, GR); loft(b, [[0.06, 0.171, 0.121], [0.11, 0.166, 0.117]], S, 0); }
-  // 1 torso (waist pivot), vest, pouches, pack, collar
+  if (lo) loft(b, [[-0.11, 0.1, 0.075], [0.0, 0.165, 0.118], [0.17, 0.15, 0.105]], 4, 1);
+  else { loft(b, [[-0.115, 0.075, 0.06, 0, 0.005], [-0.075, 0.135, 0.098], [-0.02, 0.163, 0.113], [0.05, 0.167, 0.118], [0.12, 0.158, 0.11], [0.18, 0.15, 0.105]], S, 1);
+    b.set(STRAP, GR); loft(b, [[0.07, 0.168, 0.119], [0.105, 0.165, 0.116]], S, 0); }
+  // 1 torso (waist pivot): chest rig, pouches, a rounded pack seated on the back with its straps, hood at the collar
   b.part = 1; b.set(WHITE, CL);
   if (lo) loft(b, [[-0.1, 0.15, 0.105], [0.14, 0.175, 0.128, 0, -0.01, VEST, GR], [0.38, 0.19, 0.125, 0, 0, VEST, GR], [0.52, 0.07, 0.065]], 4, 2);
   else {
     loft(b, [[-0.10, 0.15, 0.105], [0.0, 0.155, 0.11, 0, -0.005], [0.12, 0.168, 0.118, 0, -0.012], [0.24, 0.185, 0.125, 0, -0.012], [0.34, 0.195, 0.122, 0, -0.005], [0.41, 0.185, 0.112, 0, 0.005], [0.46, 0.13, 0.09, 0, 0.01], [0.50, 0.07, 0.065, 0, 0.01], [0.55, 0.058, 0.058, 0, 0.005]], S, 0);
     b.set(VEST, GR); loft(b, [[0.01, 0.163, 0.122, 0, -0.008], [0.14, 0.18, 0.133, 0, -0.016], [0.26, 0.197, 0.139, 0, -0.016], [0.355, 0.203, 0.131, 0, -0.008]], S, 0);
-    for (let k = -1; k <= 1; k++) b.box(k * 0.085 - 0.036, 0.085, -0.19, k * 0.085 + 0.036, 0.235, -0.135, 0.004, 0.012, 0); // magazine pouches
-    b.set(WHITE2, CL); b.box(-0.125, 0.05, 0.11, 0.125, 0.33, 0.235, 0.012, 0.03, 0.01); // small pack
-    b.set(VEST, GR); for (const x of [-0.1, 0.1]) b.box(x - 0.018, 0.3, -0.05, x + 0.018, 0.43, 0.13, 0, 0); // shoulder straps
+    for (let k = -1; k <= 1; k++) b.box(k * 0.085 - 0.034, 0.09, -0.183, k * 0.085 + 0.034, 0.225, -0.14, 0.004, 0.01, 0); // magazine pouches
+    b.set(PACK, PK); loft(b, [[0.08, 0.075, 0.035, 0, 0.152], [0.11, 0.098, 0.052, 0, 0.165], [0.22, 0.1, 0.054, 0, 0.167], [0.285, 0.085, 0.046, 0, 0.162], [0.305, 0.05, 0.03, 0, 0.155]], 7, 3); // pack
+    b.set(STRAP, GR); b.box(-0.1, 0.17, 0.2, 0.1, 0.19, 0.222); // compression strap
+    for (const x of [-0.085, 0.085]) b.box(x - 0.017, 0.3, -0.04, x + 0.017, 0.425, 0.15, 0, 0); // shoulder straps
     b.set(WHITE, CL); loft(b, [[0.42, 0.13, 0.1, 0, 0.012], [0.465, 0.115, 0.098, 0, 0.018], [0.52, 0.08, 0.078, 0, 0.022]], S, 0); // hood rolled at the collar
   }
-  // 2 head (neck pivot): neck gaiter, face, helmet with white cover
+  // 2 head (neck pivot): neck gaiter, face, helmet in a cloth cover with a brim edge
   b.part = 2;
-  if (lo) loft(b, [[-0.03, 0.05, 0.05, 0, 0, WHITE, CL], [0.08, 0.075, 0.09, 0, -0.01, SKIN, MAT.skin], [0.17, 0.103, 0.12, 0, 0, HELM, CL], [0.3, 0.04, 0.05, 0, 0, HELM, CL]], 4, 2);
+  if (lo) loft(b, [[-0.03, 0.05, 0.05, 0, 0, WHITE, CL], [0.08, 0.075, 0.09, 0, -0.01, SKIN, MAT.skin], [0.17, 0.11, 0.128, 0, 0, HELM, CL], [0.3, 0.04, 0.05, 0, 0, HELM, CL]], 4, 2);
   else {
     b.set(SKIN, MAT.skin);
     loft(b, [[0.04, 0.055, 0.065, 0, -0.005], [0.085, 0.073, 0.089, 0, -0.012], [0.13, 0.081, 0.098, 0, -0.012], [0.18, 0.083, 0.1, 0, -0.006], [0.23, 0.068, 0.082, 0, 0.002], [0.26, 0.035, 0.045, 0, 0.005]], S, 2);
@@ -80,36 +84,38 @@ export function buildSoldier(lo = 0) {
     b.set(EYE, MAT.skin); for (const x of [-0.035, 0.035]) b.box(x - 0.014, 0.146, -0.109, x + 0.014, 0.158, -0.098, 0, 0); // eyes
     b.set(WHITE, CL); loft(b, [[-0.04, 0.052, 0.054, 0, 0.005], [0.03, 0.06, 0.066, 0, 0.0], [0.085, 0.077, 0.092, 0, -0.011], [0.105, 0.075, 0.088, 0, -0.008]], S, 1); // gaiter up to the mouth
     b.at(0, 0.172, 0.006, 0, 0.17, 0); b.set(HELM, CL);
-    loft(b, [[-0.012, 0.099, 0.116], [0.0, 0.106, 0.123], [0.045, 0.104, 0.12], [0.09, 0.088, 0.102], [0.12, 0.058, 0.068], [0.136, 0.02, 0.024]], S, 2);
+    loft(b, [[-0.02, 0.112, 0.13], [-0.008, 0.116, 0.134], [0.0, 0.107, 0.124], [0.045, 0.104, 0.12], [0.09, 0.088, 0.102], [0.12, 0.058, 0.068], [0.136, 0.02, 0.024]], S, 2);
     b.at(0, 0, 0);
   }
-  // 3/4 upper arms, 5/6 forearms with gloves
+  // 3/4 upper arms, 5/6 forearms with olive gloves
   for (let s = 0; s < 2; s++) {
     b.part = 3 + s; b.set(WHITE, CL);
     if (lo) loft(b, [[0.06, 0.03, 0.03], [0.0, 0.066, 0.068], [-0.31, 0.05, 0.052]], SL, 0);
     else loft(b, [[0.062, 0.038, 0.04], [0.0, 0.072, 0.075], [-0.1, 0.069, 0.072], [-0.22, 0.061, 0.063], [-0.3, 0.054, 0.056], [-0.338, 0.028, 0.03]], SL, 3);
     b.part = 5 + s;
-    if (lo) loft(b, [[0.03, 0.04, 0.04], [-0.24, 0.04, 0.041, 0, 0, GLOVE, GR], [-0.36, 0.022, 0.04, 0, 0, GLOVE, GR]], SL, 0);
+    if (lo) loft(b, [[0.03, 0.04, 0.04], [-0.24, 0.04, 0.041, 0, 0, GLOVE, GV], [-0.36, 0.022, 0.04, 0, 0, GLOVE, GV]], SL, 0);
     else { loft(b, [[0.046, 0.03, 0.031], [0.0, 0.056, 0.058], [-0.1, 0.054, 0.056], [-0.24, 0.045, 0.046], [-0.255, 0.032, 0.033]], SL, 3);
-      b.set(GLOVE, GR); loft(b, [[-0.232, 0.034, 0.036], [-0.27, 0.031, 0.048], [-0.33, 0.027, 0.048], [-0.365, 0.014, 0.024]], SL, 3);
+      b.set(GLOVE, GV); loft(b, [[-0.232, 0.034, 0.036], [-0.27, 0.031, 0.048], [-0.33, 0.027, 0.048], [-0.365, 0.014, 0.024]], SL, 3);
       b.box(s ? -0.045 : 0.012, -0.29, -0.03, s ? -0.012 : 0.045, -0.255, 0.0, 0.004, 0.004); } // thumb
   }
-  // 7/8 thighs, 9/10 shins with gaiters, boots
+  // 7/8 thighs, 9/10 shins with gaiters, boots with a rounded toe
   for (let s = 0; s < 2; s++) {
     b.part = 7 + s; b.set(WHITE, CL);
     if (lo) loft(b, [[0.07, 0.04, 0.04], [0.0, 0.095, 0.1], [-0.45, 0.06, 0.064]], SL, 0);
-    else loft(b, [[0.08, 0.055, 0.057], [0.0, 0.102, 0.107], [-0.13, 0.1, 0.106], [-0.29, 0.085, 0.09], [-0.42, 0.071, 0.075], [-0.475, 0.038, 0.04]], SL, 3);
+    else loft(b, [[0.08, 0.06, 0.062], [0.0, 0.104, 0.109], [-0.13, 0.1, 0.106], [-0.29, 0.085, 0.09], [-0.42, 0.071, 0.075], [-0.475, 0.038, 0.04]], SL, 3);
     b.part = 9 + s;
-    if (lo) { loft(b, [[0.04, 0.06, 0.06], [-0.34, 0.053, 0.056, 0, 0, BOOT, GR], [-0.5, 0.055, 0.1, 0, -0.06, BOOT, GR]], SL, 2); }
+    if (lo) { loft(b, [[0.04, 0.06, 0.06], [-0.34, 0.053, 0.056, 0, 0, BOOT, PK], [-0.5, 0.045, 0.085, 0, -0.045, BOOT, PK]], SL, 2); }
     else {
       loft(b, [[0.055, 0.044, 0.046], [0.0, 0.073, 0.077], [-0.12, 0.069, 0.073], [-0.31, 0.062, 0.065], [-0.335, 0.052, 0.055]], SL, 3);
-      b.set(BOOT, GR); loft(b, [[-0.3, 0.047, 0.05], [-0.4, 0.05, 0.054], [-0.445, 0.052, 0.06, 0, 0.008]], SL, 0);
-      b.box(-0.05, -0.495, -0.2, 0.05, -0.425, 0.065, 0.01, 0.075, 0.018); b.set([0.03, 0.028, 0.026], GR); b.box(-0.053, -0.507, -0.205, 0.053, -0.49, 0.07, 0, 0.004);
+      b.set(BOOT, PK); loft(b, [[-0.3, 0.045, 0.048], [-0.4, 0.047, 0.05], [-0.44, 0.046, 0.052, 0, 0.006]], SL, 0);
+      b.at(0, -0.462, 0.035, 0, -Math.PI / 2, 0); // foot: a loft running from the heel to the toe, sole at -0.505
+      loft(b, [[-0.03, 0.03, 0.03], [-0.012, 0.04, 0.04], [0.09, 0.043, 0.035, 0, -0.005], [0.17, 0.036, 0.024, 0, -0.015], [0.2, 0.014, 0.011, 0, -0.023]], 6, 3);
+      b.at(0, 0, 0);
     }
   }
-  // 11 rifle (AK-74): origin on the bore axis at the rear of the receiver, muzzle towards -Z
-  b.part = 11; b.set(GUN, MAT.paint);
-  if (lo) { b.box(-0.022, -0.1, -0.62, 0.022, 0.03, 0.33); }
+  // 11 rifle (AK-74, 0.88 m): origin on the bore axis at the rear of the receiver, muzzle towards -Z
+  b.part = 11; b.set(GUN, MAT.paint); b.m[0] = b.m[5] = b.m[10] = RS;
+  if (lo) { b.box(-0.022, -0.1, -0.62, 0.022, 0.03, 0.0); b.set(FURN, MAT.paint); b.box(-0.022, -0.11, 0.0, 0.022, 0.01, 0.33); }
   else {
     b.box(-0.024, -0.046, -0.245, 0.024, 0.02, 0.0, 0.006, 0); // receiver
     b.set(FURN, MAT.paint); hexa(b, [[-0.02, -0.05, 0], [0.02, -0.05, 0], [0.022, -0.122, 0.33], [-0.022, -0.122, 0.33], [-0.02, 0.016, 0], [0.02, 0.016, 0], [0.022, 0.002, 0.33], [-0.022, 0.002, 0.33]]); // stock
@@ -121,17 +127,18 @@ export function buildSoldier(lo = 0) {
     b.set(GUN, MAT.paint); b.cyl(0, 0, -0.43, 0, 0, -0.6, 0.011, 0.011, 6); b.cyl(0, 0, -0.6, 0, 0, -0.68, 0.016, 0.016, 6); // barrel, muzzle brake
     b.box(-0.012, -0.014, -0.45, 0.012, 0.046, -0.425); b.box(-0.006, 0.0, -0.585, 0.006, 0.058, -0.565); b.box(-0.015, 0.016, -0.26, 0.015, 0.042, -0.215); // gas block, front and rear sight
   }
+  b.at(0, 0, 0);
   // 12 RPG-7: origin on the tube axis where it rests on the shoulder
   b.part = 12; b.set(TUBE, MAT.paint);
   if (lo) { b.cyl(0, 0, 0.6, 0, 0, -0.75, 0.045, 0.03, 4, 0); }
   else {
-    b.cyl(0, 0, 0.47, 0, 0, -0.34, 0.023, 0.023, 8); b.cyl(0, 0, 0.47, 0, 0, 0.62, 0.025, 0.045, 8); // tube, venturi flare
-    b.set(WOOD, MAT.paint); b.cyl(0, 0, 0.17, 0, 0, -0.12, 0.034, 0.034, 8); // heat shield
+    b.cyl(0, 0, 0.47, 0, 0, -0.34, 0.023, 0.023, 6); b.cyl(0, 0, 0.47, 0, 0, 0.62, 0.025, 0.045, 7); // tube, venturi flare
+    b.set(WOOD, MAT.paint); b.cyl(0, 0, 0.17, 0, 0, -0.12, 0.034, 0.034, 7); // heat shield
     b.set(GUN, MAT.paint);
     hexa(b, [[-0.013, -0.135, -0.125], [0.013, -0.135, -0.125], [0.013, -0.135, -0.09], [-0.013, -0.135, -0.09], [-0.013, -0.02, -0.15], [0.013, -0.02, -0.15], [0.013, -0.02, -0.11], [-0.013, -0.02, -0.11]]); // trigger grip
     hexa(b, [[-0.013, -0.125, -0.255], [0.013, -0.125, -0.255], [0.013, -0.125, -0.22], [-0.013, -0.125, -0.22], [-0.013, -0.02, -0.27], [0.013, -0.02, -0.27], [0.013, -0.02, -0.232], [-0.013, -0.02, -0.232]]); // front grip
-    b.box(-0.062, -0.005, -0.06, -0.03, 0.045, 0.07); b.box(-0.056, 0.004, 0.07, -0.036, 0.036, 0.11); // PGO-7 sight and eyepiece
-    b.set(WARH, MAT.rus); b.cyl(0, 0, -0.34, 0, 0, -0.42, 0.018, 0.018, 8); b.cyl(0, 0, -0.42, 0, 0, -0.54, 0.042, 0.042, 10); b.cyl(0, 0, -0.54, 0, 0, -0.8, 0.042, 0.008, 10); // PG-7V warhead
+    b.box(-0.064, 0.012, -0.06, -0.03, 0.075, 0.07); b.box(-0.058, 0.026, 0.07, -0.036, 0.062, 0.11); b.box(-0.04, 0.02, -0.03, -0.018, 0.04, 0.04); // PGO-7 sight and eyepiece
+    b.set(WARH, MAT.rus); b.cyl(0, 0, -0.34, 0, 0, -0.42, 0.018, 0.018, 6); b.cyl(0, 0, -0.42, 0, 0, -0.54, 0.042, 0.042, 8); b.cyl(0, 0, -0.54, 0, 0, -0.8, 0.042, 0.008, 8); // PG-7V warhead
   }
   return b.build();
 }
@@ -161,8 +168,14 @@ function wAimed(P, k, aim, cant, lx, ly, lz, tx, ty, tz) {
   MW[12] = V[0] - (MW[0] * lx + MW[4] * ly + MW[8] * lz); MW[13] = V[1] - (MW[1] * lx + MW[5] * ly + MW[9] * lz); MW[14] = V[2] - (MW[2] * lx + MW[6] * ly + MW[10] * lz);
   putW(P, k, MW);
 }
+// weapon pointing along char forward pitched by `aim`, placed so its local point (lx,ly,lz) sits at the eye (sight eyepiece)
+function wByEye(P, k, aim, lx, ly, lz) {
+  torsoChar(P, MT); trs(M3, 0, NECK, 0, P[9], P[10], P[11]); mul(MW, MT, M3); tp(MW, 0, 0.152, -0.098, V, 0); trs(MW, 0, 0, 0, 0, aim, 0);
+  MW[12] = V[0] - (MW[0] * lx + MW[4] * ly + MW[8] * lz); MW[13] = V[1] - (MW[1] * lx + MW[5] * ly + MW[9] * lz); MW[14] = V[2] - (MW[2] * lx + MW[6] * ly + MW[10] * lz);
+  putW(P, k, MW);
+}
 function handsOn(P, k, lx, ly, lz, rx, ry, rz) { getW(MW, P, k); tp(MW, lx, ly, lz, P, 24); tp(MW, rx, ry, rz, P, 27); }
-const RIF_L = [-0.008, -0.048, -0.3], RIF_R = [0.012, -0.088, -0.012], RIF_BUTT = [0, -0.06, 0.33];
+const RIF_L = [-0.007, -0.042, -0.27], RIF_R = [0.011, -0.077, -0.01], RIF_BUTT = RIF_PTS.butt;
 const AIMX = 0.1, AIMY = 0.43, AIMZ = -0.08; // butt pad in the shoulder pocket (torso space)
 const RPG_L = [0.0, -0.075, -0.243], RPG_R = [0.0, -0.08, -0.12];
 const fract = (x) => x - Math.floor(x), sstep = (x) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
@@ -173,7 +186,7 @@ function base(P) {
   set3(P, 18, 0, 0.2, -1); set3(P, 21, 0, 0.2, -1); set3(P, 30, -0.5, -0.75, 0.45); set3(P, 33, 0.55, -0.7, 0.45);
   P[42] = P[47] = 0; P[36] = P[40] = P[44] = 1; P[48] = P[52] = P[56] = 1; // identity rotations
 }
-function lowReady(P, s) { wFromTorso(P, 36, 0.06, 0.13 + s, -0.25, 0.42, -0.62, 0.32); handsOn(P, 36, RIF_L[0], RIF_L[1], RIF_L[2], RIF_R[0], RIF_R[1], RIF_R[2]); }
+function lowReady(P, s) { wFromTorso(P, 36, 0.04, 0.2 + s, -0.18, 0.5, -0.5, 0.32); handsOn(P, 36, RIF_L[0], RIF_L[1], RIF_L[2], RIF_R[0], RIF_R[1], RIF_R[2]); }
 function kneelLegs(P, yawP) {
   set3(P, 0, 0.0, 0.5, 0.05); P[3] = yawP;
   set3(P, 12, -0.2, ANK, -0.37); set3(P, 18, -0.15, 0.25, -1); // left foot planted forward, shin upright
@@ -191,37 +204,37 @@ function evalPose(P, pose, ph, aim) {
       set3(P, o, (k ? 1 : -1) * (run ? 0.1 : 0.11), y, z - (run ? 0.06 : 0.0));
     }
     const sw = (P[17] - P[14]) / S, bob = Math.cos(4 * Math.PI * (cyc - duty / 2));
-    P[1] = run ? 0.865 - 0.035 * bob : 0.893 + 0.018 * bob; P[2] = run ? -0.06 : 0;
-    P[3] = -0.13 * sw; P[5] = 0.03 * Math.sin(2 * Math.PI * cyc); P[4] = run ? -0.08 : 0;
-    P[6] = 0.16 * sw; P[7] = run ? -0.2 : -0.06; P[8] = -P[5] * 0.6;
+    P[1] = run ? 0.8 - 0.03 * bob : 0.885 + 0.016 * bob; P[2] = run ? -0.08 : 0;
+    P[3] = -0.13 * sw; P[5] = 0.03 * Math.sin(2 * Math.PI * cyc); P[4] = run ? -0.12 : 0;
+    P[6] = 0.16 * sw; P[7] = run ? -0.14 : -0.06; P[8] = -P[5] * 0.6;
     P[9] = -0.03 * sw; P[10] = run ? 0.24 : 0.06;
     set3(P, 18, 0, 0.1, -1); set3(P, 21, 0, 0.1, -1);
-    if (run) { wFromTorso(P, 36, 0.13, 0.2 + 0.01 * bob, -0.24, 1.2, 0.72, 1.0); set3(P, 30, -0.3, -0.9, 0.2); set3(P, 33, 0.7, -0.6, 0.3); handsOn(P, 36, RIF_L[0], RIF_L[1], RIF_L[2], RIF_R[0], RIF_R[1], RIF_R[2]); }
+    if (run) { wFromTorso(P, 36, 0.12, 0.15 + 0.01 * bob, -0.24, 1.15, 0.42, 0.95); set3(P, 30, -0.3, -0.9, 0.2); set3(P, 33, 0.7, -0.6, 0.3); handsOn(P, 36, RIF_L[0], RIF_L[1], RIF_L[2], RIF_R[0], RIF_R[1], RIF_R[2]); }
     else lowReady(P, 0.008 * bob);
   } else if (pose === 5) { // standing, rifle at the shoulder: bladed stance, left foot forward
     set3(P, 0, 0.0, 0.885, 0.02); P[3] = -0.42; set3(P, 12, -0.16, ANK, -0.2); set3(P, 15, 0.17, ANK, 0.17);
     set3(P, 18, -0.2, 0.15, -1); set3(P, 21, 0.4, 0.15, -1);
-    P[6] = -0.3; P[7] = -0.17 + aim * 0.35; P[8] = 0.08; P[9] = 0.62; P[10] = aim * 0.4 - 0.12; P[11] = 0.3;
+    P[6] = -0.3; P[7] = -0.24 + aim * 0.35; P[8] = -0.07; P[9] = 0.62; P[10] = aim * 0.4 - 0.36; P[11] = -0.32;
     wAimed(P, 36, aim, 0.05, RIF_BUTT[0], RIF_BUTT[1], RIF_BUTT[2], AIMX, AIMY, AIMZ);
     set3(P, 30, -0.25, -1, 0.1); set3(P, 33, 0.9, -0.35, 0.3); handsOn(P, 36, RIF_L[0], RIF_L[1], RIF_L[2], RIF_R[0], RIF_R[1], RIF_R[2]);
   } else if (pose === 3) { // kneeling, rifle at the shoulder, left elbow towards the knee
     kneelLegs(P, -0.45);
-    P[6] = -0.22; P[7] = -0.19 + aim * 0.35; P[8] = 0.07; P[9] = 0.6; P[10] = aim * 0.4 - 0.1; P[11] = 0.3;
+    P[6] = -0.22; P[7] = -0.25 + aim * 0.35; P[8] = -0.07; P[9] = 0.6; P[10] = aim * 0.4 - 0.34; P[11] = -0.32;
     wAimed(P, 36, aim, 0.05, RIF_BUTT[0], RIF_BUTT[1], RIF_BUTT[2], AIMX, AIMY, AIMZ);
     set3(P, 30, -0.1, -1, -0.2); set3(P, 33, 0.9, -0.4, 0.3); handsOn(P, 36, RIF_L[0], RIF_L[1], RIF_L[2], RIF_R[0], RIF_R[1], RIF_R[2]);
   } else if (pose === 7) { // kneeling with the RPG-7 on the right shoulder, rifle slung
     kneelLegs(P, -0.3);
-    P[6] = -0.12; P[7] = -0.05 + aim * 0.3; P[8] = 0.1; P[9] = 0.4; P[10] = aim * 0.5 - 0.05; P[11] = 0.28;
-    wAimed(P, 48, aim, 0, 0, 0, 0, 0.165, 0.5, -0.01);
+    P[6] = -0.12; P[7] = -0.16 + aim * 0.3; P[8] = -0.08; P[9] = 0.3; P[10] = aim * 0.5 - 0.3; P[11] = -0.3;
+    wByEye(P, 48, aim, -0.047, 0.045, 0.16); // eye behind the PGO-7 eyepiece
     set3(P, 30, -0.3, -1, 0.1); set3(P, 33, 0.7, -0.7, 0.2);
     getW(MW, P, 48); tp(MW, RPG_L[0], RPG_L[1], RPG_L[2], P, 24); tp(MW, RPG_R[0], RPG_R[1], RPG_R[2], P, 27);
     P[60] = 1;
   } else if (pose === 4) { // prone, up on the elbows, legs spread with the feet turned out
-    set3(P, 0, 0.02, 0.135, 0.5); P[4] = -Math.PI / 2; P[3] = 0.04;
-    set3(P, 12, -0.3, 0.085, 1.33); set3(P, 15, 0.2, 0.085, 1.37); set3(P, 18, -0.9, -0.45, 0); set3(P, 21, 0.9, -0.45, 0);
-    P[6] = -0.06; P[7] = 0.42 + aim * 0.3; P[8] = 0.04; P[9] = 0.2; P[10] = 0.52 + aim * 0.4; P[11] = 0.28;
+    set3(P, 0, 0.02, 0.16, 0.52); P[4] = -Math.PI / 2; P[3] = 0.04;
+    set3(P, 12, -0.19, 0.13, 1.36); set3(P, 15, 0.17, 0.13, 1.38); set3(P, 18, -0.5, -0.87, 0); set3(P, 21, 0.5, -0.87, 0);
+    P[6] = -0.06; P[7] = 0.8 + aim * 0.3; P[8] = -0.32; P[9] = 0.15; P[10] = 0.1 + aim * 0.4; P[11] = -0.1; // P[8] turns the chest about the vertical here (left shoulder forward)
     wAimed(P, 36, aim, 0.03, RIF_BUTT[0], RIF_BUTT[1], RIF_BUTT[2], 0.075, 0.47, -0.1);
-    set3(P, 30, -0.25, -1, 0.2); set3(P, 33, 0.4, -1, 0.3); handsOn(P, 36, RIF_L[0], RIF_L[1], RIF_L[2], RIF_R[0], RIF_R[1], RIF_R[2]);
+    set3(P, 30, -0.15, -1, 0.1); set3(P, 33, 0.4, -1, 0.3); handsOn(P, 36, RIF_L[0], RIF_L[1], -0.13, RIF_R[0], RIF_R[1], RIF_R[2]); // support hand under the handguard, forearm on the snow
     P[61] = 1;
   } else { // 0 stand at ease, rifle at the low ready, breathing
     const br = Math.sin(ph * 1.7);
@@ -230,29 +243,40 @@ function evalPose(P, pose, ph, aim) {
     lowReady(P, 0.004 * br);
   }
 }
-// dead, lying: 0 on the back (fell backwards), 1 face down (fell forwards), 2 face down in place (was prone)
+// dead, lying: 0 on the back (fell backwards), 1 face down (fell forwards), 2 face down in place (was prone); legs bent unevenly, the weapon clear of the body
 function evalDead(P, v, h) {
-  base(P); const a = (h - 0.5) * 0.5; P[61] = 1;
+  base(P); const a = (h - 0.5) * 0.5, sd = h > 0.5 ? 1 : -1; P[61] = 1;
   if (v === 0) {
     set3(P, 0, 0.0, 0.125, 0.78); P[3] = a; P[4] = Math.PI / 2; P[5] = 0.06;
-    P[6] = 0.05; P[7] = -0.04; P[8] = -0.05; P[9] = 0.7 * (h > 0.5 ? 1 : -1); P[10] = 0.15; P[11] = 0.2;
-    set3(P, 12, -0.24, 0.1, -0.06); set3(P, 15, 0.3, 0.1, 0.08); set3(P, 18, -1, 0.35, 0); set3(P, 21, 1, 0.45, 0);
-    set3(P, 24, -0.62, 0.06, 1.0); set3(P, 27, 0.5, 0.06, 1.35); set3(P, 30, -0.3, -1, 0.3); set3(P, 33, 0.3, -1, 0.2);
-    trs(MW, 0.62, 0.035, 0.55 + a, 1.2 + a, 0, Math.PI / 2); putW(P, 36, MW);
+    P[6] = 0.05; P[7] = -0.04; P[8] = -0.05; P[9] = 0.7 * sd; P[10] = 0.15; P[11] = 0.2;
+    set3(P, 12, -0.26, 0.1, -0.05); set3(P, 18, -1, 0.3, -0.1); // left leg out straight, foot rolled outwards
+    set3(P, 15, 0.24, 0.1, 0.4); set3(P, 21, 1, 0.22, 0); // right knee bent, fallen to the side
+    set3(P, 24, -0.62, 0.07, 1.0); set3(P, 27, 0.48, 0.07, 1.38); set3(P, 30, -1, 0.15, 0.1); set3(P, 33, 1, 0.15, -0.1); // arms flat on the snow
+    trs(MW, 0.82, 0.035, 0.3 + a, 1.25 + a, 0, Math.PI / 2); putW(P, 36, MW);
   } else {
     const prone = v === 2;
     set3(P, 0, 0.0, 0.13, prone ? 0.5 : -0.78); P[3] = a; P[4] = -Math.PI / 2; P[5] = -0.08;
-    P[6] = -0.04; P[7] = 0.02; P[8] = 0.05; P[9] = 1.0 * (h > 0.5 ? 1 : -1); P[10] = 0.1; P[11] = 0.1;
+    P[6] = -0.04; P[7] = 0.02; P[8] = 0.05; P[9] = 1.0 * sd; P[10] = 0.1; P[11] = 0.1;
     const fz = prone ? 1.35 : 0.1;
-    set3(P, 12, -0.3, 0.085, fz); set3(P, 15, 0.25, 0.13, fz - 0.25); set3(P, 18, -0.9, -0.4, 0); set3(P, 21, 0.7, -0.6, 0.2);
+    set3(P, 12, -0.22, 0.11, fz); set3(P, 18, -0.4, -0.9, 0); // left leg straight, toes down
+    set3(P, 15, 0.36, 0.12, fz - 0.36); set3(P, 21, 1, -0.1, 0); // right knee drawn up and out
     const cz = P[2] - 0.6; // shoulders
     set3(P, 24, -0.5, 0.06, cz - 0.35); set3(P, 27, 0.32, 0.06, cz + 0.5); set3(P, 30, -0.5, 1, 0); set3(P, 33, 0.5, 1, 0);
-    trs(MW, -0.45, 0.035, cz - 0.55, 0.9 + a, 0, Math.PI / 2); putW(P, 36, MW);
+    trs(MW, 0.68, 0.035, cz - 0.55, -0.45 + a, 0, Math.PI / 2); putW(P, 36, MW);
   }
+}
+// the collapse before the topple: knees buckle, hips drop, the head lolls and the arms go slack; feet stay where they were
+function evalSlump(P, A, v) {
+  P.set(A); if (v === 2) return;
+  const back = v === 0, k = back ? 1 : -1;
+  P[0] *= 0.5; P[1] = Math.min(A[1], 0.56); P[2] = A[2] * 0.5 + 0.1 * k; P[3] *= 0.5; P[4] = 0.22 * k; P[5] *= 0.5;
+  P[6] *= 0.4; P[7] = back ? 0.18 : -0.55; P[8] = 0.1 * k; P[9] *= 0.5; P[10] = back ? 0.35 : -0.45; P[11] = 0.25;
+  P[13] += 0.05; P[16] += 0.05; set3(P, 18, -0.15, 0.1, -1); set3(P, 21, 0.15, 0.1, -1); // knees forward, heels lifting
+  set3(P, 24, -0.3, 0.5, 0.05 * k); set3(P, 27, 0.32, 0.52, -0.05 * k); set3(P, 30, -0.4, -0.2, 1); set3(P, 33, 0.4, -0.2, 1); // arms hanging
 }
 
 export function initSoldiers(MAXI, heightAt) {
-  const PA = new Float32Array(NP), PB = new Float32Array(NP), PC = new Float32Array(NP);
+  const PA = new Float32Array(NP), PB = new Float32Array(NP), PC = new Float32Array(NP), PS = new Float32Array(NP);
   const cur = new Int8Array(MAXI).fill(-1), prv = new Int8Array(MAXI).fill(-1), dvar = new Int8Array(MAXI), dfrom = new Int8Array(MAXI);
   const bt = new Float32Array(MAXI), prvPh = new Float32Array(MAXI), prvAim = new Float32Array(MAXI), lastPh = new Float32Array(MAXI), lastAim = new Float32Array(MAXI);
   const out = new Float32Array(MAXI * IST), ord = new Int32Array(MAXI), key = new Float32Array(MAXI);
@@ -300,9 +324,15 @@ export function initSoldiers(MAXI, heightAt) {
     const o = i * 8, x = d[o], y = d[o + 1], z = d[o + 2], yaw = d[o + 3], pose = d[o + 4] | 0, ph = d[o + 5], aim = d[o + 6], dead = d[o + 7] > 1.5;
     let heat = 1;
     if (dead) {
-      evalPose(PA, dfrom[i], prvPh[i], prvAim[i]); evalDead(PB, dvar[i], hsh(i));
-      const t = Math.max(0, ph), wr = Math.min(1, (t / 0.62) * (t / 0.62)), wl = sstep(t / 0.35), wa = sstep((t - 0.08) / 0.5), ww = Math.min(1, (t / 0.45) * (t / 0.45));
-      blend(PA, PB, wr, wl, wa, ww, true); heat = 1 - 0.85 * sstep(t / 60);
+      evalPose(PA, dfrom[i], prvPh[i], prvAim[i]); evalDead(PB, dvar[i], hsh(i)); evalSlump(PS, PA, dvar[i]);
+      const t = Math.max(0, ph), rpg = PA[60] > 0.5;
+      if (rpg) { PB[60] = 1; for (let q = 0; q < 12; q++) PB[48 + q] = PB[36 + q]; } // the RPG drops, the rifle stays slung
+      if (t < 0.3) { const u = t / 0.3; blend(PA, PS, sstep(u * 1.3 - 0.3), sstep(u * 1.25), sstep(u * 1.4 - 0.4), 0, false); } // knees, then hips and torso, arms last
+      else { const u = Math.min(1, (t - 0.3) / 0.45); blend(PS, PB, u * u, sstep((t - 0.3) / 0.4), sstep((t - 0.4) / 0.42), 0, true); } // topple, accelerating; arms trail
+      const wf = Math.min(1, t / 0.5), k0 = rpg ? 48 : 36; PC[60] = rpg ? 1 : 0; // the weapon falls on its own path
+      for (let q = k0; q < k0 + 12; q++) PC[q] = PA[q] + (PB[q] - PA[q]) * sstep(wf);
+      PC[k0 + 10] = PA[k0 + 10] + (PB[k0 + 10] - PA[k0 + 10]) * wf * wf; // drops with gravity
+      heat = 1 - 0.85 * sstep(t / 60);
     } else if (prv[i] >= 0 && bt[i] < 0.25) {
       evalPose(PA, prv[i], prvPh[i], prvAim[i]); evalPose(PB, pose, ph, aim); const w = sstep(bt[i] / 0.25); blend(PA, PB, w, w, w, w, false);
     } else evalPose(PC, pose, ph, aim);
@@ -337,7 +367,7 @@ export function initSoldiers(MAXI, heightAt) {
     // weapons
     if (P[60] > 0.5) { mul(W4, Mt, SL); copyTo(ob + 176, W4); getW(M1, P, 48); mul(W4, B, M1); if (L < 0.5) W4[13] += drop; copyTo(ob + 192, W4); }
     else { getW(M1, P, 36); mul(W4, B, M1); if (L < 0.5) W4[13] += drop; copyTo(ob + 176, W4); for (let q = 0; q < 16; q++) out[ob + 192 + q] = 0; }
-    out[ob + 208] = heat; out[ob + 209] = 0; out[ob + 210] = 0; out[ob + 211] = 0;
+    out[ob + 208] = heat; out[ob + 209] = hsh(i * 5 + 2); out[ob + 210] = hsh(i * 11 + 7); out[ob + 211] = 0; // heat, per-soldier tint seeds
   }
 
   // per frame: track pose changes for blending, cull by distance and frustum (planes from planesFrom, n planes), pose and pack visible soldiers
