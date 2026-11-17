@@ -164,7 +164,7 @@ export async function genWorld(tick, Q, startAt) {
   for (let k = 0; k < HN * HN; k++) if (tD[k] < 12 && mat[k * 4] < 128) H[k] = lerp(H[k], tT[k], 1 - smooth(3.4, 10, tD[k]));
 
   // ---- plowed roads + parking lots: mat.G holds the distance to the asphalt edge (0.667 = edge, 6 m ramp) ----
-  const portals = [], parks = [];
+  const portals = [], parks = [], roadNet = []; // roadNet: road centre lines for enemy routing, cut where they dip towards a tunnel
   const gOf = (e) => 255 * clamp(1 - (e + 2) / 6, 0, 1);
   { // parking: least-squares plane through the lot, at most a gentle slope
     const b = blob('park'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let o = 0;
@@ -200,12 +200,15 @@ export async function genWorld(tick, Q, startAt) {
     const rE = new Float32Array(HN * HN).fill(99), rY = new Float32Array(HN * HN);
     for (const [n, w10] of meta.roads) {
       let pts = []; for (let i = 0; i < n; i++, o += 4) pts.push([dv.getInt16(o, true) / 8, dv.getInt16(o + 2, true) / 8]);
-      pts = polish(pts, 3); const m = pts.length, hw = w10 / 20, hs = new Float32Array(m), y = new Float32Array(m), dk = new Float32Array(m), cov = new Uint8Array(m);
+      pts = polish(pts, 3); const m = pts.length, hw = w10 / 20, hs = new Float32Array(m), y = new Float32Array(m), dk = new Float32Array(m), dk2 = new Float32Array(m), cov = new Uint8Array(m);
       for (let i = 0; i < m; i++) hs[i] = heightAt(pts[i][0], pts[i][1]);
       for (let i = 0; i < m; i++) {
         let s = 0, c = 0; for (let k = Math.max(0, i - 8); k <= Math.min(m - 1, i + 8); k++) { s += hs[k]; c++; }
-        const dt = dTun(pts[i][0], pts[i][1]); dk[i] = s / c; y[i] = dk[i] - DEPTH * (1 - smooth(8, 95, dt)); cov[i] = dt < 1 ? 2 : dt < 8 ? 1 : 0; // 1 = recess behind the portal face
+        const dt = dTun(pts[i][0], pts[i][1]); dk[i] = s / c; dk2[i] = dt; y[i] = dk[i] - DEPTH * (1 - smooth(8, 95, dt)); cov[i] = dt < 1 ? 2 : dt < 8 ? 1 : 0; // 1 = recess behind the portal face
       }
+      for (let q0 = 0; q0 < m;) { let q1 = q0; while (q1 < m && dk2[q1] > 100) q1++; // runs of road well away from the tunnels
+        if (q1 - q0 >= 20) { const f = new Float32Array((q1 - q0) * 2); for (let q = q0; q < q1; q++) { f[(q - q0) * 2] = pts[q][0]; f[(q - q0) * 2 + 1] = pts[q][1]; } roadNet.push({ pts: f, n: q1 - q0, hw }); }
+        q0 = q1 + 1; }
       for (let q = 0; q < m; q++) {
         const cx = pts[q][0], cz = pts[q][1], R = hw + 18, i0 = Math.max(0, Math.floor(w2t(cx - R))), i1 = Math.min(HN - 1, Math.ceil(w2t(cx + R))), j0 = Math.max(0, Math.floor(w2t(cz - R))), j1 = Math.min(HN - 1, Math.ceil(w2t(cz + R)));
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
@@ -313,7 +316,7 @@ export async function genWorld(tick, Q, startAt) {
 
   Object.assign(W, {
     PLAY, MW, TREELINE, name: 'nordmarka',
-    mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM, portals, parks, roadAt,
+    mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM, portals, parks, roadAt, roads: roadNet,
     trees: { data: td.subarray(0, tc * 8), count: tc, nearStart, nearCnt, nearY, farStart, farCnt, farY },
     start: { x: 0, z: 0, yaw: 0 },
   });

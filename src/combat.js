@@ -10,6 +10,10 @@ const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
 // shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade
 const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0]];
 const BDMG = [20, 45, 70, 0, 35, 3, 0]; // direct-hit damage to a building by shell type (the drone charge does 100)
+// enemy roles: assault closes in; overwatch takes a high spot with a view and holds; flanker swings wide to come in from the side;
+// raider (BMP) runs fast along the plowed roads to close range
+const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'flanker', 'raider'], PQN = 16;
+const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1500, burst: 1, name: 'T-72B3' }, { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 950, burst: 5, name: 'BMP-2' }];
 
 export function initCombat(C) {
@@ -19,7 +23,12 @@ export function initCombat(C) {
   const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES;
   let fireWas = false, fireBlock = false;
   let sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
-  for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i] });
+  for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i],
+    role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0 });
+  // pending spawns of the current wave (staggered groups, reinforcements): preallocated, filled by planWave on a wave start
+  const PQ = []; for (let i = 0; i < PQN; i++) PQ.push({ t: 0, trig: -1, type: 0, role: 0, brg: 0, grp: 0, ann: 0 });
+  let pqN = 0, noSlot = false, anyWreck = false; const GA = new Float32Array(8 * 3), GS = new Float32Array(8 * 4), COV = new Float32Array(36); let annNow = 0; // group anchors (x, z, set); per-release tally per group (n, unit x, unit z, distance); route points per 10° of bearing
+  G.stuck = 0; G.lastAxis = NaN; G.bag = null; G.wt = 0; G.plan = '';
   const map = typeof document !== 'undefined' && document.getElementById('map'), mctx = map && map.getContext ? map.getContext('2d') : null;
 
   // ---------- small helpers ----------
@@ -173,29 +182,174 @@ export function initCombat(C) {
   }
 
   // ---------- enemies ----------
-  function pathDir(e) { // walk the trail in the direction that closes on the player
-    const t = trails[e.path], a = clamp(e.pi + 18, 0, t.n - 1), b = clamp(e.pi - 18, 0, t.n - 1);
-    const da = Math.hypot(t.pts[a * 2] - veh.x, t.pts[a * 2 + 1] - veh.z), db = Math.hypot(t.pts[b * 2] - veh.x, t.pts[b * 2 + 1] - veh.z), d0 = Math.hypot(t.pts[e.pi * 2] - veh.x, t.pts[e.pi * 2 + 1] - veh.z);
+  const roads = W.roads || [], NETS = [trails, roads], wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const brgOf = (x, z) => Math.atan2(x - veh.x, -(z - veh.z)); // compass bearing from the player (0 = north; +z is south)
+  function pathDir(e) { // walk the route polyline (trail or road) in the direction that closes on the goal
+    const t = NETS[e.net][e.path], a = clamp(e.pi + 18, 0, t.n - 1), b = clamp(e.pi - 18, 0, t.n - 1);
+    const da = Math.hypot(t.pts[a * 2] - e.gx, t.pts[a * 2 + 1] - e.gz), db = Math.hypot(t.pts[b * 2] - e.gx, t.pts[b * 2 + 1] - e.gz), d0 = Math.hypot(t.pts[e.pi * 2] - e.gx, t.pts[e.pi * 2 + 1] - e.gz);
     if (Math.min(da, db) > d0 - 4) return 0;
     return da < db ? 1 : -1;
   }
-  function spawn(type) {
-    let e = null; for (const q of G.enemies) if (!q.on) { e = q; break; } if (!e) return false;
-    let bx = 0, bz = 0, bp = -1, bi = 0, best = -1;
-    for (let k = 0; k < 260; k++) {
-      const ti = (rnd() * trails.length) | 0, t = trails[ti]; if (t.n < 30) continue;
+  // off a route: look for a nearby trail or road stretch that leads towards the goal (raiders prefer roads)
+  function findRoute(e) {
+    const dg = Math.hypot(e.gx - e.x, e.gz - e.z); if (dg < 160) return false;
+    let best = 14, bn = -1, bp = -1, bi = 0, bd = 1;
+    for (let n = 0; n < 2; n++) { const L = NETS[n], R0 = n ? 60 : 45, bonus = n === 1 ? (e.role === RAID ? 30 : 10) : 0;
+      for (let p = 0; p < L.length; p++) { const t = L[p], P = t.pts;
+        for (let i = 2; i < t.n - 2; i += 3) { const px = P[i * 2], pz = P[i * 2 + 1], dx = px - e.x, dz = pz - e.z; if (dx * dx + dz * dz > R0 * R0) continue;
+          const dp = Math.sqrt(dx * dx + dz * dz);
+          for (let s = -1; s <= 1; s += 2) { const j = clamp(i + s * 30, 0, t.n - 1), g = dg - Math.hypot(P[j * 2] - e.gx, P[j * 2 + 1] - e.gz) - dp * 0.6 + bonus;
+            if (g > best) { best = g; bn = n; bp = p; bi = i; bd = s; } } } } }
+    if (bn < 0) return false;
+    e.net = bn; e.path = bp; e.pi = bi; e.dir = bd; return true;
+  }
+  const okSpot = (x, z) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2;
+  // overwatch: a spot r0..r1 from the player around bearing b, scored by height over the player, a clear view and the drive to get there
+  function pickSpot(e, b, r0, r1) {
+    let best = -1e9, bx = e.x, bz = e.z;
+    for (let k = 0; k < 44; k++) { const a = b + (rnd() - 0.5) * 1.6, r = r0 + rnd() * (r1 - r0), x = veh.x + Math.sin(a) * r, z = veh.z - Math.cos(a) * r; if (!okSpot(x, z)) continue;
+      const y = hAt(x, z), sc = clamp((y - veh.y) * 0.04, -1, 1.5) - Math.hypot(x - e.x, z - e.z) / 380 + rnd() * 0.3 + (losBlocked(x, y + 2.4, z, veh.x, veh.y + 1.9, veh.z) ? 0 : 1.6);
+      if (sc > best) { best = sc; bx = x; bz = z; } }
+    e.ox = bx; e.oz = bz; e.ph = 0;
+  }
+  // shoot and scoot / sidestep: a short hop across the line of fire (fwd > 0: towards the player) to a fresh spot
+  function scoot(e, fwd) {
+    const b = brgOf(e.x, e.z), sd = rnd() < 0.5 ? -1 : 1, l = 22 + rnd() * 20; if (Math.hypot(e.x - veh.x, e.z - veh.z) < 200) fwd = -Math.abs(fwd) - 10; // too close already: hop back
+    for (let k = 0; k < 4; k++) { const s = k & 1 ? -sd : sd, x = e.x + Math.cos(b) * s * l - Math.sin(b) * fwd, z = e.z + Math.sin(b) * s * l + Math.cos(b) * fwd;
+      if (okSpot(x, z)) { e.sx = x; e.sz = z; e.scT = 9; e.idleT = 0; return; } }
+  }
+  // stuck again and again: pick the open direction (no wall or collider on the way) that best leads towards the goal and drive there first
+  function escape(e) {
+    let best = -9; const y = e.y + 1.4, gb = Math.atan2(e.gx - e.x, e.gz - e.z);
+    for (let k = 0; k < 12; k++) { const a = k * 0.5236 + rnd() * 0.3, x = e.x + Math.sin(a) * 28, z = e.z + Math.cos(a) * 28;
+      if (!okSpot(x, z) || C.bld.seg(e.x, y, e.z, x, y, z) || C.collAt(e.x + Math.sin(a) * 14, e.z + Math.cos(a) * 14)) continue;
+      const sc = Math.cos(a - gb) + rnd() * 0.6; if (sc > best) { best = sc; e.sx = x; e.sz = z; } }
+    if (best > -9) { e.scT = 9; e.idleT = 0; }
+  }
+  function spawn(type, role = ASL, brg = NaN, grp = -1) {
+    let e = null; for (const q of G.enemies) if (!q.on) { e = q; break; }
+    if (!e) { let fd = -1; for (const q of G.enemies) { const dq = Math.hypot(q.x - veh.x, q.z - veh.z), dc = Math.hypot(q.x - cam.x, q.z - cam.z); // full: recycle the farthest wreck that is out of the way
+        if (q.dead && dq > fd && (anyWreck || (dc > 250 && dq > 250) || (dc > 150 && q.burn > 90))) { fd = dq; e = q; } }
+      if (!e) { noSlot = true; return false; } }
+    const dir = brg === brg, net = role === RAID && roads.length ? 1 : 0, ga = grp >= 0 && GA[grp * 3 + 2] > 0;
+    let bx = 0, bz = 0, bp = -1, bi = 0, best = -1, bn = 0;
+    for (let k = 0; k < (dir ? 420 : 260); k++) {
+      const n = k & 1 ? 0 : net, L = NETS[n], ti = (rnd() * L.length) | 0, t = L[ti]; if (!t || t.n < 30) continue;
       const i = 4 + ((rnd() * (t.n - 8)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
       if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380) continue;
-      let ok = true; for (const q of G.enemies) if (q.on && Math.hypot(q.x - x, q.z - z) < 45) { ok = false; break; } if (!ok) continue;
-      const sc = (d > 480 && d < 900 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 480–900 m away and to the north
-      if (sc > best) { best = sc; bx = x; bz = z; bp = ti; bi = i; }
-      if (best > 3.6) break;
+      let ok = true; for (const q of G.enemies) if (q.on && !q.dead && Math.hypot(q.x - x, q.z - z) < 45) { ok = false; break; } if (!ok) continue;
+      let sc;
+      if (!dir) sc = (d > 480 && d < 900 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 480–900 m away and to the north
+      else sc = (d > 520 && d < 950 ? 2 : d < 1250 ? 1 : -4 - (d - 1250) / 300) + 3 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - brg)) / 0.85) + 1.5 * (1 - Math.abs(wrap(brgOf(x, z) - brg)) / 3.1416) + (n === net ? 1.2 : 0) + (ga ? 2 * clamp(1 - Math.hypot(x - GA[grp * 3], z - GA[grp * 3 + 1]) / 260, 0, 1) : 0) + rnd() * 0.8;
+      if (sc > best) { best = sc; bx = x; bz = z; bp = ti; bi = i; bn = n; }
+      if (!dir && best > 3.6) break;
     }
     if (bp < 0) return false;
     const E = ETYPE[type];
-    Object.assign(e, { on: true, dead: false, type, x: bx, z: bz, y: hAt(bx, bz), pitch: 0, roll: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: E.hp, state: 0, rl: 3 + rnd() * 4, path: bp, pi: bi, burn: 0, burnt: 0, see: 0, losT: rnd() * 0.3, los: false, known: 0, shots: 0, burstN: 0, immob: false, evalT: 0, errT: 0 });
-    e.dir = pathDir(e) || 1; const t = trails[bp], j = clamp(bi + e.dir, 0, t.n - 1); e.yaw = Math.atan2(-(t.pts[j * 2] - bx), -(t.pts[j * 2 + 1] - bz));
+    Object.assign(e, { on: true, dead: false, type, x: bx, z: bz, y: hAt(bx, bz), pitch: 0, roll: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: E.hp, state: 0, rl: 3 + rnd() * 4, path: bp, pi: bi, burn: 0, burnt: 0, see: 0, losT: rnd() * 0.3, los: false, known: 0, shots: 0, burstN: 0, immob: false, evalT: 0, errT: 0,
+      role, grp, brg: dir ? brg : brgOf(bx, bz), side: rnd() < 0.5 ? -1 : 1, ph: 0, net: bn, gx: veh.x, gz: veh.z, scT: 0, shL: 0, hpL: E.hp, retT: 0, smk: 1, revT: 0, stN: 0, cT: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: bx, stZ: bz, wantT: 0,
+      hold: role === RAID ? 230 + rnd() * 150 : role === FLK ? 300 + rnd() * 200 : type ? 320 + rnd() * 160 : 400 + rnd() * 250 });
+    if (role === OVW) pickSpot(e, brgOf(bx, bz), 650, 1000);
+    if (role === FLK && G.lastAxis === G.lastAxis && Math.abs(wrap(e.brg - G.lastAxis)) > 0.3) e.side = wrap(e.brg - G.lastAxis) > 0 ? 1 : -1; // keep swinging away from the main axis
+    if (grp >= 0 && !ga) { GA[grp * 3] = bx; GA[grp * 3 + 1] = bz; GA[grp * 3 + 2] = 1; }
+    if (grp >= 0) { const dd = Math.hypot(bx - veh.x, bz - veh.z) || 1; GS[grp * 4]++; GS[grp * 4 + 1] += (bx - veh.x) / dd; GS[grp * 4 + 2] += (bz - veh.z) / dd; GS[grp * 4 + 3] += dd; }
+    roleGoal(e); e.dir = pathDir(e) || 1; const t = NETS[bn][bp], j = clamp(bi + e.dir, 0, t.n - 1); e.yaw = Math.atan2(-(t.pts[j * 2] - bx), -(t.pts[j * 2 + 1] - bz));
     return true;
+  }
+  // the goal of each role, refreshed on every route evaluation
+  function roleGoal(e) {
+    if (e.role === OVW && e.ph === 0) { e.gx = e.ox; e.gz = e.oz; return; }
+    if (e.role === FLK && e.ph === 0) { const b = e.brg + e.side * 0.75, r = 560; e.gx = clamp(veh.x + Math.sin(b) * r, -PLAY + 80, PLAY - 80); e.gz = clamp(veh.z - Math.cos(b) * r, -PLAY + 80, PLAY - 80); return; }
+    e.gx = veh.x; e.gz = veh.z;
+  }
+  const toPt = (e, E, tx, tz, f) => {
+    let ux = tx - e.x, uz = tz - e.z; const l = Math.hypot(ux, uz) || 1; ux /= l; uz /= l;
+    if (e.cT > 0) { const dn = ux * e.cnx + uz * e.cnz; if (dn < 0.2) { ux -= e.cnx * (dn - 0.2); uz -= e.cnz * (dn - 0.2); if (dn < -0.9) { ux -= e.cnz * e.side; uz += e.cnx * e.side; } } } // against a wall: slide along it
+    const a = wrap(Math.atan2(-ux, -uz) - e.yaw); e.st = clamp(a * 2.2, -1, 1); e.tgt = E.vmax * f * (1 - 0.6 * Math.abs(e.st)); };
+  // movement: sets e.tgt (speed, negative = reverse) and e.st (steer) from the role, hit reactions, scoots and the route
+  function drive(e, E, d, dt) {
+    e.tgt = 0; e.st = 0; e.cT -= dt; e.noRt -= dt;
+    const hit = e.hp < e.hpL - 0.5; e.hpL = e.hp;
+    if (hit && e.smk > 0 && rnd() < (e.type ? 0.5 : 0.7)) { // smoke dischargers towards the threat, then back out of the line of fire
+      e.smk--; const b = Math.atan2(veh.x - e.x, veh.z - e.z);
+      for (let k = 0; k < 4; k++) { const a = b + (k - 1.5) * 0.28; fire(1, 6, e.x, e.y + 2.3, e.z, Math.sin(a) * 0.82, 0.57, Math.cos(a) * 0.82, 24 + (k & 1) * 4, 0.03, 1.15 + rnd() * 0.2); }
+      C.sfx('smoke', e.x, e.y + 2.2, e.z, 0.8); e.retT = 5 + rnd() * 3; e.scT = 0; if (e.role === ASL || e.role === RAID) e.hold += 150;
+    } else if (hit && !e.immob && e.retT <= 0 && rnd() < 0.5) scoot(e, -8);
+    if (e.immob) return;
+    if (e.revT > 0) { e.revT -= dt; e.tgt = 3 * e.rvD; e.st = e.side; return; } // unstick
+    if (e.shots !== e.shL) { e.shL = e.shots; if (e.role !== RAID && e.state === 1 && Math.abs(e.v) < 2 && rnd() < (e.role === OVW ? 0.45 : 0.6)) scoot(e, e.role === OVW ? -6 : 12); } // shoot and scoot
+    if (e.retT > 0) { e.retT -= dt; const a = wrap(Math.atan2(-(veh.x - e.x), -(veh.z - e.z)) - e.yaw); e.st = clamp(a * 2.2, -1, 1); e.tgt = -4.5; }
+    else if (e.scT > 0) { e.scT -= dt; if (Math.hypot(e.sx - e.x, e.sz - e.z) < 7) e.scT = 0; else toPt(e, E, e.sx, e.sz, 0.65); }
+    else {
+      if (e.role === FLK && e.ph === 0) { e.phT += dt; if (d < 430 || e.phT > 110 || Math.hypot(e.gx - e.x, e.gz - e.z) < 90) { e.ph = 1; e.evalT = 0; } } // flank reached: turn in
+      if (e.role === OVW) { e.noLos = e.los ? 0 : e.noLos + dt; if ((e.ph === 1 && (e.noLos > 28 || d > 1300)) || (e.ph === 0 && e.phT > 100)) { pickSpot(e, brgOf(e.x, e.z), 600, 950); e.noLos = 0; e.phT = 0; e.evalT = 0; } }
+      const atSpot = e.role === OVW && (e.ph === 1 || Math.hypot(e.ox - e.x, e.oz - e.z) < 14);
+      if (atSpot && e.ph === 0) { e.ph = 1; e.phT = 0; } else if (e.role === OVW && e.ph === 0) e.phT += dt;
+      const halt = d < 70 || atSpot || (e.state === 1 && d < (e.role === FLK && e.ph === 0 ? 260 : e.hold));
+      if (halt) {
+        const a = wrap(Math.atan2(-(veh.x - e.x), -(veh.z - e.z)) - e.yaw); if (e.type === 0 && Math.abs(a) > 0.6 && e.state === 1) { e.st = clamp(a * 2, -1, 1); e.tgt = 0.7; } // turn the front armour to the threat
+        e.idleT += dt; if (e.idleT > (e.role === RAID ? 6 : e.role === OVW ? 30 : 13) + (e.grp & 3)) scoot(e, e.role === OVW ? -5 : 15);
+      } else {
+        e.idleT = 0; e.evalT -= dt;
+        if (e.evalT <= 0) { e.evalT = 4 + rnd() * 2; roleGoal(e); if (e.path >= 0) { const nd = pathDir(e); if (nd === 0) e.path = -1; else e.dir = nd; } if (e.path < 0 && e.noRt <= 0) findRoute(e); }
+        let tx = e.gx, tz = e.gz;
+        if (e.path >= 0) { const t = NETS[e.net][e.path]; while (Math.hypot(t.pts[e.pi * 2] - e.x, t.pts[e.pi * 2 + 1] - e.z) < 8) { e.pi += e.dir; if (e.pi < 0 || e.pi >= t.n) { e.path = -1; e.evalT = Math.min(e.evalT, 0.5); break; } } if (e.path >= 0) { tx = t.pts[e.pi * 2]; tz = t.pts[e.pi * 2 + 1]; } }
+        toPt(e, E, tx, tz, e.path < 0 ? 0.55 : e.net ? 1.3 : 1);
+      }
+    }
+    // keep station in a column: do not drive into the back of a friendly vehicle
+    if (e.tgt > 0) { const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw);
+      for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = q.x - e.x, qz = q.z - e.z, qd = Math.hypot(qx, qz), ah = qx * fx + qz * fz;
+        if (qd < 16 && ah > qd * 0.6) { e.tgt = Math.min(e.tgt, q.dead ? 1.5 : Math.max(0, q.v * 0.8)); if (q.dead || qd < 10) e.st = clamp(e.st + (qx * fz - qz * fx > 0 ? 0.6 : -0.6), -1, 1); } } } // and steer round it
+    // stuck: wanted to move for a while but did not get anywhere -> back off (or push forward), then sidestep and look for a new route
+    e.stT += dt; if (Math.abs(e.tgt) > 2) e.wantT += dt;
+    if (e.stT > 4) { const mv = Math.hypot(e.x - e.stX, e.z - e.stZ);
+      if (e.wantT > 3 && mv < 3) { e.rvD = e.tgt < 0 ? 1 : -1; e.revT = 2.5; e.side = -e.side; e.path = -1; e.evalT = 2.6; e.retT = 0; e.scT = 0; G.stuck++; if (++e.stN > 2) { escape(e); e.noRt = 15; } else if (e.stN > 1) scoot(e, -10); if (G.onStuck) G.onStuck(e); }
+      else if (mv > 15) e.stN = 0;
+      e.stT = 0; e.wantT = 0; e.stX = e.x; e.stZ = e.z; }
+  }
+  // ---------- waves: scenarios with groups, roles, directions and reinforcements ----------
+  function pq(t, trig, type, role, brg, grp, ann) { if (pqN >= PQN) return; const q = PQ[pqN++]; q.t = t; q.trig = trig; q.type = type; q.role = role; q.brg = brg; q.grp = grp; q.ann = ann; }
+  function planWave(w) { // rare event: may allocate
+    COV.fill(0);
+    for (let n = 0; n < 2; n++) for (const t of NETS[n]) for (let i = 0; i < t.n; i += 5) { const x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
+      if (d > 500 && d < 1000 && Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60) COV[Math.floor((brgOf(x, z) + 3.1416) / 6.2832 * 36) % 36]++; }
+    const feas = (b) => { const c = Math.floor((wrap(b) + 3.1416) / 6.2832 * 36); let f = 0; for (let k = -2; k <= 2; k++) f += COV[(c + k + 36) % 36]; return f; };
+    let ax = 0, best = -1;
+    for (let k = 0; k < 40; k++) { const a = w === 1 && k < 20 ? (rnd() - 0.5) * 1.2 : rnd() * 6.283 - 3.1416; // wave 1 comes from the north if it can
+      const sc = Math.min(1, feas(a) / 40) + rnd() * 0.5 - (G.lastAxis === G.lastAxis && Math.abs(wrap(a - G.lastAxis)) < 1.1 ? 1 : 0); if (sc > best) { best = sc; ax = a; } }
+    G.lastAxis = ax; const fp = feas(ax + 1.45), fm = feas(ax - 1.45), sd = fp > 15 && fm > 15 ? (rnd() < 0.5 ? -1 : 1) : fp >= fm ? 1 : -1, n = Math.min(2 + w, 7), B = () => rnd() < 0.5 ? 1 : 0;
+    if (!G.bag || !G.bag.length) { G.bag = ['platoon', 'raid', 'pincer', 'echelon']; for (let i = 3; i > 0; i--) { const j = (rnd() * (i + 1)) | 0, t = G.bag[i]; G.bag[i] = G.bag[j]; G.bag[j] = t; } }
+    const sc = w === 1 ? 'probe' : w === WAVES ? 'final' : G.bag.pop(); pqN = 0; GA.fill(0);
+    if (sc === 'probe') { pq(0, -1, 0, OVW, ax, 0, 0); pq(0, -1, 1, ASL, ax, 0, 0); pq(0, -1, 1, n > 3 ? RAID : ASL, ax + sd * 0.3, 0, 0); for (let i = 3; i < n; i++) pq(0, -1, B(), ASL, ax, 0, 0); return 'Recon in force'; }
+    if (sc === 'platoon') { pq(0, -1, 0, OVW, ax, 0, 0); for (let i = 1; i < n - 1; i++) pq(0, -1, 0, ASL, ax, 0, 0); pq(0, -1, 1, ASL, ax, 0, 0); pq(30 + rnd() * 20, 1, 1, RAID, ax + sd * 0.6, 1, 1); return 'Tank platoon with escort'; }
+    if (sc === 'raid') { for (let i = 0; i < n; i++) { const ow = i === n - 1 && n > 4; pq(i < 2 ? 0 : 6 + i * 4, -1, ow ? 0 : 1, ow ? OVW : RAID, ax + (i & 1 ? 0.25 : -0.25), 0, 0); } return 'BMP raid on the roads'; }
+    if (sc === 'pincer') { const f = Math.ceil(n / 2); pq(0, -1, 0, OVW, ax, 0, 0); for (let i = 1; i < f; i++) pq(0, -1, B(), ASL, ax, 0, 0);
+      const t = 14 + rnd() * 14; for (let i = f; i < n; i++) pq(t, -1, i === f ? 0 : B(), FLK, ax + sd * 1.45, 1, 1); return 'Pincer'; }
+    if (sc === 'echelon') { const f = Math.max(2, n - 3); for (let i = 0; i < f; i++) pq(0, -1, i ? B() : 0, i ? ASL : OVW, ax, 0, 0);
+      const t = 45 + rnd() * 20; for (let i = f; i <= n; i++) pq(t, 1, i === f ? 0 : B(), i === n ? FLK : ASL, ax + sd * 0.7, 1, 1); return 'Two echelons'; }
+    // final: overwatch and an assault group on the main axis, a BMP raid from one side, then tanks flanking from the other
+    pq(0, -1, 0, OVW, ax, 0, 0); pq(0, -1, 0, OVW, ax + 0.3, 0, 0); pq(0, -1, 0, ASL, ax, 1, 0); pq(0, -1, 0, ASL, ax, 1, 0); pq(0, -1, 1, ASL, ax, 1, 0);
+    const tr = 22 + rnd() * 10, tf = 55 + rnd() * 15; pq(tr, -1, 1, RAID, ax + sd * 1.7, 2, 1); pq(tr, -1, 1, RAID, ax + sd * 1.7, 2, 0);
+    pq(tf, 2, 0, FLK, ax - sd * 1.4, 3, 1); pq(tf, 2, 0, FLK, ax - sd * 1.4, 3, 0);
+    return 'Final assault';
+  }
+  // spawn whatever is due (by time, by the number still alive, or at once when the field is empty); GS tallies each group for the announcement
+  function releaseWave(alive) {
+    let made = 0; GS.fill(0); annNow = 0;
+    for (let i = 0; i < pqN;) { const q = PQ[i];
+      noSlot = false; anyWreck = alive === 0;
+      if ((G.wt >= q.t || (q.trig >= 0 && alive <= q.trig) || alive === 0) && (spawn(q.type, q.role, q.brg, q.grp) ? (annNow |= q.ann, ++made) : !noSlot)) { PQ[i] = PQ[pqN - 1]; PQ[pqN - 1] = q; pqN--; } // no free slot: stays pending
+      else i++; }
+    anyWreck = false;
+    return made;
+  }
+  const dirName = (x, z) => DIRS[Math.round(((Math.atan2(x, -z) * 57.296 + 360) % 360) / 45) % 8];
+  function announce(head) { // rare event
+    let msg = head, k = 0;
+    for (let g = 0; g < 8; g++) { const n = GS[g * 4]; if (!n) continue;
+      msg += (k++ ? ' · ' : '') + `${n} from the ${dirName(GS[g * 4 + 1], GS[g * 4 + 2])}, ~${Math.round(GS[g * 4 + 3] / n / 50) * 50} m`; }
+    ui.toast(msg);
   }
   function updateEnemy(e, dt, idx) {
     const E = ETYPE[e.type], K = E.K;
@@ -215,19 +369,12 @@ export function initCombat(C) {
       e.known -= dt;
       const engage = e.los && d < E.range && e.see > 0.4;
       e.state = engage && (d < 700 || e.see > 1) ? 1 : 0;
-      // movement: follow the trail towards the player, hold at stand-off range once in contact
-      let tgt = 0, st = 0;
-      if (!e.immob && !(e.state === 1 && d < 650) && d > 70) {
-        e.evalT -= dt; if (e.evalT <= 0 && e.path >= 0) { e.evalT = 5; const nd = pathDir(e); if (nd === 0) e.path = -1; else e.dir = nd; }
-        let tx = veh.x, tz = veh.z;
-        if (e.path >= 0) { const t = trails[e.path]; while (Math.hypot(t.pts[e.pi * 2] - e.x, t.pts[e.pi * 2 + 1] - e.z) < 8) { e.pi += e.dir; if (e.pi < 0 || e.pi >= t.n) { e.path = -1; break; } } if (e.path >= 0) { tx = t.pts[e.pi * 2]; tz = t.pts[e.pi * 2 + 1]; } }
-        let a = Math.atan2(-(tx - e.x), -(tz - e.z)) - e.yaw; a = Math.atan2(Math.sin(a), Math.cos(a));
-        st = clamp(a * 2.2, -1, 1); tgt = E.vmax * (e.path < 0 ? 0.55 : 1) * (1 - 0.6 * Math.abs(st));
-      }
+      // movement: role-driven (see drive())
+      drive(e, E, d, dt); const tgt = e.tgt, st = e.st;
       for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = e.x - q.x, qz = e.z - q.z, qd = Math.hypot(qx, qz); if (qd < 7 && qd > 0.01) { const k = (7 - qd) / qd * (q.dead ? 1 : 0.5); e.x += qx * k; e.z += qz * k; } }
-      e.v += (tgt - e.v) * Math.min(1, dt * 0.9); const yr = st * 0.55 * (e.v > 0.5 || tgt > 0 ? 1 : 0);
+      e.v += (tgt - e.v) * Math.min(1, dt * 0.9); const yr = st * 0.55 * (Math.abs(e.v) > 0.5 || tgt !== 0 ? 1 : 0);
       e.yaw += yr * dt; e.x = clamp(e.x - Math.sin(e.yaw) * e.v * dt, -PLAY, PLAY); e.z = clamp(e.z - Math.cos(e.yaw) * e.v * dt, -PLAY, PLAY);
-      for (let s = -1; s <= 1; s++) { const px = e.x - Math.sin(e.yaw) * 1.8 * s, pz = e.z - Math.cos(e.yaw) * 1.8 * s; if (C.solid(px, pz, 1.9, SO)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; } } // buildings and colliders are solid
+      for (let s = -1; s <= 1; s++) { const px = e.x - Math.sin(e.yaw) * 1.8 * s, pz = e.z - Math.cos(e.yaw) * 1.8 * s; if (C.solid(px, pz, 1.9, SO)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; if (SO[4] > 0) { e.cnx = SO[2]; e.cnz = SO[3]; e.cT = 1.2; } } } // buildings and colliders are solid
       if (C.bld.rubble(e.x, e.z)) e.v = Math.min(e.v, 4.5);
       e.trL += (e.v + yr * 1.43) * dt; e.trR += (e.v - yr * 1.43) * dt;
       const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw), hl = K.hl, hw = K.hw;
@@ -320,16 +467,16 @@ export function initCombat(C) {
     // waves
     if (!G.peace && !veh.dead) {
       let alive = 0; for (const e of G.enemies) if (e.on && !e.dead) alive++;
-      if (G.state === 0) { G.timer -= dt; if (G.timer <= 0) { G.wave++; const n = Math.min(2 + G.wave, MAXE - 3);
+      if (G.state === 0) { G.timer -= dt; if (G.timer <= 0) { G.wave++; G.wt = 0;
         for (const e of G.enemies) if (e.on && e.dead && Math.hypot(e.x - veh.x, e.z - veh.z) > 500) e.on = false; // recycle distant wrecks
-        let made = 0; for (let i = 0; i < n; i++) if (spawn(i > 0 && rnd() < 0.4 ? 1 : 0)) made++;
-        G.state = 1; hudDirty = true; let ax = 0, az = 0; for (const e of G.enemies) if (e.on && !e.dead) { ax += e.x - veh.x; az += e.z - veh.z; }
-        const br = ((Math.atan2(ax, -az) * 57.296 + 360) % 360), dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-        ui.toast(`Wave ${G.wave}: ${made} vehicles from the ${dirs[Math.round(br / 45) % 8]}, ~${Math.round(Math.hypot(ax, az) / made / 50) * 50} m — see the map`); } }
-      else if (alive === 0) { G.state = 0; G.timer = 9; G.score += 150 * G.wave; hudDirty = true;
+        G.plan = planWave(G.wave); const more = PQ.slice(0, pqN).some((q) => q.ann); releaseWave(1e9);
+        G.state = 1; hudDirty = true; announce(`Wave ${G.wave} — ${G.plan}: `); if (more) setTimeout(() => { if (G.state === 1) ui.toast('More enemy movement reported — watch your flanks'); }, 3500); } }
+      else {
+        if (pqN > 0) { G.wt += dt; const m = releaseWave(alive); if (m) { alive += m; hudDirty = true; if (annNow) announce('Contact! '); } } // staggered groups and reinforcements
+        if (alive === 0 && pqN === 0) { G.state = 0; G.timer = 9; G.score += 150 * G.wave; hudDirty = true;
         for (let i = 0; i < 3; i++) G.n[i] = Math.min(AMMO[i].max, G.n[i] + [7, 4, 3][i]); G.mg = Math.min(2000, G.mg + 500); G.smokeN = Math.min(2, G.smokeN + 1); veh.hp = Math.min(100, veh.hp + 25);
         if (G.wave === WAVES && !G.won) { G.won = true; ui.over('Nordmarka held', `All ${WAVES} waves beaten · ${G.kills} vehicles destroyed · score ${G.score}. Press R to start over, or close this and keep fighting.`, true); }
-        else ui.toast(`Wave ${G.wave} cleared — resupplied`); }
+        else ui.toast(`Wave ${G.wave} cleared — resupplied`); } }
     }
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on) updateEnemy(e, dt, i); }
     // vehicles are solid for each other
@@ -393,7 +540,7 @@ export function initCombat(C) {
     ui.toast('Drone away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank');
   };
   G.restart = () => {
-    for (const e of G.enemies) e.on = false; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
+    for (const e of G.enemies) e.on = false; pqN = 0; G.bag = null; G.lastAxis = NaN; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
     D.on = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
     Object.assign(G, { drones: DRONES, sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;
@@ -405,7 +552,7 @@ export function initCombat(C) {
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const cx = e.x - ox, cy = e.y + 1.3 - oy, cz = e.z - oz, b = cx * dx + cy * dy + cz * dz, q = cx * cx + cy * cy + cz * cz - b * b; if (b > 0 && q < 6.8 && b - 1.5 < t) t = b - Math.sqrt(6.8 - q) * 0.6; }
     return t;
   };
-  G.spawn = spawn; G.bldHit = bldHit; G.los = losBlocked; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
+  G.spawn = spawn; G.ROLES = ROLES; G.pending = () => pqN; G.bldHit = bldHit; G.los = losBlocked; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
   hud();
   return G;
 }
