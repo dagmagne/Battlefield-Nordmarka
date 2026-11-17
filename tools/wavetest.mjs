@@ -59,7 +59,7 @@ for (const w of res.waves) {
   console.log(`\n=== wave ${w.wave}: ${w.plan} (${w.units.length} vehicles)`);
   for (const u of w.units) console.log(`  ${u.type} ${u.role.padEnd(9)} g${u.grp} spawn t+${u.spawnT}s brg ${u.b0}° ${u.d0} m  min ${Math.round(u.dmin)} m  route trail/road ${u.net}  scoot-s ${u.scoots}${u.grazed ? (u.smoked ? '  graze->smoke+reverse' : '  graze->no smoke') : ''}\n      ${u.track}`);
 }
-console.log('\ntoasts:', res.toasts.filter((m) => /Wave|Contact|More|inbound|diving|Orlan|rocket|shot down|Hit by|MINE/.test(m)).join('\n        '));
+console.log('\ntoasts:', res.toasts.filter((m) => /Wave|Contact|More|inbound|diving|Orlan|rocket|Artillery|shot down|Hit by|MINE/.test(m)).join('\n        '));
 for (const x of res.sl) console.log('  stuck', JSON.stringify(x));
 console.log(`\nstuck events: ${res.stuck}; problems: ${res.nbad}`, res.bad);
 await browser.close();

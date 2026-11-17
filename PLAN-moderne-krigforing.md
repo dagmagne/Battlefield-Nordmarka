@@ -69,7 +69,8 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
   - Øk `MAXE`, og gi lette kjøretøy egne `ETYPE`-oppføringer (hp, fart, våpen, `night`-faktor for deteksjon).
 - **Nye scenarier** i `planWave`: «Motorisert raid», «ATGM-bakhold».
 
-### Fase 5: Artilleri med rekognoseringsdrone
+### Fase 5: Artilleri med rekognoseringsdrone (del A gjort)
+- **Del A, fiendtlig artilleri: gjort** på `claude/phase-5a-enemy-arty` (`src/arty.js`, granattype 10, lyden `incoming`, `tools/artytest.mjs`; se `CLAUDE.md` under Enemy artillery). Del B (egen artilleristøtte) gjøres for seg.
 - Hvis en Orlan eller en fiende har sett spilleren lenge nok (for eksempel 15 s sammenhengende i `G.rep`), kommer en serie på 4–8 granater mot posisjonen etter 20–40 s.
   - Spredning rundt den observerte posisjonen, ikke den nåværende. Å flytte seg er motmiddelet.
 - Varsel: fløytelyd og et første nedslag på avstand.

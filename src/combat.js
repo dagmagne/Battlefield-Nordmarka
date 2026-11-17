@@ -4,6 +4,7 @@ import { clamp } from './math.js';
 import { tankParts, wheelParts, droneParts, airParts, gunMat, LEO, T72, BMP, TIGR, BTR, BUGGY, MOTO } from './tank.js';
 import { cur as todCur } from './tod.js';
 import { initMinimap, MAP_M, MAP_PX } from './minimap.js';
+import { initArty } from './arty.js'; // phase 5A: enemy artillery
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
 export const MAXE = 14, MAXG = 760, MAXM = 48, MAXA = 6; // enemies, glow sprites, mines, enemy air units
@@ -13,7 +14,7 @@ export const DTYPE = [{ name: 'FPV', n: 5, t: 75, v: 26, r: 1500, see: 800, mark
 // grenades per bomber sortie, seconds between drops; a lost contact fades from the map over LOST_T s; NFLD pre-laid minefields enemies know about and drive around
 const BOMBS = 3, BOMB_RL = 0.7, LOST_T = 40, NFLD = 6;
 // mine damage by shell type (radius in m around a ground impact that sets a mine off): APFSDS, HEAT, HE, MG, 125 mm, 30 mm, smoke, VOG
-const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5, 2.5, 0.5];
+const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5, 2.5, 0.5, 7];
 // enemy air: FPV (operator-guided, finds you, dives), Lancet (higher and faster, short warning, smoke breaks its lock), Orlan-10 (circles high and feeds the enemy your position)
 // v cruise, vd dive (m/s), alt above ground, r hit radius (m), dmg range, see: lock-on range, warn: when the HUD arrow and the toast come, bat: battery (s), pc: lock chance per check in the open
 export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6, d0: 25, d1: 40, see: 380, warn: 650, bat: 160, pc: 0.3, score: 25 },
@@ -21,9 +22,9 @@ export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6
   { name: 'Orlan-10', hp: 4, v: 27, vd: 27, alt: 180, r: 1.7, d0: 0, d1: 0, see: 900, warn: 1400, bat: 1e9, pc: 0, score: 60 }];
 const HMG_RATE = 20; // hatch MG3 rounds per second (shares the 7.62 belt with the coax)
 const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
-// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber, 8 enemy Kornet ATGM (wire-guided), 9 enemy MG
-const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1], [18, 9, 3, 0.14, 5], [14, 5, 1.5, 0.18, 3]];
-const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0]; // direct-hit damage to a building by shell type (the drone charge does 100)
+// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber, 8 enemy Kornet ATGM (wire-guided), 9 enemy MG, 10 enemy 152 mm artillery (src/arty.js)
+const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1], [18, 9, 3, 0.14, 5], [14, 5, 1.5, 0.18, 3], [12, 8, 4.5, 0.32, 6]];
+const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0, 120]; // direct-hit damage to a building by shell type (the drone charge does 100)
 // enemy roles: assault closes in; overwatch takes a high spot with a view and holds; flanker swings wide to come in from the side;
 // raider (BMP) runs fast along the plowed roads to close range
 const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'flanker', 'raider'], PQN = 16;
@@ -169,6 +170,7 @@ export function initCombat(C) {
     else if (type === 6) smokeBurst(x, y, z);
     else if (type === 7) { explode(x, y, z, 0.75); splash(x, y, z, 3, 6, 18, owner); }
     else if (type === 8) explode(x, y, z, 1.7);
+    else if (type === 10) arty.boom(x, y, z, t, bSkip); // phase 5A: 152 mm
     else if (type === 9) { if (!t) for (let i = 0; i < 2; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.2 + rnd() * 2, sr() * 2, 0.35, 0.012, 0, 0, 1, 1, 1, 0.9); }
   }
   function smokeBurst(x, y, z) { C.sfx('smoke', x, y, z, 0.5); const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
@@ -705,6 +707,9 @@ export function initCombat(C) {
     return false;
   }
 
+  // ---------- phase 5A: enemy artillery (src/arty.js) ----------
+  const arty = initArty({ G, veh, rnd, ui, sfx: C.sfx, hAt, fire, explode, hurtPlayer, kill, bld: C.bld, bldFx, parts, enemies: G.enemies });
+
   // ---------- per-frame update ----------
   G.update = (dt) => {
     G.fxN = 0; // (blastN is cleared by the renderer once the scorch stamps are drawn)
@@ -775,6 +780,7 @@ export function initCombat(C) {
     // vehicles are solid for each other
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz); if (d < 5.6 && d > 0.01) { const k = (5.6 - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
     updateShells(dt); updateMines(dt); updateAir(dt);
+    arty.update(dt); // phase 5A
     for (let f = 0; f < 8; f++) { const o = f * 5; if (FI[o + 3] <= 0) continue; FI[o + 3] -= dt; const r = FI[o + 4]; // collapsed buildings burn for a few seconds
       if (rnd() < dt * 22) parts.emit(FI[o] + sr() * r, FI[o + 1] + 0.6 + rnd(), FI[o + 2] + sr() * r, sr(), 2 + rnd() * 2.5, sr(), 1 + rnd() * 0.8, 0.9 + rnd() * 1.1, 1.2, 4, 0.06, 0.06, 0.06, 0.85);
       if ((R.frame & 1) === 0) glow(FI[o] + sr() * r * 0.6, FI[o + 1] + 1.4, FI[o + 2] + sr() * r * 0.6, 2.6 + rnd() * 1.6, 9, 3.5, 0.8); }
@@ -885,6 +891,7 @@ export function initCombat(C) {
   };
   G.restart = () => {
     for (const e of G.enemies) e.on = false; for (const a of AIR) a.on = false; AQY.fill(-1); G.orlan = 0; G.thr.fill(0); minesReset(); veh.immob = 0; pqN = 0; G.bag = null; G.lastAxis = NaN; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
+    arty.reset(); // phase 5A
     D.on = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
     for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; D.iok = false;
     Object.assign(G, { sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
