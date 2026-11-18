@@ -50,6 +50,12 @@ r = await ev(`(()=>{ const t=find(3.6, 6.5); if (!t) return {err:'no small tree'
   return {downSmall:down(t.k), moved:Math.round(Math.hypot(e.x-t.sx,e.z-t.sz)), inBig, stuck:G.stuck}; })()`);
 check('an enemy T-72 knocks a small tree over and never sits inside a big trunk', !r.err && r.downSmall && r.moved > 20 && r.inBig === 0, r);
 
+// 3b (review fix): with the felled-tree restore list full, a small tree stays solid instead of letting the tank through
+r = await ev(`(()=>{ const t=find(3.6, 6.5); if (!t) return {err:'no small tree'}; __treesFull(true); __tp(t.sx, t.sz, Math.atan2(-(t.x-t.sx), -(t.z-t.sz))); __sim(1/60,10); __R.force=[1,0]; let md=1e9;
+  for (let k=0;k<60*6;k++){ __sim(1/60,1); md=Math.min(md, Math.hypot(__veh.x-t.x,__veh.z-t.z)); } __R.force=null; __treesFull(false);
+  return {h:t.h, down:down(t.k), minDist:+md.toFixed(2)}; })()`);
+check('with the restore list full, a small tree stays up and solid (no driving through it)', !r.err && !r.down && r.minDist > 1.8, r);
+
 // 4: a restart stands them up again
 r = await ev(`(()=>{ __api.restart(); __sim(1/60,5); return {small:down(ST.k)}; })()`);
 check('a restart stands the felled trees up again', r.small === false, r);
