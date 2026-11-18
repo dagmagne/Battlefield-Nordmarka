@@ -302,10 +302,10 @@ export function initInfantry(C, G, h) {
   }
 
   // ---------- minimap: spotted soldiers as small dots (dead ones grey), lost ones fading at the last known position ----------
-  function map(c, cx, mx, mz, sc, Wd) {
+  function map(c, cx, mx, mz, sc, Wd, lim = 900) { // lim: half-width of the map in metres (900 minimap, more for the large map)
     let k = 0;
     for (let i = 0; i < I.n; i++) { const o = i * 8, st = d[o + 7]; if (!st || !SEEN[i]) continue; const fresh = st === 2 || SPT[i] > 0; if (!fresh && LOST[i] > LOST_T) continue;
-      const ex = st === 2 ? d[o] : LX[i], ez = st === 2 ? d[o + 2] : LZ[i]; if (Math.abs(ex - mx) > 900 || Math.abs(ez - mz) > 900) continue;
+      const ex = st === 2 ? d[o] : LX[i], ez = st === 2 ? d[o + 2] : LZ[i]; if (Math.abs(ex - mx) > lim || Math.abs(ez - mz) > lim) continue;
       const x = clamp(cx + (ex - mx) * sc, 3, Wd - 3), y = clamp(cx + (ez - mz) * sc, 3, Wd - 3);
       c.globalAlpha = fresh ? 1 : 0.25 + 0.6 * (1 - LOST[i] / LOST_T); c.fillStyle = st === 2 ? '#59606a' : RL[i] === RPG || RL[i] === ATG ? '#ffd23f' : '#ff7a5a';
       c.fillRect(x - 1.4, y - 1.4, 2.8, 2.8); k++; }

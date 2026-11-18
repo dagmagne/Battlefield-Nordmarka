@@ -233,6 +233,7 @@ export function initCombat(C) {
       let px = x0, py = y0, pz = z0, hit = false, sf = owner === 0 && type !== 6 && G.inf.n ? inf.seg(type, x0, y0, z0, x1, y1, z1) : 2; // sf: where this frame's travel meets a soldier (2: none)
       for (let k = 1; k <= n && !hit; k++) {
         const f = k / n, qx = x0 + (x1 - x0) * f, qy = y0 + (y1 - y0) * f, qz = z0 + (z1 - z0) * f;
+        if (f >= sf && C.bld.seg(px, py, pz, x0 + (x1 - x0) * sf, y0 + (y1 - y0) * sf, z0 + (z1 - z0) * sf)) sf = 2; // a wall between the round and the soldier takes the hit (the building test below)
         if (f >= sf) { inf.hitKill(type === 3 ? 'mg' : 'shell'); const ix = x0 + (x1 - x0) * sf, iy = y0 + (y1 - y0) * sf, iz = z0 + (z1 - z0) * sf; sf = 2; // a soldier hit: APFSDS flies on, the others stop there
           if (type !== 0) { if (type !== 3) impact(type, owner, ix, iy, iz, null, 0, 0); hit = true; break; } }
         if (type !== 6) {
@@ -536,7 +537,7 @@ export function initCombat(C) {
     c.fillStyle = '#ff5a4a';
     for (let i = 0; i < MAXA; i++) { const a = AIR[i]; if (!a.on || !a.warned || a.st === 3) continue; const x = clamp(cx + (a.x - mx) * sc, 5, Wd - 5), y = clamp(cx + (a.z - mz) * sc, 5, Wd - 5), q = a.yaw;
       c.beginPath(); c.moveTo(x - Math.sin(q) * 6, y - Math.cos(q) * 6); c.lineTo(x - Math.sin(q + 2.3) * 4, y - Math.cos(q + 2.3) * 4); c.lineTo(x, y); c.lineTo(x - Math.sin(q - 2.3) * 4, y - Math.cos(q - 2.3) * 4); c.closePath(); c.fill(); c.stroke(); }
-    inf.map(c, cx, mx, mz, sc, Wd); // spotted soldiers
+    inf.map(c, cx, mx, mz, sc, Wd, lim); // spotted soldiers
     // only what has been seen (crew, sight, drones, muzzle flashes): fresh contacts solid, lost ones as a hollow marker at the last known position that fades out
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || !e.seen) continue;
       const fresh = e.dead || e.spotT > 0, ex = e.dead ? e.x : e.lx, ez = e.dead ? e.z : e.lz; if ((!fresh && e.lostT > LOST_T) || Math.abs(ex - mx) > lim || Math.abs(ez - mz) > lim) continue;
@@ -851,7 +852,7 @@ export function initCombat(C) {
     ui.toast('Smoke!');
   };
   // ---------- drones: FPV (one-way shaped charge), bomber (drops VOG grenades), recon (high and long, spots for the map) ----------
-  function droneEnd(msg) { D.on = false; D.auto = false; D.iok = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; if (msg) ui.toast(msg); }
+  function droneEnd(msg) { const own = !D.auto; D.on = false; D.auto = false; D.iok = false; if (own) { cam.mode = 0; R.snap = true; fireBlock = true; } hudDirty = true; if (msg) ui.toast(msg); } // a drone on autopilot ends without touching the tank camera
   function droneBoom() {
     explode(D.x, D.y, D.z, 1.9); splash(D.x, D.y, D.z, 4, 115, 140, 0, 0.35);
     const db = C.bld.at(D.x, D.y, D.z, 0.9); if (db >= 0) bldHit(db, 100, D.x, D.y, D.z, true); C.bld.splash(D.x, D.y, D.z, 5, 30, db, bldFx);
