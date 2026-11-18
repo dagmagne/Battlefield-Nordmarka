@@ -71,10 +71,11 @@ kbd{margin:0 1px}
 #rng{font-size:12px;opacity:.75;min-width:6ch}
 .st.warn{background:#e8b339;color:#2b1d00}.st.bad{background:#e2533f;color:#fff}
 #wave{right:calc(var(--sr) + 244px);top:calc(var(--st) + 8px);padding:6px 14px;font-weight:650;font-size:12px;letter-spacing:.08em}
-#map{right:var(--sr);bottom:var(--sb);width:176px;height:176px;border-radius:14px;border:1px solid #ffffff2c;background:#0b1420a0;pointer-events:auto;cursor:zoom-in}
+#map{right:var(--sr);bottom:var(--sb);width:232px;height:232px;border-radius:14px;border:1px solid #ffffff2c;background:#0b1420a0;pointer-events:auto;cursor:zoom-in}
 #bmap{left:50%;top:50%;transform:translate(-50%,-50%);border-radius:16px;border:1px solid #ffffff3a;background:#0b1420e8;box-shadow:0 10px 40px #000a;display:none;pointer-events:auto;cursor:zoom-out;z-index:6}
 #bmap.show{display:block}
 .touch #map{bottom:auto;top:calc(var(--st) + 60px);width:104px;height:104px;border-radius:12px}
+@media (min-height:600px){.touch #map{width:150px;height:150px}}
 .touch #wave{right:auto;left:var(--sl);top:calc(var(--st) + 46px);padding:4px 10px;font-size:10.5px}
 .touch #dbg{top:calc(var(--st) + 80px)}
 .touch #hud{gap:8px;padding:6px 10px}
@@ -103,7 +104,7 @@ kbd{margin:0 1px}
 <div id="ui">
   <div id="hud" class="pill"><span><span id="spd">0</span><small>km/h</small></span><span id="sH" class="st on">HULL 100</span><span id="sT" class="st bad" style="display:none">TRACK</span><span id="sA" class="st on">APFSDS 20</span><span id="sM" class="st">MG 2000</span><span id="sK" class="st">SMOKE 2</span><span id="sD" class="st">DRONE 5</span><span id="sR" class="st on">ARTY 1</span><span id="rng">0 m</span><span id="sC" class="st">CMDR</span></div>
   <div id="wave" class="pill">WAVE 1 · 0 KILLS</div>
-  <canvas id="map" width="352" height="352"></canvas>
+  <canvas id="map" width="464" height="464"></canvas>
   <canvas id="bmap" width="600" height="600"></canvas>
   <div id="over" class="modal"><div class="card pill"><h2 id="ovT"></h2><div id="ovP"></div><button class="go" id="ovGo">Restart (R)</button></div></div>
   <div id="top">

@@ -533,41 +533,46 @@ export function initCombat(C) {
     if (ui.droneUI) ui.droneUI(DT.name, D.on ? D.type : -1);
     ui.set('wave', G.peace ? 'FREE ROAM' : (G.wave ? 'WAVE ' + G.wave + (G.won ? '' : '/' + WAVES) : 'STAND BY') + ' · ' + G.kills + ' KILLS · ' + G.score);
   }
+  let mU = 0; if (typeof addEventListener !== 'undefined') addEventListener('resize', () => { mU = 0; }); // minimap marker scale, re-measured after a resize
   function drawMap() {
-    if (!mctx) return; const c = mctx, Wd = 176, sc = Wd / MAP_M, cx = Wd / 2;
+    if (!mctx) return; const c = mctx, Wd = MAP_PX / 2, sc = Wd / MAP_M, cx = Wd / 2;
+    if (!mU) { const w = map.clientWidth; mU = w > 0 ? Math.max(1, 136 / w) : 1; } // a small touch minimap keeps its markers readable
     const fly = D.on && !D.auto, mx0 = fly ? D.x : veh.x, mz0 = fly ? D.z : veh.z; // the map follows the drone while you fly it
     c.setTransform(1, 0, 0, 1, 0, 0);
     let mx = mx0, mz = mz0; if (mm) { mm.draw(c, mx0, mz0); mx = mm.cx; mz = mm.cz; } else c.clearRect(0, 0, MAP_PX, MAP_PX);
-    c.setTransform(MAP_PX / Wd, 0, 0, MAP_PX / Wd, 0, 0); // markers are drawn in CSS pixels
-    markers(c, Wd, sc, cx, mx, mz, 900);
+    c.setTransform(2, 0, 0, 2, 0, 0); // markers are drawn in CSS pixels
+    markers(c, Wd, sc, cx, mx, mz, MAP_M / 2, mU);
   }
-  // the markers over a map base: c in CSS pixels, Wd its size, sc pixels per metre, cx its centre, (mx, mz) the world point at the centre, lim the half-width in metres
-  function markers(c, Wd, sc, cx, mx, mz, lim) {
-    { const rx = cx + (veh.x - mx) * sc, ry = cx + (veh.z - mz) * sc; c.strokeStyle = '#ffffff38'; c.lineWidth = 1; c.beginPath(); c.arc(rx, ry, 500 * sc, 0, 6.283); c.stroke(); } // 500 m round the tank
-    c.fillStyle = '#ffffffb0'; c.fillRect(cx - 0.5, 3, 1, 6);
-    c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2;
-    // marked mines: small amber crosses
-    c.strokeStyle = '#ffc04a'; c.lineWidth = 1.3; c.beginPath();
-    for (let i = 0; i < MAXM; i++) { if (!MR[i] || (MS[i] !== 1 && MS[i] !== 2)) continue; const x = cx + (MX[i] - mx) * sc, y = cx + (MZ[i] - mz) * sc; if (x < 2 || y < 2 || x > Wd - 2 || y > Wd - 2) continue;
-      c.moveTo(x - 1.8, y - 1.8); c.lineTo(x + 1.8, y + 1.8); c.moveTo(x + 1.8, y - 1.8); c.lineTo(x - 1.8, y + 1.8); }
-    c.stroke(); c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2;
-    // air contacts that have been reported: small red carets (the Orlan once it is overhead)
-    c.fillStyle = '#ff5a4a';
-    for (let i = 0; i < MAXA; i++) { const a = AIR[i]; if (!a.on || !a.warned || a.st === 3) continue; const x = clamp(cx + (a.x - mx) * sc, 5, Wd - 5), y = clamp(cx + (a.z - mz) * sc, 5, Wd - 5), q = a.yaw;
-      c.beginPath(); c.moveTo(x - Math.sin(q) * 6, y - Math.cos(q) * 6); c.lineTo(x - Math.sin(q + 2.3) * 4, y - Math.cos(q + 2.3) * 4); c.lineTo(x, y); c.lineTo(x - Math.sin(q - 2.3) * 4, y - Math.cos(q - 2.3) * 4); c.closePath(); c.fill(); c.stroke(); }
-    inf.map(c, cx, mx, mz, sc, Wd, lim); // spotted soldiers
+  // the markers over a map base: c in CSS pixels, Wd its size, sc pixels per metre, cx its centre, (mx, mz) the world point at the centre, lim the half-width in metres, u the marker size scale
+  function markers(c, Wd, sc, cx, mx, mz, lim, u) {
+    const ol = 1.2 * u; // dark outline width
+    { const rx = cx + (veh.x - mx) * sc, ry = cx + (veh.z - mz) * sc; c.strokeStyle = '#ffffff38'; c.lineWidth = u; c.beginPath(); c.arc(rx, ry, 500 * sc, 0, 6.283); c.stroke(); } // 500 m round the tank
+    c.fillStyle = '#ffffffb0'; c.fillRect(cx - 0.5 * u, 3 * u, u, 6 * u);
+    // marked mines: amber crosses with a dark casing
+    const mr = 1.8 * u;
+    for (let p = u < 1.5 ? 1 : 0; p < 2; p++) { c.strokeStyle = p ? '#ffc04a' : '#05080cb0'; c.lineWidth = (p ? 1.3 : 3) * u; c.beginPath();
+      for (let i = 0; i < MAXM; i++) { if (!MR[i] || (MS[i] !== 1 && MS[i] !== 2)) continue; const x = cx + (MX[i] - mx) * sc, y = cx + (MZ[i] - mz) * sc; if (x < 2 || y < 2 || x > Wd - 2 || y > Wd - 2) continue;
+        c.moveTo(x - mr, y - mr); c.lineTo(x + mr, y + mr); c.moveTo(x + mr, y - mr); c.lineTo(x - mr, y + mr); }
+      c.stroke(); } // a dark casing only where markers are large; the small minimap keeps one stroke
+    c.strokeStyle = '#05080cd0'; c.lineWidth = ol;
+    // air contacts that have been reported: red carets (the Orlan once it is overhead)
+    c.fillStyle = '#ff5a4a'; const ae = 5 * u;
+    for (let i = 0; i < MAXA; i++) { const a = AIR[i]; if (!a.on || !a.warned || a.st === 3) continue; const x = clamp(cx + (a.x - mx) * sc, ae, Wd - ae), y = clamp(cx + (a.z - mz) * sc, ae, Wd - ae), q = a.yaw;
+      c.beginPath(); c.moveTo(x - Math.sin(q) * 6 * u, y - Math.cos(q) * 6 * u); c.lineTo(x - Math.sin(q + 2.3) * 4 * u, y - Math.cos(q + 2.3) * 4 * u); c.lineTo(x, y); c.lineTo(x - Math.sin(q - 2.3) * 4 * u, y - Math.cos(q - 2.3) * 4 * u); c.closePath(); c.fill(); c.stroke(); }
+    inf.map(c, cx, mx, mz, sc, Wd, lim, u); // spotted soldiers
     // only what has been seen (crew, sight, drones, muzzle flashes): fresh contacts solid, lost ones as a hollow marker at the last known position that fades out
+    const ee = 4 * u;
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || !e.seen) continue;
       const fresh = e.dead || e.spotT > 0, ex = e.dead ? e.x : e.lx, ez = e.dead ? e.z : e.lz; if ((!fresh && e.lostT > LOST_T) || Math.abs(ex - mx) > lim || Math.abs(ez - mz) > lim) continue;
-      const x = clamp(cx + (ex - mx) * sc, 4, Wd - 4), y = clamp(cx + (ez - mz) * sc, 4, Wd - 4), mk = ETYPE[e.type].map, col = e.dead ? '#59606a' : ['#ff4a3a', '#ff9a3d', '#ffd23f', '#ffb070'][mk];
-      c.beginPath(); if (mk === 1) c.rect(x - 2.6, y - 2.6, 5.2, 5.2); else if (mk === 2) { c.moveTo(x, y - 4); c.lineTo(x + 3.4, y); c.lineTo(x, y + 4); c.lineTo(x - 3.4, y); c.closePath(); } else if (mk === 3) c.arc(x, y, 2.3, 0, 6.283); else c.arc(x, y, 3.7, 0, 6.283);
+      const x = clamp(cx + (ex - mx) * sc, ee, Wd - ee), y = clamp(cx + (ez - mz) * sc, ee, Wd - ee), mk = ETYPE[e.type].map, col = e.dead ? '#7c848e' : ['#ff4a3a', '#ff9a3d', '#ffd23f', '#ffb070'][mk];
+      c.beginPath(); if (mk === 1) c.rect(x - 2.6 * u, y - 2.6 * u, 5.2 * u, 5.2 * u); else if (mk === 2) { c.moveTo(x, y - 4 * u); c.lineTo(x + 3.4 * u, y); c.lineTo(x, y + 4 * u); c.lineTo(x - 3.4 * u, y); c.closePath(); } else if (mk === 3) c.arc(x, y, 2.3 * u, 0, 6.283); else c.arc(x, y, 3.7 * u, 0, 6.283);
       if (fresh) { c.fillStyle = col; c.fill(); c.stroke(); }
-      else { c.globalAlpha = 0.25 + 0.75 * (1 - e.lostT / LOST_T); c.strokeStyle = '#05080c90'; c.lineWidth = 3; c.stroke(); c.strokeStyle = col; c.lineWidth = 1.4; c.stroke(); c.globalAlpha = 1; c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2; } }
-    const a = veh.yaw, t = veh.yaw + veh.turYaw, vx = clamp(cx + (veh.x - mx) * sc, 6, Wd - 6), vy = clamp(cx + (veh.z - mz) * sc, 6, Wd - 6);
-    c.strokeStyle = '#05080cb0'; c.lineWidth = 3; c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx - Math.sin(t) * 26, vy - Math.cos(t) * 26); c.stroke();
-    c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5; c.stroke();
-    c.fillStyle = '#7dffb0'; c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7, vy - Math.cos(a) * 7); c.lineTo(vx - Math.sin(a + 2.5) * 5, vy - Math.cos(a + 2.5) * 5); c.lineTo(vx - Math.sin(a - 2.5) * 5, vy - Math.cos(a - 2.5) * 5); c.closePath(); c.fill(); c.stroke();
-    if (D.on) { const q = D.yaw, dx = cx + (D.x - mx) * sc, dy = cx + (D.z - mz) * sc; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(dx - Math.sin(q) * 8, dy - Math.cos(q) * 8); c.lineTo(dx - Math.sin(q + 2.4) * 5, dy - Math.cos(q + 2.4) * 5); c.lineTo(dx - Math.sin(q - 2.4) * 5, dy - Math.cos(q - 2.4) * 5); c.closePath(); c.fill(); c.stroke(); }
+      else { c.globalAlpha = 0.25 + 0.75 * (1 - e.lostT / LOST_T); c.strokeStyle = '#05080c90'; c.lineWidth = 3 * u; c.stroke(); c.strokeStyle = col; c.lineWidth = 1.4 * u; c.stroke(); c.globalAlpha = 1; c.strokeStyle = '#05080cd0'; c.lineWidth = ol; } }
+    const a = veh.yaw, t = veh.yaw + veh.turYaw, ve = 6 * u, vx = clamp(cx + (veh.x - mx) * sc, ve, Wd - ve), vy = clamp(cx + (veh.z - mz) * sc, ve, Wd - ve);
+    c.strokeStyle = '#05080cb0'; c.lineWidth = 3 * u; c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx - Math.sin(t) * 26 * u, vy - Math.cos(t) * 26 * u); c.stroke();
+    c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5 * u; c.stroke();
+    c.fillStyle = '#7dffb0'; c.strokeStyle = '#05080cd0'; c.lineWidth = ol; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7 * u, vy - Math.cos(a) * 7 * u); c.lineTo(vx - Math.sin(a + 2.5) * 5 * u, vy - Math.cos(a + 2.5) * 5 * u); c.lineTo(vx - Math.sin(a - 2.5) * 5 * u, vy - Math.cos(a - 2.5) * 5 * u); c.closePath(); c.fill(); c.stroke();
+    if (D.on) { const q = D.yaw, dx = cx + (D.x - mx) * sc, dy = cx + (D.z - mz) * sc; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(dx - Math.sin(q) * 8 * u, dy - Math.cos(q) * 8 * u); c.lineTo(dx - Math.sin(q + 2.4) * 5 * u, dy - Math.cos(q + 2.4) * 5 * u); c.lineTo(dx - Math.sin(q - 2.4) * 5 * u, dy - Math.cos(q - 2.4) * 5 * u); c.closePath(); c.fill(); c.stroke(); }
   }
 
   // ---------- the large map view (Tab, or a tap on the minimap): the playable area at a glance, the same markers ----------
@@ -585,7 +590,7 @@ export function initCombat(C) {
     if (!bm) return; const c = bctx, sc = bCss / (2 * BEXT), cx = bCss / 2;
     c.setTransform(1, 0, 0, 1, 0, 0); bm.rect(c, -BEXT, -BEXT, 2 * BEXT, bPx, bPx);
     c.setTransform(bPx / bCss, 0, 0, bPx / bCss, 0, 0);
-    markers(c, bCss, sc, cx, 0, 0, BEXT);
+    markers(c, bCss, sc, cx, 0, 0, BEXT, clamp(bCss / 380, 1.2, 2.6)); // markers scale with the view's CSS size
     c.font = '600 13px system-ui, sans-serif'; c.fillStyle = '#0b1420c8'; c.fillRect(6, bCss - 32, 212, 24); c.fillStyle = '#ffffffd0'; c.fillText('MAP  ·  Tab or tap to close', 14, bCss - 15);
     c.fillStyle = '#ffffffb0'; c.fillRect(12, 14, 500 * sc, 3); c.fillText('500 m', 16 + 500 * sc, 20); // scale bar
   }
