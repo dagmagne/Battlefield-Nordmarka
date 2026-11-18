@@ -35,7 +35,7 @@ const res = await page.evaluate(async ({ waves, seed, move }) => {
     if (!info) continue;
     const wt = t - info.t0;
     for (let i = 0; i < G.enemies.length; i++) { const e = G.enemies[i]; if (!e.on || e.dead) { if (cur[i]) cur[i].dead = true; continue; }
-      let u = cur[i]; if (!u || u.dead || u.wave !== w) { u = cur[i] = { wave: w, type: e.type ? 'BMP' : 'T72', role: G.ROLES[e.role], grp: e.grp, spawnT: wt, b0: brg(e), d0: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), track: [], dmin: 1e9, net: [0, 0], scoots: 0, smoked: false }; info.units.push(u); }
+      let u = cur[i]; if (!u || u.dead || u.wave !== w) { u = cur[i] = { wave: w, type: ['T72', 'BMP', 'Tigr', 'BTR', 'Buggy', 'Moto'][e.type], role: G.ROLES[e.role], grp: e.grp, spawnT: wt, b0: brg(e), d0: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), track: [], dmin: 1e9, net: [0, 0], scoots: 0, smoked: false }; info.units.push(u); }
       const d = Math.hypot(e.x - veh.x, e.z - veh.z); u.dmin = Math.min(u.dmin, d);
       if (e.path >= 0) u.net[e.net]++;
       if (e.scT > 0) u.scoots++;
@@ -59,7 +59,7 @@ for (const w of res.waves) {
   console.log(`\n=== wave ${w.wave}: ${w.plan} (${w.units.length} vehicles)`);
   for (const u of w.units) console.log(`  ${u.type} ${u.role.padEnd(9)} g${u.grp} spawn t+${u.spawnT}s brg ${u.b0}° ${u.d0} m  min ${Math.round(u.dmin)} m  route trail/road ${u.net}  scoot-s ${u.scoots}${u.grazed ? (u.smoked ? '  graze->smoke+reverse' : '  graze->no smoke') : ''}\n      ${u.track}`);
 }
-console.log('\ntoasts:', res.toasts.filter((m) => /Wave|Contact|More/.test(m)).join('\n        '));
+console.log('\ntoasts:', res.toasts.filter((m) => /Wave|Contact|More|inbound|diving|Orlan|rocket|shot down|Hit by|MINE/.test(m)).join('\n        '));
 for (const x of res.sl) console.log('  stuck', JSON.stringify(x));
 console.log(`\nstuck events: ${res.stuck}; problems: ${res.nbad}`, res.bad);
 await browser.close();

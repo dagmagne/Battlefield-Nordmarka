@@ -1,6 +1,6 @@
 # Plan: moderne krigføring (droner, miner, lette kjøretøy, infanteri)
 
-Status: **fase 1 og 2 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines` som bygger på den; ingen av dem merget; se `CLAUDE.md` under Drones, Minimap og Mines). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
+Status: **fase 1–4 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines`, fase 3 på `claude/phase-3-air`, fase 4 på `claude/phase-4-light`, hver bygget på den forrige; ingen merget; se `CLAUDE.md` under Drones, Minimap, Mines, Enemy air og Light and wheeled vehicles). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
 miner over alt, små raske angrepsgrupper, og rekognoseringsdroner som leder artilleri.
 Alt skal fortsatt være prosedyrisk og følge reglene i `CLAUDE.md` (ingen allokering per frame, touch-kontroll for alt nytt,
 verifisering med renders og `__sim`-tester, bundle-størrelse rapporteres).
@@ -47,7 +47,7 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
 - **Fiender** kjører rundt sine egne felt (rutefinning ignorerer minesegmenter).
 - **Test:** tanken kjører inn i et felt, blir stående i X s, og HP faller. Fiender passerer uten å treffe sine egne.
 
-### Fase 3: Fiendtlige droner og MG på luken
+### Fase 3: Fiendtlige droner og MG på luken (gjort)
 - **Fiendtlig FPV:** kommer fra en retning med summende lyd (egen loop eller syntetisk) og retningsindikator i HUD (`post.wgsl` eller en lett DOM-pil som bare endres ved behov).
   - Treff gir stor skade.
   - Skogdekning og bevegelse reduserer sjansen for at den finner deg.
@@ -57,7 +57,7 @@ Faser som berører samme kode (dronen) gjøres etter hverandre. Faser i ulike de
 - **Cope cage på noen T-72:** synlig bur over tårnet (prosedyrisk gitter), som gir FPV-dronen og bombedronen redusert effekt mot den.
 - **Test:** spilleren skyter ned en innkommende FPV med luke-MG-en i `__sim`. Treff uten nedskyting gir forventet skade.
 
-### Fase 4: Lette kjøretøy
+### Fase 4: Lette kjøretøy (gjort)
 - **Tigr eller UAZ med Kornet:** svakt pansret, rask. Stopper i overwatch og skyter et trådstyrt missil som flyr synlig og sakte (cirka 250 m/s, glødende hale).
   - Spilleren kan legge røyk (bryter styringen) eller komme i dekning.
   - Missilet trenger egen prosjektiltype som styres mot siktelinjen.
