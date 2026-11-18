@@ -27,6 +27,7 @@ import { initBuildings, DMAX } from './buildings.js';
 import { Particles } from './particles.js';
 import { initUI, inp } from './ui.js';
 import { initAudio } from './audio.js';
+import { initHaptics } from './haptics.js';
 import { REC, RECM } from './sndrec.js';
 import { initMusic } from './music.js';
 import TITLE from './data/title.webp';
@@ -587,13 +588,14 @@ async function main() {
     trees(v) { R.treeSel = v; R.trees = v !== 'off'; if (R.trees) setTreeQ(TREEQ.indexOf(v)); try { localStorage.gtrees = v; } catch (e) { /* ignore */ } ui.toast('Trees: ' + v); },
     sound(v) { const on = v === undefined ? !audio.on : !!v; audio.setOn(on); music.sound(on); try { localStorage.gsnd = on ? '1' : '0'; } catch (e) { /* ignore */ } ui.toast(on ? 'Sound on' : 'Sound off'); },
     music(v) { const on = v === undefined ? music.toggle() : (music.set(v), music.on); ui.toast(on ? 'Music on' : 'Music off'); },
+    vib(v) { R.hap.setLevel(v); try { localStorage.gvib = String(v); } catch (e) { /* ignore */ } ui.toast(['Vibration off', 'Vibration light', 'Vibration full'][v]); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
+    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
-  const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
+  const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); if (R.hap) R.hap.ev(name, x, y, z, k); };
   const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
   const SOL = initSoldiers(MAXI, W.heightAt);
@@ -602,6 +604,10 @@ async function main() {
   let sndOn = true; /* on by default; a stored choice (M or the menu) and ?mute win */ try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
   if (qs.has('mute')) sndOn = false;
   const audio = initAudio({ R, cam, veh, view, game, on: sndOn, rec: REC, recM: RECM }); window.__audio = audio;
+  // controller vibration: off / light / full (menu row; localStorage.gvib, ?novib)
+  let vibL = 2; try { const g = localStorage.gvib; if (g === '0' || g === '1' || g === '2') vibL = +g; } catch (e) { /* ignore */ }
+  if (qs.has('novib')) vibL = 0;
+  const hap = R.hap = initHaptics({ veh, game, ui, level: vibL }); window.__hap = hap;
 
   // ---------- state ----------
   veh.x = W.start.x; veh.z = W.start.z; veh.yaw = W.start.yaw; veh.y = W.heightAt(veh.x, veh.z);
@@ -728,7 +734,7 @@ async function main() {
       veh.roll *= 1 - Math.min(1, dt * 1.2);
       if (veh.y <= gY) { // touchdown
         const imp = Math.max(0, gV - veh.vy);
-        veh.air = false; veh.y = gY; veh.vy = gV; veh.land = imp; veh.dpV -= Math.min(0.6, imp * 0.05);
+        veh.air = false; veh.y = gY; veh.vy = gV; veh.land = imp; sfx('land', veh.x, veh.y, veh.z, imp); veh.dpV -= Math.min(0.6, imp * 0.05);
         veh.shake = Math.max(veh.shake, Math.min(1.3, imp / 9)); veh.v *= 1 - Math.min(0.3, imp * 0.012);
       }
     }
@@ -871,7 +877,7 @@ async function main() {
     cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
     emitParticles(dt, BM);
     const pn = parts.update(dt, W.heightAt, 1.3, 0.5);
-    audio.update(dt);
+    audio.update(dt); hap.update(dt);
     if (R.simOnly) return; // logic-only step for scripted tests (window.__sim)
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
