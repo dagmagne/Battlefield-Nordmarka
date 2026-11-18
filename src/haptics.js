@@ -19,7 +19,7 @@ export function initHaptics(o) {
   }
   // game events (the same names as the sound events, plus 'land'); distances from the vehicle being controlled
   function ev(n, x, y, z, k) {
-    if (!H.level) return;
+    if (!H.level || !ui.pad) return; // nothing to feel it on: do not queue kicks that would replay when a pad connects
     const fly = D.on && !D.auto, lx = fly ? D.x : veh.x, ly = fly ? D.y : veh.y + 1.5, lz = fly ? D.z : veh.z;
     const d = Math.sqrt((x - lx) * (x - lx) + (y - ly) * (y - ly) + (z - lz) * (z - lz));
     switch (n) {
@@ -51,7 +51,7 @@ export function initHaptics(o) {
   function update(dt) {
     let pad = ui.pad;
     if (pad && !pad.vibrationActuator && !pad.hapticActuators) pad = null;
-    if (!pad || !H.level || (typeof document !== 'undefined' && document.hidden)) { if (active) stop(); return; }
+    if (!pad || !H.level || (typeof document !== 'undefined' && document.hidden)) { if (active) stop(); else KT.fill(0); return; } // drop pending kicks too
     const menu = ui.modalOpen && ui.modalOpen(); // help or menu open: only kicks (the test buzz of the menu row)
     // continuous layer: engine (pulses that follow the rpm of the sound), tracks by speed (softer on a plowed road), turret traverse, MG
     const alive = !veh.dead, av = Math.abs(veh.v), sv = Math.min(1, av / 18), th = alive ? Math.abs(veh.throttle) : 0;

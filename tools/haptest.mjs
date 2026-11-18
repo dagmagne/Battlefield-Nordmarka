@@ -26,7 +26,9 @@ const snap = () => ev('({ n: __vlog.length, last: __vlog[__vlog.length - 1] || n
 
 await step(30);
 let r = await snap(); check('no pad: nothing sent', r.n === 0, r);
-await ev("window.__padOn = true; dispatchEvent(new Event('gamepadconnected'))"); await step(30);
+await ev('__hap.ev("hit", __veh.x, __veh.y + 1.5, __veh.z, 40)'); await step(30); // a heavy hit while no pad is connected
+await ev("window.__padOn = true; dispatchEvent(new Event('gamepadconnected'))"); await step(2);
+r = await snap(); check('connecting a pad does not replay old kicks', r.s < 0.1, r); await step(28);
 // engine pulses: count the strong motor's rises through the middle of its range over the last ~2 s of effects sent
 const pulses = (js) => ev(`(() => { const L = __vlog.slice(-${js}), v = L.map((e) => e[1]), hi = Math.max(...v), lo = Math.min(...v), m = (hi + lo) / 2, h = (hi - lo) * 0.2; let c = 0, up = v[0] > m; for (let i = 1; i < v.length; i++) { if (!up && v[i] > m + h) { up = true; c++; } else if (up && v[i] < m - h) up = false; } return { c, max: hi, min: lo, n: v.length }; })()`); // rising crossings with hysteresis
 await step(60); let t0i = await ev('__vlog.length'); await step(120); let pi = await pulses((await ev('__vlog.length')) - t0i); pi.c /= 2; r = await snap(); // per second
