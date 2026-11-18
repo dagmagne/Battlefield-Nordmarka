@@ -10,7 +10,7 @@ export const PARTS = 13, IST = PARTS * 16 + 4; // floats per instance: 13 part m
 // Walk and run cycles in cycles per second at their matching ground speed: advance `phase` by dt * speed / WALK_V (or RUN_V)
 // seconds-equivalent and the planted foot does not slide.
 export const WALK_HZ = 0.92, WALK_V = 1.45, RUN_HZ = 1.38, RUN_V = 3.9;
-const LOD_FAR = 120, MAX_D = 650;
+const LOD_FAR = 120, MAX_D = 1600; // drawn out to the infantry's own engagement ranges (ATGM teams fire from up to 1500 m); beyond 120 m the 244-triangle LOD
 
 // bind skeleton (metres): pelvis origin = hip-joint centre; joints relative to their parent part
 const HIPX = 0.095, WAIST = 0.10, NECK = 0.47, SHX = 0.195, SHY = 0.395, UA = 0.29, FA = 0.31, TH = 0.42, SH = 0.42, ANK = 0.085;

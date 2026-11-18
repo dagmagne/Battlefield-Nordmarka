@@ -273,7 +273,8 @@ export function initInfantry(C, G, h) {
       if (LT[i] <= 0) { LT[i] = 0.45; eye(i); VIS[i] = !veh.dead && dist < 1800 ? h.losVis(LP[0], LP[1], LP[2], veh.x, veh.y + 1.9, veh.z) : 0;
         if (VIS[i] > 0.2 && !veh.dead) { const p = d[o + 4], hid = HB[i] >= 0 && !exposed(i), r = (p === 4 ? 220 : p === 3 || p === 7 ? 380 : 600) * (hid ? 0.12 : 1) * thm * rng0 * (1 - (R.trees ? h.canAt(x, z) / 255 * 0.5 : 0));
           if (dist < r && (dist < 60 || Math.abs(wrap(Math.atan2(-(x - veh.x), -(z - veh.z)) - aim.yaw)) < 0.75)) SPT[i] = Math.max(SPT[i], 6); } }
-      if (VIS[i] > 0) SEE[i] = Math.min(4, SEE[i] + (VIS[i] * sig / (1 + dist * dist / (RL[i] === ATG ? SEE_RA * SEE_RA : SEE_RI * SEE_RI)) * (KN[i] > 0 ? 1.6 : 1) - FLOOR) * dt); else SEE[i] = Math.max(0, SEE[i] - 0.4 * dt);
+      if (VIS[i] > 0) SEE[i] = Math.min(4, SEE[i] + (VIS[i] * sig / (1 + dist * dist / (RL[i] === ATG ? SEE_RA * SEE_RA : SEE_RI * SEE_RI)) * (KN[i] > 0 ? 1.6 : 1) - FLOOR) * dt); else SEE[i] -= 0.4 * dt;
+      if (SEE[i] < 0) SEE[i] = 0; // detection progress never goes negative (as for the vehicles)
       if (dist < HEAR && Math.abs(veh.v) > 1 && !veh.dead) KN[i] = Math.max(KN[i], 5); // they hear the engine and the tracks
       if (SEE[i] >= 1 && VIS[i] > 0) G.spot = true;
       KN[i] -= dt; SUP[i] = Math.max(0, SUP[i] - dt * 0.5); REL[i] -= dt;

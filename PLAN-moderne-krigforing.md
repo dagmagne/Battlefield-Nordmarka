@@ -1,6 +1,6 @@
 # Plan: moderne krigføring (droner, miner, lette kjøretøy, infanteri)
 
-Status: **fase 1–6 gjort** (fase 1 på `claude/gpu-setup-phase-1-92182d`, fase 2 på `claude/phase-2-mines`, fase 3 på `claude/phase-3-air`, fase 4 på `claude/phase-4-light`, fase 5 på `claude/phase-5-arty`, fase 6 på `claude/phase-6-infantry`, hver bygget på den forrige; ingen merget; se `CLAUDE.md` under Drones, Minimap, Mines, Enemy air og Light and wheeled vehicles). Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
+Status: **fase 1–6 gjort og merget til `main`** (via PR #2–#6). Neste: fase 6b (realismeløft for soldatene) og fase 7. Inspirert av krigføringen i Ukraina: droner som hovedvåpen, elektronisk krigføring (EW) og fiberoptiske droner,
 miner over alt, små raske angrepsgrupper, og rekognoseringsdroner som leder artilleri.
 Alt skal fortsatt være prosedyrisk og følge reglene i `CLAUDE.md` (ingen allokering per frame, touch-kontroll for alt nytt,
 verifisering med renders og `__sim`-tester, bundle-størrelse rapporteres).

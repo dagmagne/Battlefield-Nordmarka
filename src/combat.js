@@ -772,7 +772,7 @@ export function initCombat(C) {
     // coaxial MG3: the fire control corrects for its steeper trajectory at the lased range
     // one MG control: the coax by default; the hatch MG when the view is above what the gun can elevate to or a drone is close to the crosshair (Q / R3 force the hatch MG)
     let hatch = !!inp.aa;
-    if (!hatch && inp.mg && cam.mode === 0 && !R.pose) { if (aim.pitch > 0.3) hatch = true;
+    if (!hatch && inp.mg && cam.mode <= 1 && !R.pose) { if (aim.pitch > 0.3) hatch = true;
       else for (let j = 0; j < MAXA; j++) { const q = AIR[j]; if (!q.on || q.st === 3) continue; const qx = q.x - cam.x, qy = q.y - cam.y, qz = q.z - cam.z, ql = Math.hypot(qx, qy, qz); if (ql < 1500 && (qx * aim.dx + qy * aim.dy + qz * aim.dz) / ql > 0.996) { hatch = true; break; } } }
     G.hmgAuto = hatch;
     if ((G.mgOn = inp.mg && !hatch && !veh.dead && G.mg > 0)) {
