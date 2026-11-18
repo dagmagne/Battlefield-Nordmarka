@@ -509,7 +509,7 @@ async function main() {
   const upPipe = mkPost('fsUp', HDR, { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'one', dstFactor: 'zero' } });
   const NB = Q.name === 'low' ? 4 : 6;
   const pU = [], pUData = [];
-  for (let i = 0; i < NB * 2 + 1; i++) { pU[i] = device.createBuffer({ size: 80, usage: U.UNIFORM | U.COPY_DST }); pUData[i] = new Float32Array(20); }
+  for (let i = 0; i < NB * 2 + 1; i++) { pU[i] = device.createBuffer({ size: 96, usage: U.UNIFORM | U.COPY_DST }); pUData[i] = new Float32Array(24); }
   const black = device.createTexture({ size: [1, 1], format: HDR, usage: TB }).createView();
 
   // ---------- GPU timing ----------
@@ -789,7 +789,7 @@ async function main() {
     if (cam.mode === 4 && D.on && D.type === 1 && D.iok) { const dw = vp[3] * D.ix + vp[7] * D.iy + vp[11] * D.iz + vp[15];
       if (dw > 0.1) { R.dropSx = (vp[0] * D.ix + vp[4] * D.iy + vp[8] * D.iz + vp[12]) / dw; R.dropSy = (vp[1] * D.ix + vp[5] * D.iy + vp[9] * D.iz + vp[13]) / dw; } }
   }
-  const chaseP = new Float32Array(5);
+  const chaseP = new Float32Array(5), osdV = new Float32Array(10); let dzAcc = 0; R.dZoom = 1; R.dFirst = false;
   function updateCamera(dt, BM) {
     const sens = isTouch ? 0.006 : 0.0045, sight = cam.mode === 1 || (inp.sight && cam.mode === 0);
     if (sight && cam.mode === 0) cam.mode = 1; else if (cam.mode === 1 && cam.held && !inp.sight) cam.mode = 0;
@@ -799,17 +799,36 @@ async function main() {
       if (D.on) { // pad yaw: a rate that spins up firmly and coasts down slowly when the stick is let go (mouse turns stay direct)
         const u = inp.yawR; D.yr += (-u * 1.5 - D.yr) * Math.min(1, dt * (Math.abs(u) > 0.05 ? 5 : 4)); D.yaw += D.yr * dt;
       }
+      if (D.on) { // view levels (D-pad up/down, wheel, pinch): FPV 0 chase far, 1 chase, 2 goggles; bomber/recon 0 outside, 1 camera, 2 zoom 2×, 3 zoom 4×
+        dzAcc += inp.zoom; const top = D.type ? 3 : 2, v0 = D.view;
+        if (dzAcc <= -0.3) { D.view = Math.min(top, D.view + 1); dzAcc = 0; } else if (dzAcc >= 0.3) { D.view = Math.max(0, D.view - 1); dzAcc = 0; }
+        if (D.view !== v0) { game.dview[D.type] = D.view; ui.toast(D.type ? ['Outside view', 'Camera', 'Camera 2×', 'Camera 4×'][D.view] : ['Chase camera, far', 'Chase camera', 'FPV goggles'][D.view]); }
+      } else dzAcc = 0;
+      const zk = D.on && D.type ? (D.view === 2 ? 0.5 : D.view === 3 ? 0.25 : 1) : 1; R.dZoom = zk; // optical zoom: narrower field, slower look
+      R.dFirst = D.on && (D.type ? D.view >= 1 : D.view === 2); // first person: the drone mesh is not drawn
       if (D.on && D.type) { // bomber and recon: the view from the gimbal camera under the airframe, which tilts down to the vertical
-        D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.5707, 0.35);
+        D.yaw -= inp.lookX * sens * 0.6 * zk; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6 * zk, -1.5707, 0.35);
         const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
-        cam.x = D.x; cam.z = D.z; cam.y = Math.max(D.y - 0.2, W.heightAt(cam.x, cam.z) + 0.3);
-        if (cp < 0.02) lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, -Math.sin(D.yaw), 0, -Math.cos(D.yaw)); // straight down: up is the heading
-        else lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
-      } else if (D.on) { // rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
+        if (D.view === 0) { // outside: behind and above the airframe along the heading, looking a little ahead of it (handy for landing on the tank)
+          const hx = -Math.sin(D.yaw), hz = -Math.cos(D.yaw);
+          cam.x = D.x - hx * 4.5; cam.z = D.z - hz * 4.5; cam.y = Math.max(D.y + 1.8, W.heightAt(cam.x, cam.z) + 0.6);
+          lookAt(view, cam.x, cam.y, cam.z, D.x + hx * 5, D.y - 1.2, D.z + hz * 5, 0, 1, 0);
+        } else {
+          cam.x = D.x; cam.z = D.z; cam.y = Math.max(D.y - 0.2, W.heightAt(cam.x, cam.z) + 0.3);
+          if (cp < 0.02) lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, -Math.sin(D.yaw), 0, -Math.cos(D.yaw)); // straight down: up is the heading
+          else lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
+        }
+      } else if (D.on) { // FPV, rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
         D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.3, 1.1);
         const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
-        cam.x = D.x - fx * 2.3; cam.z = D.z - fz * 2.3; cam.y = Math.max(D.y - fy * 2.3 + 0.55, W.heightAt(cam.x, cam.z) + 0.4);
-        lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy - 0.06, cam.z + fz, 0, 1, 0);
+        if (D.view === 2) { // goggles: the camera in the nose
+          cam.x = D.x + fx * 0.3; cam.z = D.z + fz * 0.3; cam.y = Math.max(D.y + fy * 0.3 + 0.06, W.heightAt(cam.x, cam.z) + 0.2);
+          lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
+        } else {
+          const cd = D.view ? 2.3 : 7, cu = D.view ? 0.55 : 1.9;
+          cam.x = D.x - fx * cd; cam.z = D.z - fz * cd; cam.y = Math.max(D.y - fy * cd + cu, W.heightAt(cam.x, cam.z) + 0.4);
+          lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy - (D.view ? 0.06 : 0.2), cam.z + fz, 0, 1, 0);
+        }
       } else { // after the detonation: pull back and up, and keep watching the blast for a few seconds
         const tx = D.bx + Math.sin(D.yaw) * 11, tz = D.bz + Math.cos(D.yaw) * 11, ty = Math.max(D.by + 5, W.heightAt(tx, tz) + 2.5), k = Math.min(1, dt * 1.5);
         cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.z += (tz - cam.z) * k; cam.y = Math.max(cam.y, W.heightAt(cam.x, cam.z) + 0.6);
@@ -884,7 +903,7 @@ async function main() {
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
 
     const rw = Math.max(8, Math.round(R.w * R.scale)), rh = Math.max(8, Math.round(R.h * R.scale));
-    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * cam.fovNow * (cam.mode === 4 ? 1.25 : 1);
+    const fovy = cam.fov * (R.w < R.h ? 1.3 : 1) * cam.fovNow * (cam.mode === 4 ? 1.25 * R.dZoom : 1);
     perspRZ(proj, fovy, rw / rh, 0.25);
     mul(vp, proj, view); invert(ivp, vp);
     GU.set(vp, O.viewProj); GU.set(ivp, O.invViewProj);
@@ -953,7 +972,7 @@ async function main() {
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
     if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
-    if (droneOn && !hV && !(cam.mode === 4 && game.drone.type)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
+    if (droneOn && !hV && !(cam.mode === 4 && R.dFirst)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
     for (let i = 0; i < MAXA; i++) { const a = game.air[i]; if (!a.on || hV) continue; const m = aMesh[a.type]; p.setBindGroup(1, aObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.cage ? 6 : e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
@@ -993,6 +1012,12 @@ async function main() {
     const Dr = game.drone, drop = cam.mode === 4 && Dr.on && Dr.type === 1;
     fu[8] = cam.mode === 4 ? R.dropSx : aim.sx; fu[9] = cam.mode === 4 ? R.dropSy : aim.sy; fu[10] = drop ? (Dr.bombs ? clamp(1 - Dr.rel / 0.7, 0, 1) : 0) : R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = drop ? (Dr.bombs ? 1 : 0) : aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
     fu[16] = game.thr[0]; fu[17] = game.thr[1]; fu[18] = game.thr[2]; fu[19] = game.thr[3]; // incoming drone arrows
+    fu[20] = cam.mode === 4 && Dr.on && R.dFirst && !R.pose ? (Dr.type ? 2 : 1) : 0; fu[21] = Dr.sig; // drone video look (goggles / digital)
+    if (fu[20] && hudOn) { // OSD numbers (ui.osd writes only what changed, a few times a second)
+      const O = osdV, hx = veh.x - Dr.x, hz = veh.z - Dr.z, rel = Math.atan2(-hx, -hz) - Dr.yaw; O[0] = Dr.type; O[1] = Math.round(1 / R.dZoom); O[2] = Math.round(Dr.sig * 100);
+      O[3] = Math.max(0, Math.ceil(Dr.t)); O[4] = Math.max(0, Math.round(Dr.t / Dr.tMax * 100)); O[5] = Math.round((Dr.type ? Math.hypot(Dr.vx, Dr.vz) : Math.hypot(Dr.vx, Dr.vy, Dr.vz)) * 10);
+      O[6] = Math.round(Dr.y - W.heightAt(Dr.x, Dr.z)); O[7] = Math.round(Math.hypot(hx, hz) / 10) * 10; O[8] = ((Math.round(-rel / (Math.PI / 4)) % 8) + 8) % 8; O[9] = Dr.bombs; ui.osd(fu[20], O);
+    } else ui.osd(0, osdV);
     device.queue.writeBuffer(pU[NB * 2], 0, fu);
     finalPass.colorAttachments[0].view = ctx.getCurrentTexture().createView();
     const fp = enc.beginRenderPass(finalPass); fp.setPipeline(finalPipe); fp.setBindGroup(0, finalBG); fp.draw(3); fp.end();

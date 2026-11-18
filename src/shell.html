@@ -79,6 +79,16 @@ kbd{margin:0 1px}
 .touch #dbg{top:calc(var(--st) + 80px)}
 .touch #hud{gap:8px;padding:6px 10px}
 #ovP{opacity:.85;line-height:1.5}
+#osd{left:50%;top:50%;transform:translate(-50%,-50%);width:min(70vw,112vh);height:min(64vh,46vw);display:none;color:#fff;font:700 15px/1.35 ui-monospace,Menlo,Consolas,monospace;text-shadow:0 0 2px #000,0 0 3px #000,1px 1px 0 #000}
+#osd.a,#osd.d{display:block}
+#osd>div{position:absolute;white-space:pre}
+#oTL{left:0;top:0}#oTR{right:0;top:0;text-align:right}#oBL{left:0;bottom:0}#oBR{right:0;bottom:0;text-align:right}#oBC{left:50%;bottom:0;transform:translateX(-50%);text-align:center}
+#oTC{left:50%;top:22%;transform:translateX(-50%);color:#ff5a4a;font-size:17px;animation:oblink 1s steps(2) infinite}
+@keyframes oblink{50%{opacity:.25}}
+#oX{left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;background:linear-gradient(#fff,#fff) center/2px 10px no-repeat,linear-gradient(#fff,#fff) center/10px 2px no-repeat;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000)}
+#osd.d{font:650 13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.05em;text-shadow:0 0 2px #000,0 0 4px #000,0 1px 2px #000}
+#osd.d #oX{display:none}
+.droning #keys,.droning #padd,.droning #padk{opacity:.6}
 #hold{left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;display:none}
 #hold.show{display:block}
 #hold svg{width:84px;height:84px;transform:rotate(-90deg);filter:drop-shadow(0 1px 3px #000a)}
@@ -145,10 +155,11 @@ kbd{margin:0 1px}
     <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg><span id="bBl">BOOM</span></button>
   </div>
   <div id="padk" class="pill"><b>L stick</b> drive · <b>R stick</b> aim · <kbd>R2</kbd> fire · <kbd>L2</kbd> sight · <kbd>R1</kbd> MG · <kbd>L1</kbd> smoke · <kbd>□</kbd> ammo · <kbd>△</kbd> thermal · hold <kbd>✕</kbd> drone · hold <kbd>○</kbd> artillery · <kbd>↑</kbd><kbd>↓</kbd> zoom · <kbd>←</kbd><kbd>→</kbd> type · <kbd>Create</kbd> map</div>
-  <div id="padd" class="pill"><b>L stick</b> height · turn · <b>R stick</b> fly · <kbd>L1</kbd><kbd>L2</kbd> tilt camera · <kbd>R2</kbd> detonate / drop · hold <kbd>✕</kbd> back to the tank · hold <kbd>○</kbd> artillery · <kbd>△</kbd> thermal · <kbd>Create</kbd> map</div>
+  <div id="padd" class="pill"><b>L stick</b> height · turn · <b>R stick</b> fly · <kbd>L1</kbd><kbd>L2</kbd> tilt camera · <kbd>R2</kbd> detonate / drop · hold <kbd>✕</kbd> back to the tank · hold <kbd>○</kbd> artillery · <kbd>△</kbd> thermal · <kbd>↑</kbd><kbd>↓</kbd> view · <kbd>Create</kbd> map</div>
   <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>Tab</kbd> map · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>Z</kbd> type · <kbd>B</kbd> artillery · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
+  <div id="osd"><div id="oTL"></div><div id="oTR"></div><div id="oTC"></div><div id="oBL"></div><div id="oBC"></div><div id="oBR"></div><div id="oX"></div></div>
   <div id="hold"><svg viewBox="0 0 84 84"><circle class="hb" cx="42" cy="42" r="34"/><circle class="hf" cx="42" cy="42" r="34"/></svg><div id="holdT" class="pill"></div></div>
   <div id="help" class="modal"><div class="card pill">
     <h2>Battlefield Nordmarka — Leopard 2A4NO</h2>
@@ -167,7 +178,7 @@ kbd{margin:0 1px}
       <b><kbd>T</kbd> <kbd>N</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · sound · music</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
       <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight (hold; L3 locks it) · R1 MG · R3 force hatch MG · L1 smoke · □ ammo · △ thermal · hold ✕ launch drone · hold ○ artillery · D-pad ↑↓ magnification, ←→ drone type · Create map · Options menu (Vibration: off / light / full)</span>
-      <b>Pad, drone</b><span>Like a DJI controller (Mode 2): left stick height and turn · right stick fly · L1/L2 tilt the camera · R2 detonate / drop · hold ✕ back to the tank (recon: autopilot) · hold ○ artillery where the camera looks · △ thermal</span>
+      <b>Pad, drone</b><span>Like a DJI controller (Mode 2): left stick height and turn · right stick fly · L1/L2 tilt the camera · R2 detonate / drop · hold ✕ back to the tank (recon: autopilot) · hold ○ artillery where the camera looks · △ thermal · D-pad ↑↓ view: FPV chase far / chase / goggles, bomber and recon outside / camera / 2× / 4× (the mouse wheel and pinch do the same)</span>
     </div>
     <div class="grid" id="hT">
       <b>Left thumb</b><span>Joystick: push to drive, sideways to steer</span>

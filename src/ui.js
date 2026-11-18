@@ -166,6 +166,7 @@ export function initUI(api, isTouch) {
     gFire = bv(7) > 0.5;
     if (fly) { // drone, DJI Mode 2 (yaw is a rate with momentum, see main.js): left stick height and yaw, right stick forward/back and sideways, L1/L2 tilt the gimbal (the FPV's nose)
       gY = -ly; gZ = -ry; gX = rx; inp.yawR = lx; inp.lookY += (bv(6) - bv(4)) * 7;
+      if (press(12)) inp.zoom -= 0.35; if (press(13)) inp.zoom += 0.35; // view level: in towards goggles / zoom, out towards the chase or outside view
       for (let j = 0; j < PADT.length; j++) pb[PADT[j]] = down(PADT[j]) ? 1 : 0; // tank-only buttons: track them so a press in flight does not fire on return
       return;
     }
@@ -202,6 +203,26 @@ export function initUI(api, isTouch) {
   U.show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
   // drone buttons (rare): the DRONE button names the selected type; in flight the action button reads BOOM (FPV), DROP (bomber) or is hidden (recon)
   U.droneUI = (name, flying) => { $('bXl').textContent = name; $('bBl').textContent = flying === 1 ? 'DROP' : 'BOOM'; $('bB').style.visibility = flying === 2 ? 'hidden' : ''; };
+  // drone OSD (rare writes: at most every 0.15 s and only for the corners whose text changed). mode 0 off, 1 analog FPV goggles, 2 digital DJI-style.
+  // o: [type, zoom, signal %, seconds left, battery %, speed m/s ×10, height m, distance m, bearing to the tank (0..7, 0 = ahead), grenades]
+  const OSDA = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'], OSDN = ['FPV', 'BOMB', 'RECON'], oL = new Float32Array(10).fill(-1); let oM = -1, oT = 0;
+  const oSet = (id, t) => { const e = $(id); if (e.textContent !== t) e.textContent = t; };
+  U.osd = (mode, o) => {
+    if (mode !== oM) { oM = mode; $('osd').className = mode === 1 ? 'a' : mode === 2 ? 'd' : ''; oL.fill(-1); oT = 0; }
+    if (!mode) return;
+    const now = performance.now(); if (now - oT < 150) return;
+    let same = true; for (let i = 0; i < 10; i++) if (oL[i] !== o[i]) { same = false; oL[i] = o[i]; } if (same) return; oT = now;
+    const sig = o[2], sec = o[3], mm = Math.floor(sec / 60), ss = String(sec % 60).padStart(2, '0'), ar = OSDA[o[8]];
+    if (mode === 1) {
+      oSet('oTL', 'RSSI ' + String(sig).padStart(3) + (sig < 25 ? ' !' : '')); oSet('oTR', mm + ':' + ss + '\nBAT ' + String(o[4]).padStart(3) + '%');
+      oSet('oBL', String(Math.round(o[5] * 0.36)).padStart(3) + ' KM/H'); oSet('oBR', 'ALT ' + String(o[6]).padStart(4) + ' M'); oSet('oBC', ar + ' HOME ' + o[7] + ' M');
+    } else {
+      const bars = '▮▮▮▮▮'.slice(0, Math.ceil(sig / 20)) + '▯▯▯▯▯'.slice(0, 5 - Math.ceil(sig / 20));
+      oSet('oTL', OSDN[o[0]] + (o[1] > 1 ? '   ' + o[1] + '×' : '')); oSet('oTR', 'SIG ' + bars + '    ' + o[4] + '%  ' + mm + ':' + ss);
+      oSet('oBL', 'H ' + o[6] + ' m    H.S ' + (o[5] / 10).toFixed(1) + ' m/s'); oSet('oBR', 'D ' + o[7] + ' m  ' + ar); oSet('oBC', o[0] === 1 ? 'GRENADES ' + o[9] : '');
+    }
+    oSet('oTC', sig < 25 ? (mode === 1 ? 'LOW SIGNAL' : 'WEAK SIGNAL — turn back') : '');
+  };
   // end-of-game card (knocked out / victory); `cont` lets the player close it and keep going
   let overCont = false;
   U.over = (title, text, cont) => { overCont = !!cont; $('over').classList.toggle('show', !!title); if (title) { $('ovT').textContent = title; $('ovP').textContent = text; if (document.pointerLockElement) document.exitPointerLock(); } };

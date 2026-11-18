@@ -50,6 +50,7 @@ export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
   const SO = new Float32Array(5), TRO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
+  G.dview = [1, 1, 1]; // last view level per drone type (kept between launches)
   const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
     type: 0, bombs: 0, rel: 0, climb: 0, away: false, auto: false, ax: 0, az: 0, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
   G.inf = { n: 0, d: new Float32Array(MAXI * 8) }; // soldiers (phase 6): per soldier [x, y, z, yaw, pose, phase, aim, state]; logic in infantry.js, drawn by the renderer
@@ -112,6 +113,13 @@ export function initCombat(C) {
     for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1 || CL[o + 3] < 1.2 || CL[o + 3] > 22) continue;
       const t = clamp(((CL[o] - x0) * dx + (CL[o + 1] - y0) * dy + (CL[o + 2] - z0) * dz) / (d * d), 0, 1); if (Math.hypot(x0 + dx * t - CL[o], y0 + dy * t - CL[o + 1], z0 + dz * t - CL[o + 2]) < 10) return 0; }
     return Math.exp(-fol / (255 * FOL_L));
+  }
+  // radio path from the tank to a drone: terrain in the way costs most (some signal still bends round), a building less; smoke and trees do not matter
+  function radioPath(x0, y0, z0, x1, y1, z1) {
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, n = clamp(Math.ceil(Math.hypot(dx, dz) / 10), 4, 120); let f = 1;
+    for (let k = 1; k < n; k++) { const t = k / n; if (y0 + dy * t < hAt(x0 + dx * t, z0 + dz * t) + 1) { f = 0.4; break; } }
+    if (C.bld.seg(x0, y0, z0, x1, y1, z1)) f *= 0.75;
+    return f;
   }
   const losBlocked = (x0, y0, z0, x1, y1, z1) => losVis(x0, y0, z0, x1, y1, z1) <= 0;
   const canAt = (x, z) => W.nrm[(clamp(((z + HALF) / WS * HN) | 0, 0, HN - 1) * HN + clamp(((x + HALF) / WS * HN) | 0, 0, HN - 1)) * 4 + 2]; // canopy density 0..255
@@ -941,6 +949,9 @@ export function initCombat(C) {
     if (D.type && D.away && !D.auto && dv < 4.5 && D.y < veh.y + 4.5 && Math.hypot(D.vx, D.vy, D.vz) < 5) { G.dn[D.type]++; droneEnd(D.type === 1 ? 'Bomber landed — rearmed' : 'Recon drone landed'); return; }
     if (D.t <= 0) { droneEnd('Drone battery empty — lost'); return; }
     if (dv > T.r) { droneEnd('Drone out of radio range — lost'); return; }
+    // video link quality for the goggles / OSD (0..1): fine out to 70 % of the radio range, then fading; a hill between tank and drone costs much, a building some
+    D.sq -= dt; if (D.sq <= 0) { D.sq = 0.25; const d3 = Math.hypot(D.x - veh.x, D.y - veh.y - 3, D.z - veh.z); D.sigT = clamp((T.r - d3) / (0.3 * T.r), 0, 1) * radioPath(veh.x, veh.y + 3, veh.z, D.x, D.y, D.z); }
+    D.sig += (D.sigT - D.sig) * Math.min(1, dt * 3);
     D.scan -= dt; if (D.scan <= 0) { D.scan = 0.3; droneScan(T); }
     const sec = Math.ceil(D.t); if (sec !== D.sec) { D.sec = sec; hudDirty = true; }
     droneParts(C.dobj, D); C.dobj[131] = 1;
@@ -955,7 +966,7 @@ export function initCombat(C) {
     const ty = G.dsel, T = DTYPE[ty];
     if (G.dn[ty] <= 0) { ui.toast(`No ${T.name} drones left` + (G.dn[0] + G.dn[1] + G.dn[2] ? ' — Z picks another type' : '')); return; }
     G.dn[ty]--; Object.assign(D, { on: true, type: ty, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: ty ? -0.5 : -0.12, t: T.t, spin: 0, tp: 0, tr: 0, sec: T.t,
-      bombs: ty === 1 ? BOMBS : 0, rel: 0, yr: 0, climb: T.climb, away: false, scan: 0, iok: false });
+      bombs: ty === 1 ? BOMBS : 0, rel: 0, yr: 0, view: G.dview[ty], sig: 1, sigT: 1, sq: 0, tMax: T.t, climb: T.climb, away: false, scan: 0, iok: false });
     cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
     if (ui.pad) ui.toast((ty === 0 ? 'FPV away — R2 detonates' : ty === 1 ? 'Bomber away — R2 drops a grenade on the marker' : 'Recon drone climbing — hold ✕: autopilot')
       + ' · left stick height/turn · right stick fly · L1/L2 tilt the camera' + (ty === 2 ? '' : ' · hold ✕: back to the tank'));
