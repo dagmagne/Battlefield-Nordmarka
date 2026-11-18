@@ -69,7 +69,7 @@ r = await ev('({armed:M.armed(), marked:Array.from(M.s).filter((s,i)=>s===1&&M.r
 check('a recon drone looking at the field marks its buried mines', r.marked >= Math.min(4, r.armed) && r.armed >= 5, r);
 await ev('__step(1/60, 14)'); await page.locator('#map').screenshot({ path: `${out}/map-mines.png` });
 await shot('drone-sees-field');
-await ev('__game.droneKey(); __sim(1/60, 5)');
+await ev('__game.drone.t=0.5; __sim(1/60, 60)'); // end the recon (X now hands it to its autopilot)
 
 // 6: an enemy drives round its own field on a road towards the player
 r = await ev(`(()=>{ const RD=__W.roads.filter((t)=>t.n>120&&Math.abs(t.pts[t.n]) < __W.PLAY-200 && Math.abs(t.pts[t.n+1]) < __W.PLAY-200).sort((a,b)=>b.n-a.n)[0]; if(!RD) return {err:'no road'};

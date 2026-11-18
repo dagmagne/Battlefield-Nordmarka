@@ -51,7 +51,7 @@ export function initCombat(C) {
   const SO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
   const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
-    type: 0, bombs: 0, rel: 0, climb: 0, away: false, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
+    type: 0, bombs: 0, rel: 0, climb: 0, away: false, auto: false, ax: 0, az: 0, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
   G.inf = { n: 0, d: new Float32Array(MAXI * 8) }; // soldiers (phase 6): per soldier [x, y, z, yaw, pose, phase, aim, state]; logic in infantry.js, drawn by the renderer
   G.dn = new Int32Array(3); for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; G.dsel = 0; G.rep = 0; G.spot = false;
   let fireWas = false, fireBlock = false, inf = null; // inf: the infantry (src/infantry.js), set at the end of initCombat
@@ -516,11 +516,15 @@ export function initCombat(C) {
   }
   function drawMap() {
     if (!mctx) return; const c = mctx, Wd = 176, sc = Wd / MAP_M, cx = Wd / 2;
-    const mx0 = D.on ? D.x : veh.x, mz0 = D.on ? D.z : veh.z; // the map follows the drone while it flies
+    const fly = D.on && !D.auto, mx0 = fly ? D.x : veh.x, mz0 = fly ? D.z : veh.z; // the map follows the drone while you fly it
     c.setTransform(1, 0, 0, 1, 0, 0);
     let mx = mx0, mz = mz0; if (mm) { mm.draw(c, mx0, mz0); mx = mm.cx; mz = mm.cz; } else c.clearRect(0, 0, MAP_PX, MAP_PX);
     c.setTransform(MAP_PX / Wd, 0, 0, MAP_PX / Wd, 0, 0); // markers are drawn in CSS pixels
-    c.strokeStyle = '#ffffff38'; c.lineWidth = 1; c.beginPath(); c.arc(cx, cx, 500 * sc, 0, 6.283); c.stroke();
+    markers(c, Wd, sc, cx, mx, mz, 900);
+  }
+  // the markers over a map base: c in CSS pixels, Wd its size, sc pixels per metre, cx its centre, (mx, mz) the world point at the centre, lim the half-width in metres
+  function markers(c, Wd, sc, cx, mx, mz, lim) {
+    { const rx = cx + (veh.x - mx) * sc, ry = cx + (veh.z - mz) * sc; c.strokeStyle = '#ffffff38'; c.lineWidth = 1; c.beginPath(); c.arc(rx, ry, 500 * sc, 0, 6.283); c.stroke(); } // 500 m round the tank
     c.fillStyle = '#ffffffb0'; c.fillRect(cx - 0.5, 3, 1, 6);
     c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2;
     // marked mines: small amber crosses
@@ -535,7 +539,7 @@ export function initCombat(C) {
     inf.map(c, cx, mx, mz, sc, Wd); // spotted soldiers
     // only what has been seen (crew, sight, drones, muzzle flashes): fresh contacts solid, lost ones as a hollow marker at the last known position that fades out
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || !e.seen) continue;
-      const fresh = e.dead || e.spotT > 0, ex = e.dead ? e.x : e.lx, ez = e.dead ? e.z : e.lz; if ((!fresh && e.lostT > LOST_T) || Math.abs(ex - mx) > 900 || Math.abs(ez - mz) > 900) continue;
+      const fresh = e.dead || e.spotT > 0, ex = e.dead ? e.x : e.lx, ez = e.dead ? e.z : e.lz; if ((!fresh && e.lostT > LOST_T) || Math.abs(ex - mx) > lim || Math.abs(ez - mz) > lim) continue;
       const x = clamp(cx + (ex - mx) * sc, 4, Wd - 4), y = clamp(cx + (ez - mz) * sc, 4, Wd - 4), mk = ETYPE[e.type].map, col = e.dead ? '#59606a' : ['#ff4a3a', '#ff9a3d', '#ffd23f', '#ffb070'][mk];
       c.beginPath(); if (mk === 1) c.rect(x - 2.6, y - 2.6, 5.2, 5.2); else if (mk === 2) { c.moveTo(x, y - 4); c.lineTo(x + 3.4, y); c.lineTo(x, y + 4); c.lineTo(x - 3.4, y); c.closePath(); } else if (mk === 3) c.arc(x, y, 2.3, 0, 6.283); else c.arc(x, y, 3.7, 0, 6.283);
       if (fresh) { c.fillStyle = col; c.fill(); c.stroke(); }
@@ -545,6 +549,26 @@ export function initCombat(C) {
     c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5; c.stroke();
     c.fillStyle = '#7dffb0'; c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7, vy - Math.cos(a) * 7); c.lineTo(vx - Math.sin(a + 2.5) * 5, vy - Math.cos(a + 2.5) * 5); c.lineTo(vx - Math.sin(a - 2.5) * 5, vy - Math.cos(a - 2.5) * 5); c.closePath(); c.fill(); c.stroke();
     if (D.on) { const q = D.yaw, dx = cx + (D.x - mx) * sc, dy = cx + (D.z - mz) * sc; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(dx - Math.sin(q) * 8, dy - Math.cos(q) * 8); c.lineTo(dx - Math.sin(q + 2.4) * 5, dy - Math.cos(q + 2.4) * 5); c.lineTo(dx - Math.sin(q - 2.4) * 5, dy - Math.cos(q - 2.4) * 5); c.closePath(); c.fill(); c.stroke(); }
+  }
+
+  // ---------- the large map view (Tab, or a tap on the minimap): the playable area at a glance, the same markers ----------
+  const bmap = typeof document !== 'undefined' && document.getElementById('bmap'), bctx = bmap && bmap.getContext ? bmap.getContext('2d') : null;
+  let bm = null, bigOn = false, bigT = 0, bCss = 0, bPx = 0; const BEXT = PLAY + 120; // metres from the centre to the edge of the view
+  G.bigMap = (on) => { // rare event: may allocate (the sharper base map is built on first use)
+    if (!bctx) return; bigOn = on === undefined ? !bigOn : !!on; bmap.classList.toggle('show', bigOn); if (!bigOn) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1); bCss = Math.floor(Math.min(innerWidth, innerHeight) * 0.86); bPx = Math.min(1600, Math.round(bCss * dpr));
+    bmap.style.width = bmap.style.height = bCss + 'px'; if (bmap.width !== bPx) bmap.width = bmap.height = bPx;
+    if (!bm) bm = initMinimap(W, C.bld, HALF, Math.min(0.6, bPx / (2 * BEXT)));
+    bigT = 0; drawBig();
+  };
+  G.bigOpen = () => bigOn;
+  function drawBig() {
+    if (!bm) return; const c = bctx, sc = bCss / (2 * BEXT), cx = bCss / 2;
+    c.setTransform(1, 0, 0, 1, 0, 0); bm.rect(c, -BEXT, -BEXT, 2 * BEXT, bPx, bPx);
+    c.setTransform(bPx / bCss, 0, 0, bPx / bCss, 0, 0);
+    markers(c, bCss, sc, cx, 0, 0, BEXT);
+    c.font = '600 13px system-ui, sans-serif'; c.fillStyle = '#0b1420c8'; c.fillRect(6, bCss - 32, 212, 24); c.fillStyle = '#ffffffd0'; c.fillText('MAP  ·  Tab or tap to close', 14, bCss - 15);
+    c.fillStyle = '#ffffffb0'; c.fillRect(12, 14, 500 * sc, 3); c.fillText('500 m', 16 + 500 * sc, 20); // scale bar
   }
 
   // ---------- mines: pre-laid fields on the roads ahead (buried, a faint disturbance in the snow) and rocket-laid mines on the surface ----------
@@ -735,7 +759,7 @@ export function initCombat(C) {
     if (G.rl > 0 && !veh.dead) { G.rl -= dt; if (G.rl <= 0) { G.rl = 0; C.sfx('reload', veh.x, veh.y + 2, veh.z, 1); } }
     R.reload = 1 - G.rl / RELOAD; dryT -= dt;
     if (!inp.fire) fireBlock = false;
-    if (inp.fire && !veh.dead && !R.pose && !D.on && D.hold <= 0 && !fireBlock) {
+    if (inp.fire && !veh.dead && !R.pose && (!D.on || D.auto) && D.hold <= 0 && !fireBlock) {
       if (G.n[G.sel] <= 0) { if (dryT <= 0) { dryT = 1.5; ui.toast('Out of ' + AMMO[G.sel].name); } }
       else if (G.rl <= 0) {
         G.n[G.sel]--; G.rl = RELOAD; hudDirty = true;
@@ -816,6 +840,7 @@ export function initCombat(C) {
     updateDrone(dt); fireWas = inp.fire;
     if (hudDirty) hud();
     mapT -= dt; if (mapT <= 0 && !R.simOnly) { mapT = 0.2; drawMap(); }
+    if (bigOn && !R.simOnly) { bigT -= dt; if (bigT <= 0) { bigT = 0.25; drawBig(); } }
   };
   G.ammo = (i) => { if (i < 0) i = (G.sel + 1) % 3; if (i === G.sel || veh.dead) return; G.sel = i; R.shellV = AMMO[i].v; G.rl = RELOAD; hudDirty = true; ui.toast('Loading ' + AMMO[i].name); };
   G.smoke = () => {
@@ -826,7 +851,7 @@ export function initCombat(C) {
     ui.toast('Smoke!');
   };
   // ---------- drones: FPV (one-way shaped charge), bomber (drops VOG grenades), recon (high and long, spots for the map) ----------
-  function droneEnd(msg) { D.on = false; D.iok = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; if (msg) ui.toast(msg); }
+  function droneEnd(msg) { D.on = false; D.auto = false; D.iok = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; if (msg) ui.toast(msg); }
   function droneBoom() {
     explode(D.x, D.y, D.z, 1.9); splash(D.x, D.y, D.z, 4, 115, 140, 0, 0.35);
     const db = C.bld.at(D.x, D.y, D.z, 0.9); if (db >= 0) bldHit(db, 100, D.x, D.y, D.z, true); C.bld.splash(D.x, D.y, D.z, 5, 30, db, bldFx);
@@ -861,7 +886,11 @@ export function initCombat(C) {
     if (veh.dead) { droneEnd('Drone link lost'); return; }
     const T = DTYPE[D.type], g0 = hAt(D.x, D.z);
     D.t -= dt; D.spin += dt * 95;
-    if (D.type === 0) { // FPV: flies where the camera points
+    if (D.auto) { // recon on its own: circles the spot where it was left, holding its height, the camera sweeping round and down
+      const ox = D.x - D.ax, oz = D.z - D.az, od = Math.hypot(ox, oz) || 1, k = Math.min(1, dt * 1.2);
+      const tx = -oz / od * T.v * 0.6 + (80 - od) / 80 * ox / od * T.v * 0.6, tz = ox / od * T.v * 0.6 + (80 - od) / 80 * oz / od * T.v * 0.6;
+      D.vx += (tx - D.vx) * k; D.vz += (tz - D.vz) * k; D.vy += (0 - D.vy) * k; D.yaw += 0.35 * dt; D.pitch = -0.75;
+    } else if (D.type === 0) { // FPV: flies where the camera points
       const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * 2.6);
       D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * T.v - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     } else { // bomber and recon: level flight on the heading, a stiff hover, height from Space/Shift (and the climb after launch); the camera gimbal tilts freely
@@ -872,7 +901,7 @@ export function initCombat(C) {
     }
     D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y = Math.min(D.y + D.vy * dt, g0 + 250); D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);
     const lean = D.type ? 0.22 : 0.38; D.tp += (-inp.mvZ * lean - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * lean - D.tr) * Math.min(1, dt * 5); // lean into the motion
-    const gh = hAt(D.x, D.z), press = inp.fire && !fireWas; let boom = D.type === 0 && press, crash = false;
+    const gh = hAt(D.x, D.z), press = inp.fire && !fireWas && !D.auto; let boom = D.type === 0 && press, crash = false;
     if (D.y < gh + 0.35) { if (Math.hypot(D.vx, D.vy, D.vz) > 9) crash = true; else { D.y = gh + 0.35; D.vy = Math.max(0, D.vy); } }
     if ((D.y < gh + 8 && C.collAt(D.x, D.z)) || C.bld.at(D.x, D.y, D.z, 0.3) >= 0) crash = true;
     for (let i = 0; i < MAXE && !crash; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, D.x, D.y, D.z)) crash = true; }
@@ -886,7 +915,7 @@ export function initCombat(C) {
     } else if (D.type === 2 && press) ui.toast('Recon drone: unarmed — spotted enemies go on the map · B calls artillery where the camera looks');
     // bomber and recon land back on the tank (on the engine deck, slowly) and are ready again
     const dv = Math.hypot(D.x - veh.x, D.z - veh.z); if (dv > 15) D.away = true;
-    if (D.type && D.away && dv < 4.5 && D.y < veh.y + 4.5 && Math.hypot(D.vx, D.vy, D.vz) < 5) { G.dn[D.type]++; droneEnd(D.type === 1 ? 'Bomber landed — rearmed' : 'Recon drone landed'); return; }
+    if (D.type && D.away && !D.auto && dv < 4.5 && D.y < veh.y + 4.5 && Math.hypot(D.vx, D.vy, D.vz) < 5) { G.dn[D.type]++; droneEnd(D.type === 1 ? 'Bomber landed — rearmed' : 'Recon drone landed'); return; }
     if (D.t <= 0) { droneEnd('Drone battery empty — lost'); return; }
     if (dv > T.r) { droneEnd('Drone out of radio range — lost'); return; }
     D.scan -= dt; if (D.scan <= 0) { D.scan = 0.3; droneScan(T); }
@@ -896,6 +925,8 @@ export function initCombat(C) {
   // X: launch the selected drone type from the turret roof, or cut the link to the one in the air (it is lost)
   G.droneKey = () => {
     if (D.hold > 0) { D.hold = 0; droneEnd(null); return; }
+    if (D.on && D.auto) { D.auto = false; cam.mode = 4; R.snap = true; hudDirty = true; ui.toast('Back on the recon drone'); return; }
+    if (D.on && D.type === 2) { D.auto = true; D.ax = D.x; D.az = D.z; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; ui.toast(`Recon drone keeps watch on its own for ${Math.ceil(D.t)} s — X takes it back`); return; } // the recon flies out its battery
     if (D.on) { droneEnd('Drone link cut — back in the tank'); return; }
     if (veh.dead || cam.mode === 3) return;
     const ty = G.dsel, T = DTYPE[ty];
@@ -905,11 +936,11 @@ export function initCombat(C) {
     cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
     ui.toast(ty === 0 ? 'FPV away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank'
       : ty === 1 ? 'Bomber away — WASD fly · mouse tilts the camera · LMB drops a grenade on the marker · land on the tank to rearm'
-        : 'Recon drone climbing — enemies in its camera go on the map · land on the tank to recover it');
+        : 'Recon drone climbing — enemies in its camera go on the map · X: back to the tank (it keeps flying) · land on the tank to recover it');
   };
   // Z: pick the drone type for the next launch
   G.droneType = (i) => {
-    if (D.on) { ui.toast('Land the drone or cut the link first'); return; }
+    if (D.on) { ui.toast(D.auto ? 'The recon drone is still up — X takes it back' : 'Land the drone or cut the link first'); return; }
     G.dsel = i === undefined || i < 0 ? (G.dsel + 1) % 3 : i; hudDirty = true;
     const T = DTYPE[G.dsel]; ui.toast(`Drone: ${T.name} (${G.dn[G.dsel]} left)` + [' — one-way shaped charge', ' — hovers and drops grenades', ' — flies high and spots for the map'][G.dsel]);
   };
@@ -917,7 +948,7 @@ export function initCombat(C) {
     for (const e of G.enemies) e.on = false; for (const a of AIR) a.on = false; AQY.fill(-1); G.orlan = 0; G.thr.fill(0); minesReset(); veh.immob = 0; pqN = 0; G.bag = null; G.lastAxis = NaN; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
     arty.reset(); // phase 5A
     inf.reset(); // phase 6B
-    D.on = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
+    D.on = false; D.auto = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
     for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; D.iok = false;
     Object.assign(G, { sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;

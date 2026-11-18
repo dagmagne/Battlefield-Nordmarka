@@ -71,7 +71,9 @@ kbd{margin:0 1px}
 #rng{font-size:12px;opacity:.75;min-width:6ch}
 .st.warn{background:#e8b339;color:#2b1d00}.st.bad{background:#e2533f;color:#fff}
 #wave{right:calc(var(--sr) + 244px);top:calc(var(--st) + 8px);padding:6px 14px;font-weight:650;font-size:12px;letter-spacing:.08em}
-#map{right:var(--sr);bottom:var(--sb);width:176px;height:176px;border-radius:14px;border:1px solid #ffffff2c;background:#0b1420a0}
+#map{right:var(--sr);bottom:var(--sb);width:176px;height:176px;border-radius:14px;border:1px solid #ffffff2c;background:#0b1420a0;pointer-events:auto;cursor:zoom-in}
+#bmap{left:50%;top:50%;transform:translate(-50%,-50%);border-radius:16px;border:1px solid #ffffff3a;background:#0b1420e8;box-shadow:0 10px 40px #000a;display:none;pointer-events:auto;cursor:zoom-out;z-index:6}
+#bmap.show{display:block}
 .touch #map{bottom:auto;top:calc(var(--st) + 60px);width:104px;height:104px;border-radius:12px}
 .touch #wave{right:auto;left:var(--sl);top:calc(var(--st) + 46px);padding:4px 10px;font-size:10.5px}
 .touch #dbg{top:calc(var(--st) + 80px)}
@@ -102,6 +104,7 @@ kbd{margin:0 1px}
   <div id="hud" class="pill"><span><span id="spd">0</span><small>km/h</small></span><span id="sH" class="st on">HULL 100</span><span id="sT" class="st bad" style="display:none">TRACK</span><span id="sA" class="st on">APFSDS 20</span><span id="sM" class="st">MG 2000</span><span id="sK" class="st">SMOKE 2</span><span id="sD" class="st">DRONE 5</span><span id="sR" class="st on">ARTY 1</span><span id="rng">0 m</span><span id="sC" class="st">CMDR</span></div>
   <div id="wave" class="pill">WAVE 1 · 0 KILLS</div>
   <canvas id="map" width="352" height="352"></canvas>
+  <canvas id="bmap" width="600" height="600"></canvas>
   <div id="over" class="modal"><div class="card pill"><h2 id="ovT"></h2><div id="ovP"></div><button class="go" id="ovGo">Restart (R)</button></div></div>
   <div id="top">
     <button class="btn" id="bD" aria-label="Time of day"><svg viewBox="0 0 24 24"><path d="M3 17h18M6 17a6 6 0 0 1 12 0M12 5v3M4.5 9.5l2 1.8M19.5 9.5l-2 1.8M8 21h8"/></svg>TIME</button>
@@ -130,7 +133,7 @@ kbd{margin:0 1px}
     <button class="btn donly" id="bA2" aria-label="Artillery"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>ARTY</button>
     <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg><span id="bBl">BOOM</span></button>
   </div>
-  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>Z</kbd> type · <kbd>B</kbd> artillery · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
+  <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>Tab</kbd> map · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>Z</kbd> type · <kbd>B</kbd> artillery · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
   <div id="help" class="modal"><div class="card pill">
@@ -144,7 +147,7 @@ kbd{margin:0 1px}
       <b><kbd>Space</kbd> <kbd>Q</kbd></b><span>Hold Space for the machine gun: the coaxial MG3 by default; when you look higher than the gun can elevate (up to 70°) or put the crosshair on a drone, the commander's hatch MG3 fires instead — the answer to enemy drones. <kbd>Q</kbd> forces the hatch MG. Red arrows round the crosshair point to incoming FPV drones and Lancets (blinking: diving at you). Smoke breaks a Lancet's lock; trees and moving make you harder to find. An Orlan circling high tells the enemy where you are — shoot it down. Some T-72s carry a cope cage that blunts drone attacks from above</span>
       <b><kbd>G</kbd></b><span>Smoke grenades — breaks the enemy's line of sight, and blinds thermal sights too</span>
       <b><kbd>V</kbd></b><span>Thermal imager in the gunner sight and on the drone: off · white-hot · black-hot. Sees engines, tracks and fires through darkness, haze and dust</span>
-      <b><kbd>X</kbd> <kbd>Z</kbd></b><span>Launch a drone; <kbd>Z</kbd> picks the type. Mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. <b>FPV</b> (5): fly into a vehicle, left button detonates. <b>BOMB</b> (2): hovers, the camera tilts straight down, left button drops one of 3 grenades on the marker (roof and engine deck are weak); land on the tank to rearm. <b>RECON</b> (2): climbs to 110 m, 3 min, unarmed; what its camera sees goes on the map. <kbd>X</kbd> again cuts the link (the drone is lost). The tank stands still and exposed meanwhile</span>
+      <b><kbd>X</kbd> <kbd>Z</kbd></b><span>Launch a drone; <kbd>Z</kbd> picks the type. Mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. <b>FPV</b> (5): fly into a vehicle, left button detonates. <b>BOMB</b> (2): hovers, the camera tilts straight down, left button drops one of 3 grenades on the marker (roof and engine deck are weak); land on the tank to rearm. <b>RECON</b> (2): climbs to 110 m, 3 min, unarmed; what its camera sees goes on the map; <kbd>X</kbd> with it up hands it to its autopilot (it circles and keeps watching until the battery is flat) and puts you back in the tank, <kbd>X</kbd> again takes it back. <kbd>X</kbd> again cuts the link (the drone is lost). The tank stands still and exposed meanwhile</span>
       <b><kbd>B</kbd></b><span>Artillery: one fire mission per wave (restocked when the wave is cleared) — six 155 mm rounds land around the point about 25 s later. In the tank it goes where the sight is laid; from a drone, where its camera looks (the bomber: on the drop marker). Kills light vehicles and BMPs, wrecks houses, often knocks out a T-72. Within 150 m of your tank it is danger close</span>
       <b>Mines</b><span>Enemy engineers mine roads ahead (a faint grey patch in the snow, warm in the thermal sight) and rockets can scatter mines around you. Driving onto one blows a track: you are stuck for a few seconds (TRACK) and lose hull. Drones and a close look mark them with red flags; HE or a burst of MG fire sets them off</span>
       <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · free-fly camera · sound · music</span>
@@ -158,7 +161,7 @@ kbd{margin:0 1px}
       <b>MG · SMOKE</b><span>Hold for the machine gun (it switches to the hatch MG on its own when you drag the view up or onto a drone; red arrows round the crosshair point to incoming drones) · fire the smoke grenades</span>
       <b>DRONE · TYPE</b><span>Launch the drone named on the button; TYPE switches FPV / BOMB / RECON. Joystick flies, drag turns (and tilts the bomber camera), UP / DOWN change height, BOOM detonates the FPV, DROP releases a grenade, TANK cuts the link. Land the bomber or recon drone on the tank to get it back</span>
       <b>ARTY</b><span>One artillery fire mission per wave: six 155 mm rounds land about 25 s later on the point the sight is laid on — or, from a drone, where its camera looks. Keep your tank 150 m clear</span>
-      <b>Map</b><span>Top right: enemies someone has seen — the crew, the sight, a drone or their own muzzle flash (red T-72, orange BMP-2; hollow = last known position)</span>
+      <b>Map</b><span>Tap the map for the large view (tap again to close). Enemies someone has seen — the crew, the sight, a drone or their own muzzle flash (red T-72, orange BMP-2; hollow = last known position)</span>
       <b>Mines</b><span>Grey patches in the snow on roads ahead may be mines; red flags mark the ones found. Driving onto one blows a track (TRACK) — shoot it with HE or the MG instead</span>
       <b>CAM · TIME</b><span>Commander view or gunner sight · time of day</span>
       <b>3-finger tap</b><span>Performance overlay</span>

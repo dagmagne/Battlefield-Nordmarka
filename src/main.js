@@ -571,6 +571,7 @@ async function main() {
   const api = {
     cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
     drone() { if (R.game) R.game.droneKey(); },
+    bigMap(on) { if (R.game) R.game.bigMap(on); },
     droneType(i) { if (R.game) R.game.droneType(i); },
     arty() { if (R.game) R.game.support.key(); },
     ammo(i) { if (R.game) R.game.ammo(i); },

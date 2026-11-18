@@ -23,6 +23,7 @@ export function initUI(api, isTouch) {
     const c = e.code;
     if (modalOpen()) { if (c === 'Escape' || c === 'Enter' || c === 'Space' || c === 'KeyH') { showHelp(false); showMenu(false); e.preventDefault(); } return; }
     keys.add(c);
+    if (c === 'Tab' && !e.repeat) api.bigMap();
     if (c === 'Space' || c === 'Tab') e.preventDefault();
     else if (c === 'KeyT') api.tod(-1);
     else if (c === 'KeyC') api.cam();
@@ -96,6 +97,8 @@ export function initUI(api, isTouch) {
   for (const ev of ['contextmenu', 'gesturestart', 'gesturechange', 'dblclick', 'selectstart']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
   document.addEventListener('touchmove', (e) => { if (!e.target.closest || !e.target.closest('.card')) e.preventDefault(); }, { passive: false });
 
+  // ---- the large map: a click or tap on the minimap opens it, one on the large map closes it ----
+  for (const id of ['map', 'bmap']) { const m = $(id); m.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); m.addEventListener('click', (e) => { e.stopPropagation(); api.bigMap(id === 'map'); }); }
   // ---- buttons ----
   const btn = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); b.blur(); }); };
   btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bY', () => api.droneType()); btn('bR', api.drone); btn('bA', api.arty); btn('bA2', api.arty);
