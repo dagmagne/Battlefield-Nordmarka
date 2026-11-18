@@ -1,4 +1,4 @@
-struct PU { a: vec4f, b: vec4f, c: vec4f, d: vec4f, e: vec4f }; // e: incoming-drone arrows (angle, strength) ×2 // c: xy = gun marker (ndc), z = reload 0..1, w = hud mode (1 commander, 2 sight) ; d: x = hit marker, y = gun ready, z = sight blend, w = damage flash
+struct PU { a: vec4f, b: vec4f, c: vec4f, d: vec4f, e: vec4f, f: vec4f }; // f: x = drone video (0 none, 1 analog FPV goggles, 2 digital DJI-style camera), y = link quality 0..1 // e: incoming-drone arrows (angle, strength) ×2 // c: xy = gun marker (ndc), z = reload 0..1, w = hud mode (1 commander, 2 sight) ; d: x = hit marker, y = gun ready, z = sight blend, w = damage flash
 // // a: xy = uv scale, zw = src texel ; b: x = exposure, y = bloom, z = time, w = mode
 @group(0) @binding(0) var<uniform> U: PU;
 @group(0) @binding(1) var src: texture_2d<f32>;
@@ -12,6 +12,7 @@ struct PO { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
   o.pos = vec4f(p * 2.0 - 1.0, 0.0, 1.0); o.uv = vec2f(p.x, 1.0 - p.y);
   return o;
 }
+fn hsh(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453); }
 fn S(uv: vec2f) -> vec3f { return textureSampleLevel(src, smp, min(uv * U.a.xy, U.a.xy - U.a.zw * 0.5), 0.0).rgb; }
 
 // bloom prefilter + 13-tap downsample
@@ -59,10 +60,21 @@ fn thermalView(uv: vec2f, fp: vec2f, bloom: f32) -> vec3f {
   return mix(mix(vec3f(0.0, 0.035, 0.012), vec3f(0.5, 1.0, 0.55), v), vec3f(v * 0.95 + 0.02), grey) * (1.0 - dot(q, q) * 0.5);
 }
 @fragment fn fsFinal(in: PO) -> @location(0) vec4f {
-  var c = clamp(S(in.uv), vec3f(0.0), vec3f(4096.0)); // also drops NaN / inf from a bad pixel instead of letting it flash
-  let bl = textureSampleLevel(src2, smp, in.uv, 0.0).rgb;
+  // drone video: analog goggles bend the picture (wide lens) and tear lines as the link weakens; the digital link breaks into blocks
+  let gm = U.f.x; let sig = U.f.y; let lo = 1.0 - sig; let rs = 1.0 / U.a.zw; let tf = floor(U.b.z * 30.0);
+  var uv = in.uv; let qn = (in.uv - 0.5) * 2.0; let r2 = dot(qn, qn) * 0.5;
+  if (gm > 0.5 && gm < 1.5) {
+    uv = 0.5 + (in.uv - 0.5) * (0.9 + 0.2 * r2);
+    let ln = floor(in.pos.y / max(2.0, rs.y / 360.0));
+    uv.x += (hsh(vec2f(ln, tf)) - 0.5) * (0.0012 + 0.04 * lo * lo * lo * lo);
+  } else if (gm > 1.5 && sig < 0.55) {
+    let bk = mix(1.0, 28.0, smoothstep(0.55, 0.05, sig)) * max(1.0, rs.y / 1100.0);
+    uv = (floor(in.pos.xy / bk) + 0.5) * bk / rs;
+  }
+  var c = clamp(S(uv), vec3f(0.0), vec3f(4096.0)); // also drops NaN / inf from a bad pixel instead of letting it flash
+  let bl = textureSampleLevel(src2, smp, uv, 0.0).rgb;
   let q = in.uv - 0.5;
-  if (U.b.w > 0.5) { c = thermalView(in.uv, in.pos.xy, bl.r); } else {
+  if (U.b.w > 0.5) { c = thermalView(uv, uv * rs, bl.r); } else {
   c = mix(c, bl, U.b.y * 0.5) + bl * U.b.y * 0.5;
   c *= U.b.x;
   c *= 1.0 - dot(q, q) * 0.42;
@@ -76,6 +88,17 @@ fn thermalView(uv: vec2f, fp: vec2f, bloom: f32) -> vec3f {
   let n2 = fract(sin(dot(in.pos.xy + 31.7, vec2f(39.346, 11.135))) * 24634.6345);
   c += (n + n2 - 1.0) / 255.0;
   }
+  if (gm > 0.5 && gm < 1.5) { // analog goggles: washed-out colour, scanlines, grain, torn lines and static as the link fades, dark rounded edges
+    let l = dot(c, vec3f(0.299, 0.587, 0.114));
+    c = mix(vec3f(l), c, 0.15 + 0.7 * sig) * vec3f(1.0, 1.0, 1.06);
+    c *= 0.9 + 0.1 * sin(in.pos.y * 3.14159 / max(1.0, rs.y / 540.0));
+    let gn = hsh(in.pos.xy + vec2f(tf * 17.0, tf * 3.0));
+    c = mix(c, vec3f(gn), 0.05 + 0.7 * lo * lo * lo);
+    let ln = floor(in.pos.y / max(2.0, rs.y / 240.0));
+    if (hsh(vec2f(ln * 0.37, tf)) < 0.5 * lo * lo * lo * lo) { c = vec3f(0.5 + 0.5 * gn); }
+    let inb = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+    c *= inb * (1.0 - r2 * 0.55);
+  } else if (gm > 1.5) { c *= mix(0.25, 1.0, smoothstep(0.02, 0.3, sig)); } // digital: the picture darkens as it is about to drop
   // ---- sight overlays (drawn here so the HUD never touches the DOM per frame) ----
   let res = 1.0 / U.a.zw; let px = (in.uv - 0.5) * res; let s = max(1.0, res.y / 1100.0);
   c = mix(c, vec3f(0.75, 0.04, 0.02), U.d.w * smoothstep(0.25, 0.75, length(q)) * 0.55);

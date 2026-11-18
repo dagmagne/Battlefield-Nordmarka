@@ -13,7 +13,7 @@ export const MAXE = 14, MAXG = 760, MAXM = 48, MAXA = 6; // enemies, glow sprite
 export { MAXI }; // infantry slots (phase 6, defined in infantry.js; main.js imports it from here)
 // drone types: 0 FPV (one-way shaped charge), 1 bomber (hovers, drops VOG grenades, lands back on the tank to rearm), 2 recon (high, long, quiet, unarmed)
 // n per game, battery t (s), top speed v (m/s), radio range r (m), spotting range see (m), how long a sighting stays on the map mark (s), climb after launch (m above ground)
-export const DTYPE = [{ name: 'FPV', n: 5, t: 75, v: 26, r: 1500, see: 800, mark: 20, climb: 0 }, { name: 'BOMB', n: 2, t: 120, v: 14, r: 1500, see: 900, mark: 25, climb: 30 }, { name: 'RECON', n: 2, t: 180, v: 18, r: 2200, see: 1500, mark: 40, climb: 110 }];
+export const DTYPE = [{ name: 'FPV', n: 5, t: 120, v: 26, r: 1500, see: 800, mark: 20, climb: 0 }, { name: 'BOMB', n: 2, t: 240, v: 14, r: 1500, see: 900, mark: 25, climb: 30 }, { name: 'RECON', n: 2, t: 360, v: 18, r: 2200, see: 1500, mark: 40, climb: 110 }];
 // grenades per bomber sortie, seconds between drops; a lost contact fades from the map over LOST_T s; NFLD pre-laid minefields enemies know about and drive around
 const BOMBS = 3, BOMB_RL = 0.7, LOST_T = 40, NFLD = 6;
 // mine damage by shell type (radius in m around a ground impact that sets a mine off): APFSDS, HEAT, HE, MG, 125 mm, 30 mm, smoke, VOG
@@ -50,6 +50,7 @@ export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
   const SO = new Float32Array(5), TRO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
+  G.dview = [1, 1, 1]; // last view level per drone type (kept between launches)
   const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
     type: 0, bombs: 0, rel: 0, climb: 0, away: false, auto: false, ax: 0, az: 0, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
   G.inf = { n: 0, d: new Float32Array(MAXI * 8) }; // soldiers (phase 6): per soldier [x, y, z, yaw, pose, phase, aim, state]; logic in infantry.js, drawn by the renderer
@@ -112,6 +113,13 @@ export function initCombat(C) {
     for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1 || CL[o + 3] < 1.2 || CL[o + 3] > 22) continue;
       const t = clamp(((CL[o] - x0) * dx + (CL[o + 1] - y0) * dy + (CL[o + 2] - z0) * dz) / (d * d), 0, 1); if (Math.hypot(x0 + dx * t - CL[o], y0 + dy * t - CL[o + 1], z0 + dz * t - CL[o + 2]) < 10) return 0; }
     return Math.exp(-fol / (255 * FOL_L));
+  }
+  // radio path from the tank to a drone: terrain in the way costs most (some signal still bends round), a building less; smoke and trees do not matter
+  function radioPath(x0, y0, z0, x1, y1, z1) {
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, n = clamp(Math.ceil(Math.hypot(dx, dz) / 10), 4, 120); let f = 1;
+    for (let k = 1; k < n; k++) { const t = k / n; if (y0 + dy * t < hAt(x0 + dx * t, z0 + dz * t) + 1) { f = 0.4; break; } }
+    if (C.bld.seg(x0, y0, z0, x1, y1, z1)) f *= 0.75;
+    return f;
   }
   const losBlocked = (x0, y0, z0, x1, y1, z1) => losVis(x0, y0, z0, x1, y1, z1) <= 0;
   const canAt = (x, z) => W.nrm[(clamp(((z + HALF) / WS * HN) | 0, 0, HN - 1) * HN + clamp(((x + HALF) / WS * HN) | 0, 0, HN - 1)) * 4 + 2]; // canopy density 0..255
@@ -900,6 +908,9 @@ export function initCombat(C) {
     inf.scan(D.x, D.y, D.z, fx, fy, fz, T.see, T.mark);
     droneMines(fx, fy, fz, D.type ? 450 : 250);
   }
+  // velocity response like a DJI in normal mode: a firm rate while the sticks are deflected, a slow one when they are let go,
+  // so the drone coasts for a second or two (time constant 1/coast s); u = stick deflection 0..1
+  const glide = (dt, firm, coast, u) => Math.min(1, dt * (coast + (firm - coast) * Math.min(1, u * 1.5)));
   function updateDrone(dt) {
     if (!D.on) { if (D.hold > 0) { D.hold -= dt; if (D.hold <= 0 || veh.dead || (inp.fire && !fireWas)) { D.hold = 0; droneEnd(null); } } return; }
     if (veh.dead) { droneEnd('Drone link lost'); return; }
@@ -909,14 +920,15 @@ export function initCombat(C) {
       const ox = D.x - D.ax, oz = D.z - D.az, od = Math.hypot(ox, oz) || 1, k = Math.min(1, dt * 1.2);
       const tx = -oz / od * T.v * 0.6 + (80 - od) / 80 * ox / od * T.v * 0.6, tz = ox / od * T.v * 0.6 + (80 - od) / 80 * oz / od * T.v * 0.6;
       D.vx += (tx - D.vx) * k; D.vz += (tz - D.vz) * k; D.vy += (0 - D.vy) * k; D.yaw += 0.35 * dt; D.pitch = -0.75;
-    } else if (D.type === 0) { // FPV: flies where the camera points
-      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * 2.6);
-      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * T.v - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
+    } else if (D.type === 0) { // FPV: flies where the camera points; height does not coast
+      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, 2.6, 1.3, Math.hypot(inp.mvZ, inp.mvX));
+      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * T.v - D.vy) * Math.min(1, dt * (Math.abs(inp.mvY) + Math.abs(inp.mvZ) > 0.05 ? 2.6 : 7)); D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     } else { // bomber and recon: level flight on the heading, a stiff hover, height from Space/Shift (and the climb after launch); the camera gimbal tilts freely
-      const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * (D.type === 1 ? 3.2 : 2));
+      const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, D.type === 1 ? 3.2 : 2, D.type === 1 ? 1.4 : 1.1, Math.hypot(inp.mvZ, inp.mvX));
       let vy = inp.mvY * (D.type === 2 ? 10 : 5);
       if (D.climb > 0) { if (inp.mvY !== 0 || D.y - g0 > D.climb) D.climb = 0; else vy = D.type === 2 ? 14 : 7; }
-      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += (vy - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
+      const ky = Math.min(1, dt * (D.climb > 0 || Math.abs(inp.mvY) > 0.05 ? (D.type === 1 ? 3.2 : 2) : 7)); // height does not coast: it stops sharply when the stick is let go
+      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += (vy - D.vy) * ky; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     }
     D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y = Math.min(D.y + D.vy * dt, g0 + 250); D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);
     const lean = D.type ? 0.22 : 0.38; D.tp += (-inp.mvZ * lean - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * lean - D.tr) * Math.min(1, dt * 5); // lean into the motion
@@ -937,6 +949,9 @@ export function initCombat(C) {
     if (D.type && D.away && !D.auto && dv < 4.5 && D.y < veh.y + 4.5 && Math.hypot(D.vx, D.vy, D.vz) < 5) { G.dn[D.type]++; droneEnd(D.type === 1 ? 'Bomber landed — rearmed' : 'Recon drone landed'); return; }
     if (D.t <= 0) { droneEnd('Drone battery empty — lost'); return; }
     if (dv > T.r) { droneEnd('Drone out of radio range — lost'); return; }
+    // video link quality for the goggles / OSD (0..1): fine out to 70 % of the radio range, then fading; a hill between tank and drone costs much, a building some
+    D.sq -= dt; if (D.sq <= 0) { D.sq = 0.25; const d3 = Math.hypot(D.x - veh.x, D.y - veh.y - 3, D.z - veh.z); D.sigT = clamp((T.r - d3) / (0.3 * T.r), 0, 1) * radioPath(veh.x, veh.y + 3, veh.z, D.x, D.y, D.z); }
+    D.sig += (D.sigT - D.sig) * Math.min(1, dt * 3);
     D.scan -= dt; if (D.scan <= 0) { D.scan = 0.3; droneScan(T); }
     const sec = Math.ceil(D.t); if (sec !== D.sec) { D.sec = sec; hudDirty = true; }
     droneParts(C.dobj, D); C.dobj[131] = 1;
@@ -944,23 +959,28 @@ export function initCombat(C) {
   // X: launch the selected drone type from the turret roof, or cut the link to the one in the air (it is lost)
   G.droneKey = () => {
     if (D.hold > 0) { D.hold = 0; droneEnd(null); return; }
-    if (D.on && D.auto) { D.auto = false; cam.mode = 4; R.snap = true; hudDirty = true; ui.toast('Back on the recon drone'); return; }
+    if (D.on && D.auto) { D.auto = false; D.yr = 0; cam.mode = 4; R.snap = true; hudDirty = true; ui.toast('Back on the recon drone'); return; }
     if (D.on && D.type === 2) { D.auto = true; D.ax = D.x; D.az = D.z; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; ui.toast(`Recon drone keeps watch on its own for ${Math.ceil(D.t)} s — X takes it back`); return; } // the recon flies out its battery
     if (D.on) { droneEnd('Drone link cut — back in the tank'); return; }
     if (veh.dead || cam.mode === 3) return;
     const ty = G.dsel, T = DTYPE[ty];
     if (G.dn[ty] <= 0) { ui.toast(`No ${T.name} drones left` + (G.dn[0] + G.dn[1] + G.dn[2] ? ' — Z picks another type' : '')); return; }
     G.dn[ty]--; Object.assign(D, { on: true, type: ty, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: ty ? -0.5 : -0.12, t: T.t, spin: 0, tp: 0, tr: 0, sec: T.t,
-      bombs: ty === 1 ? BOMBS : 0, rel: 0, climb: T.climb, away: false, scan: 0, iok: false });
+      bombs: ty === 1 ? BOMBS : 0, rel: 0, yr: 0, view: G.dview[ty], tpS: 0, sig: 1, sigT: 1, sq: 0, tMax: T.t, climb: T.climb, away: false, scan: 0, iok: false });
     cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
-    ui.toast(ty === 0 ? 'FPV away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank'
+    if (ui.pad) ui.toast((ty === 0 ? 'FPV away — R2 detonates' : ty === 1 ? 'Bomber away — R2 drops a grenade on the marker' : 'Recon drone climbing — hold ✕: autopilot')
+      + ' · left stick height/turn · right stick fly · L1/L2 tilt the camera' + (ty === 2 ? '' : ' · hold ✕: back to the tank'));
+    else ui.toast(ty === 0 ? 'FPV away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank'
       : ty === 1 ? 'Bomber away — WASD fly · mouse tilts the camera · LMB drops a grenade on the marker · land on the tank to rearm'
         : 'Recon drone climbing — enemies in its camera go on the map · X: back to the tank (it keeps flying) · land on the tank to recover it');
   };
-  // Z: pick the drone type for the next launch
+  // what a hold of pad ✕ would do now (for the hold ring's label); '' when it should act at once (skip the blast view, or nothing to launch)
+  G.droneLabel = () => D.hold > 0 ? '' : D.on && D.auto ? 'TAKE BACK RECON' : D.on && D.type === 2 ? 'RECON AUTOPILOT' : D.on ? 'CUT LINK'
+    : veh.dead || G.dn[G.dsel] <= 0 ? '' : 'LAUNCH ' + DTYPE[G.dsel].name;
+  // Z: pick the drone type for the next launch (i: index, -1 or undefined next, -2 previous)
   G.droneType = (i) => {
     if (D.on) { ui.toast(D.auto ? 'The recon drone is still up — X takes it back' : 'Land the drone or cut the link first'); return; }
-    G.dsel = i === undefined || i < 0 ? (G.dsel + 1) % 3 : i; hudDirty = true;
+    G.dsel = i === -2 ? (G.dsel + 2) % 3 : i === undefined || i < 0 ? (G.dsel + 1) % 3 : i; hudDirty = true;
     const T = DTYPE[G.dsel]; ui.toast(`Drone: ${T.name} (${G.dn[G.dsel]} left)` + [' — one-way shaped charge', ' — hovers and drops grenades', ' — flies high and spots for the map'][G.dsel]);
   };
   G.restart = () => {
