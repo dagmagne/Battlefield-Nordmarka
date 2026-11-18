@@ -1,6 +1,6 @@
 // Input (keyboard, mouse, touch) and DOM UI. All state lives in `inp`; nothing here allocates per frame.
 const $ = (id) => document.getElementById(id);
-export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, aa: false, sight: false };
+export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, yawR: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, aa: false, sight: false };
 const keys = new Set();
 const SPD = []; for (let i = 0; i < 200; i++) SPD.push(String(i));
 const CAMN = ['CMDR', 'SIGHT', '', 'FLY', 'DRONE'];
@@ -144,7 +144,7 @@ export function initUI(api, isTouch) {
   const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = text; $('hold').classList.add('show'); };
   const holdEnd = () => { if (hK) { hK = 0; $('hold').classList.remove('show'); } };
   const pollPad = (fly) => {
-    gTh = gSt = gX = gZ = gY = 0; gFire = gMg = gAA = gSight = false;
+    gTh = gSt = gX = gZ = gY = 0; gFire = gMg = gAA = gSight = false; inp.yawR = 0;
     U.pad = null; if (!padN || !navigator.getGamepads) { holdEnd(); return; }
     const gl = navigator.getGamepads();
     let g = null; for (let i = 0; i < gl.length; i++) if (gl[i] && gl[i].connected) { g = gl[i]; break; }
@@ -164,8 +164,8 @@ export function initUI(api, isTouch) {
     if (press(3)) api.thermal(); if (press(8)) api.bigMap(); if (press(9)) showMenu(true);
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
     gFire = bv(7) > 0.5;
-    if (fly) { // drone, DJI Mode 2: left stick height and yaw, right stick forward/back and sideways, L1/L2 tilt the gimbal (the FPV's nose)
-      gY = -ly; gZ = -ry; gX = rx; inp.lookX += lx * 9; inp.lookY += (bv(6) - bv(4)) * 7;
+    if (fly) { // drone, DJI Mode 2 (yaw is a rate with momentum, see main.js): left stick height and yaw, right stick forward/back and sideways, L1/L2 tilt the gimbal (the FPV's nose)
+      gY = -ly; gZ = -ry; gX = rx; inp.yawR = lx; inp.lookY += (bv(6) - bv(4)) * 7;
       for (let j = 0; j < PADT.length; j++) pb[PADT[j]] = down(PADT[j]) ? 1 : 0; // tank-only buttons: track them so a press in flight does not fire on return
       return;
     }

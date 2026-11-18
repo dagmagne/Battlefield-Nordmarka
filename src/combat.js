@@ -900,6 +900,9 @@ export function initCombat(C) {
     inf.scan(D.x, D.y, D.z, fx, fy, fz, T.see, T.mark);
     droneMines(fx, fy, fz, D.type ? 450 : 250);
   }
+  // velocity response like a DJI in normal mode: a firm rate while the sticks are deflected, a slow one when they are let go,
+  // so the drone coasts for a second or two (time constant 1/coast s); u = stick deflection 0..1
+  const glide = (dt, firm, coast, u) => Math.min(1, dt * (coast + (firm - coast) * Math.min(1, u * 1.5)));
   function updateDrone(dt) {
     if (!D.on) { if (D.hold > 0) { D.hold -= dt; if (D.hold <= 0 || veh.dead || (inp.fire && !fireWas)) { D.hold = 0; droneEnd(null); } } return; }
     if (veh.dead) { droneEnd('Drone link lost'); return; }
@@ -910,13 +913,14 @@ export function initCombat(C) {
       const tx = -oz / od * T.v * 0.6 + (80 - od) / 80 * ox / od * T.v * 0.6, tz = ox / od * T.v * 0.6 + (80 - od) / 80 * oz / od * T.v * 0.6;
       D.vx += (tx - D.vx) * k; D.vz += (tz - D.vz) * k; D.vy += (0 - D.vy) * k; D.yaw += 0.35 * dt; D.pitch = -0.75;
     } else if (D.type === 0) { // FPV: flies where the camera points
-      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * 2.6);
+      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, 2.6, 0.9, Math.hypot(inp.mvZ, inp.mvX, inp.mvY));
       D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * T.v - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     } else { // bomber and recon: level flight on the heading, a stiff hover, height from Space/Shift (and the climb after launch); the camera gimbal tilts freely
-      const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * (D.type === 1 ? 3.2 : 2));
+      const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, D.type === 1 ? 3.2 : 2, D.type === 1 ? 1 : 0.8, Math.hypot(inp.mvZ, inp.mvX));
       let vy = inp.mvY * (D.type === 2 ? 10 : 5);
       if (D.climb > 0) { if (inp.mvY !== 0 || D.y - g0 > D.climb) D.climb = 0; else vy = D.type === 2 ? 14 : 7; }
-      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += (vy - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
+      const ky = glide(dt, D.type === 1 ? 3.2 : 2, 1.4, D.climb > 0 ? 1 : Math.abs(inp.mvY)); // height settles a little quicker than the drift
+      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += (vy - D.vy) * ky; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     }
     D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y = Math.min(D.y + D.vy * dt, g0 + 250); D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);
     const lean = D.type ? 0.22 : 0.38; D.tp += (-inp.mvZ * lean - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * lean - D.tr) * Math.min(1, dt * 5); // lean into the motion
@@ -944,14 +948,14 @@ export function initCombat(C) {
   // X: launch the selected drone type from the turret roof, or cut the link to the one in the air (it is lost)
   G.droneKey = () => {
     if (D.hold > 0) { D.hold = 0; droneEnd(null); return; }
-    if (D.on && D.auto) { D.auto = false; cam.mode = 4; R.snap = true; hudDirty = true; ui.toast('Back on the recon drone'); return; }
+    if (D.on && D.auto) { D.auto = false; D.yr = 0; cam.mode = 4; R.snap = true; hudDirty = true; ui.toast('Back on the recon drone'); return; }
     if (D.on && D.type === 2) { D.auto = true; D.ax = D.x; D.az = D.z; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; ui.toast(`Recon drone keeps watch on its own for ${Math.ceil(D.t)} s — X takes it back`); return; } // the recon flies out its battery
     if (D.on) { droneEnd('Drone link cut — back in the tank'); return; }
     if (veh.dead || cam.mode === 3) return;
     const ty = G.dsel, T = DTYPE[ty];
     if (G.dn[ty] <= 0) { ui.toast(`No ${T.name} drones left` + (G.dn[0] + G.dn[1] + G.dn[2] ? ' — Z picks another type' : '')); return; }
     G.dn[ty]--; Object.assign(D, { on: true, type: ty, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: ty ? -0.5 : -0.12, t: T.t, spin: 0, tp: 0, tr: 0, sec: T.t,
-      bombs: ty === 1 ? BOMBS : 0, rel: 0, climb: T.climb, away: false, scan: 0, iok: false });
+      bombs: ty === 1 ? BOMBS : 0, rel: 0, yr: 0, climb: T.climb, away: false, scan: 0, iok: false });
     cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
     if (ui.pad) ui.toast((ty === 0 ? 'FPV away — R2 detonates' : ty === 1 ? 'Bomber away — R2 drops a grenade on the marker' : 'Recon drone climbing — hold ✕: autopilot')
       + ' · left stick height/turn · right stick fly · L1/L2 tilt the camera' + (ty === 2 ? '' : ' · hold ✕: back to the tank'));
