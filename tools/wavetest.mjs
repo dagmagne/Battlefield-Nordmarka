@@ -7,12 +7,14 @@ const require = createRequire(import.meta.url);
 let chromium; try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = require('playwright-core')); }
 const a = process.argv.slice(2), opt = (k, d) => { const i = a.indexOf('--' + k); return i < 0 ? d : a[i + 1]; };
 const port = +opt('port', 8080), query = opt('query', 'w=frogner'), waves = +opt('waves', 7), seed = +opt('seed', 0), move = a.includes('--move');
-const browser = await chromium.launch({ args: ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--enable-features=Vulkan,SkiaGraphite', '--use-vulkan=swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
+// --gpu: the installed Chrome on the real GPU (headed) instead of Playwright's headless shell with SwiftShader
+const browser = a.includes('--gpu') ? await chromium.launch({ channel: 'chrome', headless: false, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--window-size=900,600'] })
+  : await chromium.launch({ args: ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--enable-features=Vulkan,SkiaGraphite', '--use-vulkan=swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 400 } });
 let errs = 0;
 page.on('pageerror', (e) => { console.log('[pageerror]', String(e.stack || e).slice(0, 800)); errs++; });
 page.on('console', (m) => { if (m.type() === 'error') { console.log('[error]', m.text().slice(0, 400)); errs++; } });
-await page.goto(`http://localhost:${port}/index.html?${query}&nohint&mute&q=low`);
+await page.goto(`http://localhost:${port}/${opt("path", "") ? opt("path", "").replace(/^\/+|\/+$/g, "") + "/" : ""}index.html?${query}&nohint&mute&q=low`); // --path: a checkout below the server root
 await page.waitForFunction('window.__ready===true', null, { timeout: 240000 });
 const res = await page.evaluate(async ({ waves, seed, move }) => {
   const G = __game, R = __R, veh = __veh, B = __bld; R.god = true; __ui.poll = () => {};

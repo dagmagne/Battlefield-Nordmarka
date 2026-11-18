@@ -1,19 +1,20 @@
 // Renders the fixed verification scenes. usage: node tools/poses.mjs outdir [--only 1,3] [--dpr 2] [--mobile]
 import { chromium } from 'playwright-core';
+import { base, chromeArgs, logAdapter } from './gpu.mjs';
 import { SCENES, MOBILE } from './scenes.mjs';
 import { mkdirSync } from 'node:fs';
 const a = process.argv.slice(2), out = a[0];
 const opt = (k, d) => { const i = a.indexOf('--' + k); return i < 0 ? d : a[i + 1]; };
 const only = opt('only', ''), dpr = +opt('dpr', 2), mobile = a.includes('--mobile'), q = opt('q', '');
 mkdirSync(out, { recursive: true });
-const browser = await chromium.launch({ channel: 'chrome', headless: false, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--window-size=1728,1117', '--hide-scrollbars'] });
+const browser = await chromium.launch({ channel: 'chrome', headless: false, args: chromeArgs(['--window-size=1728,1117']) });
 async function run(list, vw, vh, dp, mob, query) {
   const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: dp, hasTouch: mob, isMobile: mob });
   const page = await ctx.newPage();
   page.on('console', (m) => { const t = m.type(); if ((t === 'error' && !/404/.test(m.text())) || t === 'warning') console.log(`[${t}]`, m.text().slice(0, 800)); });
   page.on('pageerror', (e) => console.log('[pageerror]', String(e.stack || e).slice(0, 800)));
-  await page.goto(`http://localhost:8080/index.html?nohint&drs=0&${query}`);
-  await page.waitForFunction('window.__ready===true', null, { timeout: 90000 });
+  await page.goto(`${base}?nohint&drs=0&${query}`);
+  await page.waitForFunction('window.__ready===true', null, { timeout: 90000 }); await logAdapter(page);
   for (const s of list) {
     if (only && !only.split(',').includes(s.name.split('-')[0])) continue;
     if (s.w && (s.w !== page.viewportSize().width)) { await page.setViewportSize({ width: s.w, height: s.h }); await page.waitForTimeout(400); }

@@ -16,8 +16,8 @@ import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
-import { buildLeopard, buildT72, buildBMP, buildDrone, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
-import { initCombat, MAXE, MAXG } from './combat.js';
+import { buildLeopard, buildT72, buildBMP, buildDrone, buildMine, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
+import { initCombat, MAXE, MAXG, MAXM } from './combat.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { initBuildings, DMAX } from './buildings.js';
@@ -205,6 +205,16 @@ async function main() {
   BL.upload = (v0, v1) => device.queue.writeBuffer(props.vb, v0 * 56, propsMesh.v, v0 * 14, (v1 - v0) * 14);
   const debO = { vb: device.createBuffer({ size: DMAX * 24 * 56, usage: U.VERTEX | U.COPY_DST }), ib: mkBuf(BL.di, U.INDEX) }; // rubble debris boxes
   BL.debUpload = (k, n) => device.queue.writeBuffer(debO.vb, k * 24 * 56, BL.dv, k * 24 * 14, n * 24 * 14);
+  // mines on the surface: MAXM copies of one small mesh in a vertex buffer; a copy is rewritten (moved or collapsed) only when a mine changes
+  const mineT = buildMine(), mNV = mineT.v.length / 14, mNI = mineT.i.length, mineV = new Float32Array(MAXM * mNV * 14), mineI = new Uint32Array(MAXM * mNI);
+  for (let k = 0; k < MAXM; k++) for (let j = 0; j < mNI; j++) mineI[k * mNI + j] = mineT.i[j] + k * mNV;
+  const mineO = { vb: device.createBuffer({ size: mineV.byteLength, usage: U.VERTEX | U.COPY_DST }), ib: mkBuf(mineI, U.INDEX), n: 0, on: new Uint8Array(MAXM) };
+  // surface: the mine lies on the snow; marked: a red-flagged picket stands beside it (a marked buried mine shows only its top)
+  const mineMesh = (k, x, y, z, yaw, surface, marked) => { const o = k * mNV * 14, c = Math.cos(yaw), s = Math.sin(yaw), T = mineT.v, show = surface || marked;
+    for (let j = 0; j < mNV; j++) { const a = j * 14, b = o + a; for (let q = 0; q < 14; q++) mineV[b + q] = T[a + q];
+      if (j < mineT.nm ? !show : !marked) { mineV[b] = mineV[b + 1] = mineV[b + 2] = 0; continue; }
+      mineV[b] = x + c * T[a] + s * T[a + 2]; mineV[b + 1] = y - (j < mineT.nm && !surface ? 0.11 : 0.03) + T[a + 1]; mineV[b + 2] = z - s * T[a] + c * T[a + 2]; mineV[b + 3] = c * T[a + 3] + s * T[a + 5]; mineV[b + 5] = -s * T[a + 3] + c * T[a + 5]; }
+    device.queue.writeBuffer(mineO.vb, o * 4, mineV, o, mNV * 14); if (mineO.on[k] !== (show ? 1 : 0)) { mineO.on[k] = show ? 1 : 0; mineO.n += show ? 1 : -1; } };
   // enemy vehicles: two shared meshes, one uniform block (part matrices) per slot
   const eMesh = [buildT72(), buildBMP()].map((m) => ({ vb: mkBuf(m.v, U.VERTEX), ib: mkBuf(m.i, U.INDEX), n: m.i.length }));
   const eObj = []; for (let i = 0; i < MAXE; i++) { const u = device.createBuffer({ size: 528, usage: U.UNIFORM | U.COPY_DST }); eObj.push({ u, d: new Float32Array(132), bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) }); }
@@ -536,6 +546,7 @@ async function main() {
   const api = {
     cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
     drone() { if (R.game) R.game.droneKey(); },
+    droneType(i) { if (R.game) R.game.droneType(i); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
@@ -556,7 +567,7 @@ async function main() {
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
@@ -709,6 +720,10 @@ async function main() {
     const px = aim.mx + aim.gx * R.shellV * t, py = aim.my + aim.gy * R.shellV * t - 4.905 * t * t, pz = aim.mz + aim.gz * R.shellV * t;
     const w = vp[3] * px + vp[7] * py + vp[11] * pz + vp[15];
     if (w > 0.1) { aim.sx = (vp[0] * px + vp[4] * py + vp[8] * pz + vp[12]) / w; aim.sy = (vp[1] * px + vp[5] * py + vp[9] * pz + vp[13]) / w; } else { aim.sx = 9; aim.sy = 9; }
+    // bomber: the predicted grenade impact replaces the gun marker in the drone view (ring green when a grenade is ready)
+    const D = game.drone; R.dropSx = 9; R.dropSy = 9;
+    if (cam.mode === 4 && D.on && D.type === 1 && D.iok) { const dw = vp[3] * D.ix + vp[7] * D.iy + vp[11] * D.iz + vp[15];
+      if (dw > 0.1) { R.dropSx = (vp[0] * D.ix + vp[4] * D.iy + vp[8] * D.iz + vp[12]) / dw; R.dropSy = (vp[1] * D.ix + vp[5] * D.iy + vp[9] * D.iz + vp[13]) / dw; } }
   }
   const chaseP = new Float32Array(5);
   function updateCamera(dt, BM) {
@@ -717,7 +732,13 @@ async function main() {
     cam.held = inp.sight;
     if (cam.mode === 4) { // FPV drone: the mouse turns it, the camera trails just behind and above
       const D = game.drone;
-      if (D.on) { // rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
+      if (D.on && D.type) { // bomber and recon: the view from the gimbal camera under the airframe, which tilts down to the vertical
+        D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.5707, 0.35);
+        const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
+        cam.x = D.x; cam.z = D.z; cam.y = Math.max(D.y - 0.2, W.heightAt(cam.x, cam.z) + 0.3);
+        if (cp < 0.02) lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, -Math.sin(D.yaw), 0, -Math.cos(D.yaw)); // straight down: up is the heading
+        else lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
+      } else if (D.on) { // rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
         D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.3, 1.1);
         const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
         cam.x = D.x - fx * 2.3; cam.z = D.z - fz * 2.3; cam.y = Math.max(D.y - fy * 2.3 + 0.55, W.heightAt(cam.x, cam.z) + 0.4);
@@ -848,7 +869,8 @@ async function main() {
       if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
-        if (BL.dN) { sp.setVertexBuffer(0, debO.vb); sp.setIndexBuffer(debO.ib, 'uint32'); sp.drawIndexed(BL.dN * 36); } }
+        if (BL.dN) { sp.setVertexBuffer(0, debO.vb); sp.setIndexBuffer(debO.ib, 'uint32'); sp.drawIndexed(BL.dN * 36); }
+        if (mineO.n && c === 0) { sp.setVertexBuffer(0, mineO.vb); sp.setIndexBuffer(mineO.ib, 'uint32'); sp.drawIndexed(MAXM * mNI); } }
       if (R.trees) { sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3, c + 1); }
       }
       sp.end();
@@ -858,10 +880,11 @@ async function main() {
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
     if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
-    if (droneOn && !hV) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
+    if (droneOn && !hV && !(cam.mode === 4 && game.drone.type)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
-      if (BL.dN) { p.setVertexBuffer(0, debO.vb); p.setIndexBuffer(debO.ib, 'uint32'); p.drawIndexed(BL.dN * 36); } }
+      if (BL.dN) { p.setVertexBuffer(0, debO.vb); p.setIndexBuffer(debO.ib, 'uint32'); p.drawIndexed(BL.dN * 36); }
+      if (mineO.n) { p.setVertexBuffer(0, mineO.vb); p.setIndexBuffer(mineO.ib, 'uint32'); p.drawIndexed(MAXM * mNI); } }
     if (R.trees) { p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4, 0); }
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
     for (let l = 0; l < NL && !hT; l++) {
@@ -892,7 +915,8 @@ async function main() {
     }
     const fu = pUData[NB * 2]; fu[0] = sx; fu[1] = sy; fu[2] = 1 / R.w; fu[3] = 1 / R.h; fu[4] = expo; fu[5] = 0.1; fu[6] = R.manual ? 0.37 : R.time; fu[7] = R.thNow;
     const hudOn = cam.mode !== 3 && !R.pose && !R.nohud && !hX;
-    fu[8] = cam.mode === 4 ? 9 : aim.sx; fu[9] = aim.sy; fu[10] = R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
+    const Dr = game.drone, drop = cam.mode === 4 && Dr.on && Dr.type === 1;
+    fu[8] = cam.mode === 4 ? R.dropSx : aim.sx; fu[9] = cam.mode === 4 ? R.dropSy : aim.sy; fu[10] = drop ? (Dr.bombs ? clamp(1 - Dr.rel / 0.7, 0, 1) : 0) : R.reload || 0; fu[11] = hudOn ? (cam.mode === 1 ? 2 : 1) : 0; fu[12] = R.hitT || 0; fu[13] = drop ? (Dr.bombs ? 1 : 0) : aim.ready; fu[14] = cam.sightK; fu[15] = R.hurtT || 0;
     device.queue.writeBuffer(pU[NB * 2], 0, fu);
     finalPass.colorAttachments[0].view = ctx.getCurrentTexture().createView();
     const fp = enc.beginRenderPass(finalPass); fp.setPipeline(finalPipe); fp.setBindGroup(0, finalBG); fp.draw(3); fp.end();

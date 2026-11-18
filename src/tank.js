@@ -251,6 +251,17 @@ export function buildBMP() {
   return b.build();
 }
 
+// ---------- anti-tank mine (TM-62 style: a squat olive disc with the fuze well on top), about 0.32 m across ----------
+export function buildMine() {
+  const b = new MB(), OLV = [0.15, 0.17, 0.1], DARK = [0.05, 0.055, 0.045];
+  b.set(OLV, MAT.paint); b.cyl(0, 0, 0, 0, 0.09, 0, 0.16, 0.155, 14); b.cyl(0, 0.09, 0, 0, 0.115, 0, 0.13, 0.11, 14);
+  b.set(DARK, MAT.metal); b.cyl(0, 0.115, 0, 0, 0.14, 0, 0.045, 0.04, 10); b.set(OLV, MAT.paint); b.box(-0.17, 0.035, -0.012, -0.15, 0.06, 0.012); // fuze, carrying handle lug
+  const nm = b.v.length / 14; // the marking picket follows: a thin stake with a red flag beside the mine (shown once the mine is marked)
+  b.set([0.42, 0.36, 0.26], MAT.wood); b.cyl(0.3, -0.1, 0.05, 0.3, 0.85, 0.05, 0.014, 0.011, 5);
+  b.set([0.75, 0.06, 0.03], MAT.paint); b.box(0.31, 0.66, 0.045, 0.55, 0.82, 0.055, 0, 0); b.set([0.95, 0.85, 0.1], MAT.paint); b.box(0.31, 0.6, 0.045, 0.43, 0.66, 0.055, 0, 0);
+  const m = b.build(); m.nm = nm; return m;
+}
+
 // ---------- FPV drone with an anti-tank warhead slung underneath (about 0.75 m across) ----------
 // parts: 0 airframe, 1..4 rotors
 export function buildDrone() {

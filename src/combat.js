@@ -6,12 +6,18 @@ import { cur as todCur } from './tod.js';
 import { initMinimap, MAP_M, MAP_PX } from './minimap.js';
 
 export const AMMO = [{ name: 'APFSDS', v: 1650, max: 20 }, { name: 'HEAT-MP', v: 1140, max: 12 }, { name: 'HE', v: 950, max: 10 }];
-export const MAXE = 10, MAXG = 760;
-const DRONES = 5, DRONE_T = 75, DRONE_V = 26, DRONE_R = 1500; // drones per game, battery (s), top speed (m/s), radio range (m)
+export const MAXE = 10, MAXG = 760, MAXM = 48; // enemies, glow sprites, mines
+// drone types: 0 FPV (one-way shaped charge), 1 bomber (hovers, drops VOG grenades, lands back on the tank to rearm), 2 recon (high, long, quiet, unarmed)
+// n per game, battery t (s), top speed v (m/s), radio range r (m), spotting range see (m), how long a sighting stays on the map mark (s), climb after launch (m above ground)
+export const DTYPE = [{ name: 'FPV', n: 5, t: 75, v: 26, r: 1500, see: 800, mark: 20, climb: 0 }, { name: 'BOMB', n: 2, t: 120, v: 14, r: 1500, see: 900, mark: 25, climb: 30 }, { name: 'RECON', n: 2, t: 180, v: 18, r: 2200, see: 1500, mark: 40, climb: 110 }];
+// grenades per bomber sortie, seconds between drops; a lost contact fades from the map over LOST_T s; NFLD pre-laid minefields enemies know about and drive around
+const BOMBS = 3, BOMB_RL = 0.7, LOST_T = 40, NFLD = 6;
+// mine damage by shell type (radius in m around a ground impact that sets a mine off): APFSDS, HEAT, HE, MG, 125 mm, 30 mm, smoke, VOG
+const MCLR = [1.5, 2.5, 4.5, 0.8, 2, 1, 0, 2.5];
 const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
-// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade
-const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0]];
-const BDMG = [20, 45, 70, 0, 35, 3, 0]; // direct-hit damage to a building by shell type (the drone charge does 100)
+// shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber
+const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1]];
+const BDMG = [20, 45, 70, 0, 35, 3, 0, 25]; // direct-hit damage to a building by shell type (the drone charge does 100)
 // enemy roles: assault closes in; overwatch takes a high spot with a view and holds; flanker swings wide to come in from the side;
 // raider (BMP) runs fast along the plowed roads to close range
 const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'flanker', 'raider'], PQN = 16;
@@ -26,11 +32,13 @@ export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
   const SO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
-  const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1 }; G.drones = DRONES; G.rep = 0; G.spot = false;
+  const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
+    type: 0, bombs: 0, rel: 0, climb: 0, away: false, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
+  G.dn = new Int32Array(3); for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; G.dsel = 0; G.rep = 0; G.spot = false;
   let fireWas = false, fireBlock = false;
   let sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i],
-    role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0 });
+    role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
   // pending spawns of the current wave (staggered groups, reinforcements): preallocated, filled by planWave on a wave start
   const PQ = []; for (let i = 0; i < PQN; i++) PQ.push({ t: 0, trig: -1, type: 0, role: 0, brg: 0, grp: 0, ann: 0 });
   let pqN = 0, noSlot = false, anyWreck = false; const GA = new Float32Array(8 * 3), GS = new Float32Array(8 * 4), COV = new Float32Array(36); let annNow = 0; // group anchors (x, z, set); per-release tally per group (n, unit x, unit z, distance); route points per 10° of bearing
@@ -42,7 +50,7 @@ export function initCombat(C) {
   const glow = (x, y, z, size, r, g, b) => { if (G.fxN >= MAXG) return; const o = G.fxN++ * 12, f = G.fx; f[o] = x; f[o + 1] = y; f[o + 2] = z; f[o + 3] = size; f[o + 4] = r; f[o + 5] = g; f[o + 6] = b; f[o + 7] = 0; f[o + 8] = 3; f[o + 9] = 0; f[o + 10] = 8; f[o + 11] = 0; };
   const flashAdd = (x, y, z, size, life, r, g, b) => { const o = flNext * 8; flNext = (flNext + 1) % 24; FL[o] = x; FL[o + 1] = y; FL[o + 2] = z; FL[o + 3] = size; FL[o + 4] = life; FL[o + 5] = life; FL[o + 6] = r; FL[o + 7] = g; const L = G.flash; L[0] = x; L[1] = y + 1; L[2] = z; L[3] = 30 + size * 9; L[4] = r * 0.5 * size; L[5] = g * 0.5 * size; L[6] = g * 0.2 * size; L[7] = 1; };
   const blast = (x, z, r, k) => { if (G.blastN >= 16) return; const o = G.blastN++ * 4; G.blasts[o] = x; G.blasts[o + 1] = z; G.blasts[o + 2] = r; G.blasts[o + 3] = k; };
-  const sr = () => rnd() - 0.5;
+  const sr = () => rnd() - 0.5, d2p = (e) => Math.hypot(e.x - veh.x, e.z - veh.z);
   function fire(owner, type, x, y, z, dx, dy, dz, v, spread, life) {
     let i = sNext; for (let k = 0; k < SN; k++) { if (S[i * SS + 8] <= 0) break; i = (i + 1) % SN; } sNext = (i + 1) % SN;
     const o = i * SS; dx += sr() * spread; dy += sr() * spread; dz += sr() * spread; const l = v / Math.hypot(dx, dy, dz);
@@ -102,7 +110,7 @@ export function initCombat(C) {
   // ---------- damage ----------
   const DT72 = [[60, 110, 140], [28, 75, 110], [22, 24, 30]];
   function kill(e) {
-    e.dead = true; e.hp = 0; e.burn = 0.01; e.state = 3; e.v = 0; G.kills++; G.score += e.type ? 60 : 100; hudDirty = true;
+    e.dead = true; e.hp = 0; e.burn = 0.01; e.state = 3; e.v = 0; e.seen = true; e.lx = e.x; e.lz = e.z; G.kills++; G.score += e.type ? 60 : 100; hudDirty = true;
     explode(e.x, e.y + 1.4, e.z, 2.4); explode(e.x, e.y + 0.4, e.z, 1.2);
     if (e.type === 0 && rnd() < 0.45) e.tlV = 7 + rnd() * 5; // ammunition cook-off throws the turret
     ui.toast(ETYPE[e.type].name + ' destroyed'); R.hitT = 0.6;
@@ -117,27 +125,31 @@ export function initCombat(C) {
   function hitVehicle(type, t, zone, fc, x, y, z) {
     if (t === veh) { const d = type === 4 ? [16, 30, 44][fc] * (zone === 2 ? 0.8 : 1) : type === 5 ? [1.5, 4, 7][fc] : 0; if (d) hurtPlayer(d, fc, y - veh.y < 0.95); return; }
     if (t.dead) return;
-    let d = 0;
-    if (t.type === 0) { if (type < 3) d = DT72[type][fc] * (zone === 2 && fc === 0 ? 0.85 : 1); }
+    let d = 0, deck = false;
+    if (type === 7) { // VOG from above: the thin roof and the engine deck (rear, local +z) are where it hurts
+      const lz = Math.sin(t.yaw) * (x - t.x) + Math.cos(t.yaw) * (z - t.z); deck = zone === 1 && lz > 0.9;
+      d = t.type ? 110 : zone === 2 ? 50 : deck ? 85 : 30; }
+    else if (t.type === 0) { if (type < 3) d = DT72[type][fc] * (zone === 2 && fc === 0 ? 0.85 : 1); }
     else d = type === 0 ? 100 : type === 1 ? 130 : type === 2 ? 110 : 3;
     if (d <= 0) return;
-    t.hp -= d * (0.85 + rnd() * 0.3); t.known = 15; if (type !== 3 || R.hitT < 0.1) R.hitT = 0.3;
-    if (type < 3 && fc === 1 && y - t.y < 0.95 && rnd() < 0.4) t.immob = true;
+    t.hp -= d * (0.85 + rnd() * 0.3); t.known = 15; t.spotT = Math.max(t.spotT, 10); if (type !== 3 || R.hitT < 0.1) R.hitT = 0.3;
+    if ((type < 3 && fc === 1 && y - t.y < 0.95 && rnd() < 0.4) || deck) t.immob = true;
     t.dpV = 0; t.see = Math.max(t.see, 1.2); // it now knows where the shot came from
-    if (t.hp <= 0) kill(t); else if (type < 3) ui.toast(fc === 0 ? 'Hit — frontal armour held' : 'Hit');
+    if (t.hp <= 0) kill(t); else if (type === 7) ui.toast(deck ? 'Grenade hit — engine deck, it is immobilised' : zone === 2 ? 'Grenade hit — turret roof' : 'Grenade hit'); else if (type < 3) ui.toast(fc === 0 ? 'Hit — frontal armour held' : 'Hit');
   }
   function splash(x, y, z, r, dT, dB, owner) {
     if (owner === 0) { for (const e of G.enemies) { if (!e.on || e.dead) continue; const d = Math.hypot(e.x - x, e.y + 1 - y, e.z - z); if (d < r + 2.5) { e.hp -= (e.type ? dB : dT) * clamp(1 - (d - 2.5) / r, 0, 1); e.known = 15; if (e.hp <= 0) kill(e); } } }
     else { const d = Math.hypot(veh.x - x, veh.y + 1 - y, veh.z - z); if (d < r + 2.5) hurtPlayer(dT * clamp(1 - (d - 2.5) / r, 0, 1), 1, false); }
   }
   function impact(type, owner, x, y, z, t, zone, fc) {
-    if (t) hitVehicle(type, t, zone, fc, x, y, z);
+    if (t) hitVehicle(type, t, zone, fc, x, y, z); else if (MCLR[type] && y - hAt(x, z) < 1.5) mineHit(x, z, MCLR[type]);
     if (type === 0 || type === 4) { explode(x, y, z, t ? 0.9 : 0.55); if (t) for (let i = 0; i < 14; i++) parts.emit(x, y, z, sr() * 14, rnd() * 9, sr() * 14, 0.3 + rnd() * 0.4, 0.02 + rnd() * 0.02, 0, 0, 3, 2.2, 1, 1); }
     else if (type === 1) { explode(x, y, z, 1.7); splash(x, y, z, 3.5, 6, 40, owner); }
     else if (type === 2) { explode(x, y, z, 3.2); splash(x, y, z, 9, 12, 70, owner); C.bld.splash(x, y, z, 9, 30, bSkip, bldFx); }
     else if (type === 5) { explode(x, y, z, 0.4); }
     else if (type === 3) { if (t) glow(x, y, z, 0.5, 20, 12, 4); else for (let i = 0; i < 3; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.5 + rnd() * 2.5, sr() * 2, 0.4 + rnd() * 0.3, 0.012 + rnd() * 0.015, 0, 0, 1, 1, 1, 0.9); }
     else if (type === 6) smokeBurst(x, y, z);
+    else if (type === 7) { explode(x, y, z, 0.75); splash(x, y, z, 3, 6, 18, owner); }
   }
   function smokeBurst(x, y, z) { C.sfx('smoke', x, y, z, 0.5); const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
 
@@ -269,6 +281,7 @@ export function initCombat(C) {
     if (role === FLK && G.lastAxis === G.lastAxis && Math.abs(wrap(e.brg - G.lastAxis)) > 0.3) e.side = wrap(e.brg - G.lastAxis) > 0 ? 1 : -1; // keep swinging away from the main axis
     if (grp >= 0 && !ga) { GA[grp * 3] = bx; GA[grp * 3 + 1] = bz; GA[grp * 3 + 2] = 1; }
     if (grp >= 0) { const dd = Math.hypot(bx - veh.x, bz - veh.z) || 1; GS[grp * 4]++; GS[grp * 4 + 1] += (bx - veh.x) / dd; GS[grp * 4 + 2] += (bz - veh.z) / dd; GS[grp * 4 + 3] += dd; }
+    e.spotT = 0; e.seen = false; e.lostT = 0; e.lx = bx; e.lz = bz;
     roleGoal(e); e.dir = pathDir(e) || 1; const t = NETS[bn][bp], j = clamp(bi + e.dir, 0, t.n - 1); e.yaw = Math.atan2(-(t.pts[j * 2] - bx), -(t.pts[j * 2 + 1] - bz));
     return true;
   }
@@ -280,6 +293,8 @@ export function initCombat(C) {
   }
   const toPt = (e, E, tx, tz, f) => {
     let ux = tx - e.x, uz = tz - e.z; const l = Math.hypot(ux, uz) || 1; ux /= l; uz /= l;
+    for (let f = 0; f < NFLD; f++) { const o = f * 4; if (!FLD[o + 3]) continue; const fx = e.x - FLD[o], fz = e.z - FLD[o + 1], fd = Math.hypot(fx, fz) || 1, rr = FLD[o + 2] + 14; // own minefields: swing round them
+      if (fd < rr) { const w = (rr - fd) / 14 * 1.8; ux += fx / fd * w; uz += fz / fd * w; } }
     if (e.cT > 0) { const dn = ux * e.cnx + uz * e.cnz; if (dn < 0.2) { ux -= e.cnx * (dn - 0.2); uz -= e.cnz * (dn - 0.2); if (dn < -0.9) { ux -= e.cnz * e.side; uz += e.cnx * e.side; } } } // against a wall: slide along it
     const a = wrap(Math.atan2(-ux, -uz) - e.yaw); e.st = clamp(a * 2.2, -1, 1); e.tgt = E.vmax * f * (1 - 0.6 * Math.abs(e.st)); };
   // movement: sets e.tgt (speed, negative = reverse) and e.st (steer) from the role, hit reactions, scoots and the route
@@ -308,8 +323,8 @@ export function initCombat(C) {
       } else {
         e.idleT = 0; e.evalT -= dt;
         if (e.evalT <= 0) { e.evalT = 4 + rnd() * 2; roleGoal(e); if (e.path >= 0) { const nd = pathDir(e); if (nd === 0) e.path = -1; else e.dir = nd; } if (e.path < 0 && e.noRt <= 0) findRoute(e); }
-        let tx = e.gx, tz = e.gz;
-        if (e.path >= 0) { const t = NETS[e.net][e.path]; while (Math.hypot(t.pts[e.pi * 2] - e.x, t.pts[e.pi * 2 + 1] - e.z) < 8) { e.pi += e.dir; if (e.pi < 0 || e.pi >= t.n) { e.path = -1; e.evalT = Math.min(e.evalT, 0.5); break; } } if (e.path >= 0) { tx = t.pts[e.pi * 2]; tz = t.pts[e.pi * 2 + 1]; } }
+        let tx = e.gx, tz = e.gz; // (route points inside one of our own minefields are skipped)
+        if (e.path >= 0) { const t = NETS[e.net][e.path]; while (Math.hypot(t.pts[e.pi * 2] - e.x, t.pts[e.pi * 2 + 1] - e.z) < 8 || inField(t.pts[e.pi * 2], t.pts[e.pi * 2 + 1], 4)) { e.pi += e.dir; if (e.pi < 0 || e.pi >= t.n) { e.path = -1; e.evalT = Math.min(e.evalT, 0.5); break; } } if (e.path >= 0) { tx = t.pts[e.pi * 2]; tz = t.pts[e.pi * 2 + 1]; } }
         toPt(e, E, tx, tz, e.path < 0 ? 0.55 : e.net ? 1.3 : 1);
       }
     }
@@ -361,14 +376,15 @@ export function initCombat(C) {
     return made;
   }
   const dirName = (x, z) => DIRS[Math.round(((Math.atan2(x, -z) * 57.296 + 360) % 360) / 45) % 8];
-  function announce(head) { // rare event
+  function announce(head, tail = '') { // rare event
     let msg = head, k = 0;
     for (let g = 0; g < 8; g++) { const n = GS[g * 4]; if (!n) continue;
       msg += (k++ ? ' · ' : '') + `${n} from the ${dirName(GS[g * 4 + 1], GS[g * 4 + 2])}, ~${Math.round(GS[g * 4 + 3] / n / 50) * 50} m`; }
-    ui.toast(msg);
+    ui.toast(msg + tail);
   }
   function updateEnemy(e, dt, idx) {
     const E = ETYPE[e.type], K = E.K;
+    if (e.spotT > 0) { e.spotT -= dt; e.seen = true; e.lostT = 0; if (!e.dead) { e.lx = e.x; e.lz = e.z; } } else e.lostT += dt; // map contact: fresh while spotted, then the last known position
     if (e.dead) { // wreck: burn, then smoulder; a thrown turret comes back down askew
       e.burn += dt; e.burnt = Math.min(1, e.burnt + dt * 0.5);
       if (e.tlV !== 0) { e.tlV -= 13 * dt; e.tl += e.tlV * dt; e.tt += dt * 2.2; e.turYaw += dt * 1.7; if (e.tl <= 0.1 && e.tlV < 0) { e.tl = 0.1; e.tlV = 0; e.tt = 0.16; explode(e.x, e.y + 1.5, e.z, 0.8); } }
@@ -385,6 +401,9 @@ export function initCombat(C) {
       else e.see -= 0.5 * dt;
       if (e.see < 0) e.see = 0;
       if (e.see >= 1) { e.known = Math.max(e.known, 12); if (e.los > 0) G.spot = true; }
+      // the crew sees it (the same sight line, reversed): inside the sight's field of view or close by, within a range that shrinks at night without the thermal sight
+      if (e.los > 0.2 && !veh.dead) { const rng = 1600 * (1 - (R.therm ? 0.15 : 0.6) * clamp((2 - todCur[1]) / 22, 0, 1));
+        if (d < rng && (d < 180 || Math.abs(wrap(Math.atan2(-(e.x - veh.x), -(e.z - veh.z)) - aim.yaw)) < 0.75)) e.spotT = Math.max(e.spotT, 6); }
       if (G.rep > 5) e.known = Math.max(e.known, 3); // a contact report from another crew (radio delay) tells it where to look
       e.known -= dt;
       const engage = e.los > 0 && d < E.range && e.see >= 1;
@@ -419,7 +438,7 @@ export function initCombat(C) {
       else if (engage && !G.peace && e.rl <= 0 && Math.hypot(dyaw, dpt) < 0.012 && e.see >= (e.shots ? 1 : 1 + d * 0.001)) { e.rl = E.reload * (0.9 + rnd() * 0.3); e.shots++; e.fire = true; e.burstN = E.burst - 1; e.burstT = 0.2; }
     }
     tankParts(e.d, e, K); e.d[128] = e.trL; e.d[129] = e.trR; e.d[130] = e.burnt; e.d[131] = 1;
-    if (e.fire) { e.fire = false; const M = gunMat(), mx = M[4] * K.gy + M[8] * K.mz + M[12], my = M[5] * K.gy + M[9] * K.mz + M[13], mz = M[6] * K.gy + M[10] * K.mz + M[14], l = -1 / Math.hypot(M[8], M[9], M[10]);
+    if (e.fire) { e.fire = false; if (d2p(e) < 2500) e.spotT = Math.max(e.spotT, 8); const M = gunMat(), mx = M[4] * K.gy + M[8] * K.mz + M[12], my = M[5] * K.gy + M[9] * K.mz + M[13], mz = M[6] * K.gy + M[10] * K.mz + M[14], l = -1 / Math.hypot(M[8], M[9], M[10]);
       C.sfx(e.type ? 'auto' : 'egun', mx, my, mz, 1);
       const E2 = ETYPE[e.type]; fire(1, E2.shell, mx, my, mz, M[8] * l, M[9] * l, M[10] * l, E2.v, e.type ? 0.004 : 0.0016, 4);
       muzzle(mx, my, mz, M[8] * l, M[9] * l, M[10] * l, e.type ? 0.3 : 1); e.recoil = e.type ? 0.05 : 0.3; e.known = 14; }
@@ -430,9 +449,12 @@ export function initCombat(C) {
     hudDirty = false; lastMg = Math.ceil(G.mg / 50) * 50;
     const hp = Math.ceil(veh.hp);
     ui.set('sH', 'HULL ' + hp, 'st ' + (hp > 60 ? 'on' : hp > 30 ? 'warn' : 'bad'));
+    if (veh.immob > 0 && !veh.dead) ui.set('sT', 'TRACK ' + Math.ceil(veh.immob) + ' s', 'st bad'); ui.show('sT', veh.immob > 0 && !veh.dead);
     ui.set('sA', AMMO[G.sel].name + ' ' + G.n[G.sel], 'st ' + (G.n[G.sel] ? 'on' : 'bad'));
     ui.set('sM', 'MG ' + lastMg, 'st'); ui.set('sK', 'SMOKE ' + G.smokeN, 'st');
-    ui.set('sD', D.on ? 'DRONE ' + D.sec + ' s' : 'DRONE ' + G.drones, 'st' + (D.on ? (D.sec > 15 ? ' on' : ' warn') : ''));
+    const DT = DTYPE[D.on ? D.type : G.dsel];
+    ui.set('sD', D.on ? DT.name + (D.type === 1 ? ' ×' + D.bombs : '') + ' · ' + D.sec + ' s' : DT.name + ' ' + G.dn[G.dsel], 'st' + (D.on ? (D.sec > 15 ? ' on' : ' warn') : ''));
+    if (ui.droneUI) ui.droneUI(DT.name, D.on ? D.type : -1);
     ui.set('wave', G.peace ? 'FREE ROAM' : (G.wave ? 'WAVE ' + G.wave + (G.won ? '' : '/' + WAVES) : 'STAND BY') + ' · ' + G.kills + ' KILLS · ' + G.score);
   }
   function drawMap() {
@@ -444,15 +466,108 @@ export function initCombat(C) {
     c.strokeStyle = '#ffffff38'; c.lineWidth = 1; c.beginPath(); c.arc(cx, cx, 500 * sc, 0, 6.283); c.stroke();
     c.fillStyle = '#ffffffb0'; c.fillRect(cx - 0.5, 3, 1, 6);
     c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2;
-    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || Math.abs(e.x - mx) > 900 || Math.abs(e.z - mz) > 900) continue; // datalink: everything within 900 m is plotted
-      const x = clamp(cx + (e.x - mx) * sc, 4, Wd - 4), y = clamp(cx + (e.z - mz) * sc, 4, Wd - 4);
-      c.fillStyle = e.dead ? '#59606a' : e.type ? '#ff9a3d' : '#ff4a3a'; c.beginPath(); if (e.type) c.rect(x - 2.6, y - 2.6, 5.2, 5.2); else c.arc(x, y, 3.7, 0, 6.283); c.fill(); c.stroke(); }
+    // marked mines: small amber crosses
+    c.strokeStyle = '#ffc04a'; c.lineWidth = 1.3; c.beginPath();
+    for (let i = 0; i < MAXM; i++) { if (!MR[i] || (MS[i] !== 1 && MS[i] !== 2)) continue; const x = cx + (MX[i] - mx) * sc, y = cx + (MZ[i] - mz) * sc; if (x < 2 || y < 2 || x > Wd - 2 || y > Wd - 2) continue;
+      c.moveTo(x - 1.8, y - 1.8); c.lineTo(x + 1.8, y + 1.8); c.moveTo(x + 1.8, y - 1.8); c.lineTo(x - 1.8, y + 1.8); }
+    c.stroke(); c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2;
+    // only what has been seen (crew, sight, drones, muzzle flashes): fresh contacts solid, lost ones as a hollow marker at the last known position that fades out
+    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || !e.seen) continue;
+      const fresh = e.dead || e.spotT > 0, ex = e.dead ? e.x : e.lx, ez = e.dead ? e.z : e.lz; if ((!fresh && e.lostT > LOST_T) || Math.abs(ex - mx) > 900 || Math.abs(ez - mz) > 900) continue;
+      const x = clamp(cx + (ex - mx) * sc, 4, Wd - 4), y = clamp(cx + (ez - mz) * sc, 4, Wd - 4), col = e.dead ? '#59606a' : e.type ? '#ff9a3d' : '#ff4a3a';
+      c.beginPath(); if (e.type) c.rect(x - 2.6, y - 2.6, 5.2, 5.2); else c.arc(x, y, 3.7, 0, 6.283);
+      if (fresh) { c.fillStyle = col; c.fill(); c.stroke(); }
+      else { c.globalAlpha = 0.25 + 0.75 * (1 - e.lostT / LOST_T); c.strokeStyle = '#05080c90'; c.lineWidth = 3; c.stroke(); c.strokeStyle = col; c.lineWidth = 1.4; c.stroke(); c.globalAlpha = 1; c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2; } }
     const a = veh.yaw, t = veh.yaw + veh.turYaw, vx = clamp(cx + (veh.x - mx) * sc, 6, Wd - 6), vy = clamp(cx + (veh.z - mz) * sc, 6, Wd - 6);
     c.strokeStyle = '#05080cb0'; c.lineWidth = 3; c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx - Math.sin(t) * 26, vy - Math.cos(t) * 26); c.stroke();
     c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5; c.stroke();
     c.fillStyle = '#7dffb0'; c.strokeStyle = '#05080cd0'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7, vy - Math.cos(a) * 7); c.lineTo(vx - Math.sin(a + 2.5) * 5, vy - Math.cos(a + 2.5) * 5); c.lineTo(vx - Math.sin(a - 2.5) * 5, vy - Math.cos(a - 2.5) * 5); c.closePath(); c.fill(); c.stroke();
     if (D.on) { const q = D.yaw, dx = cx + (D.x - mx) * sc, dy = cx + (D.z - mz) * sc; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(dx - Math.sin(q) * 8, dy - Math.cos(q) * 8); c.lineTo(dx - Math.sin(q + 2.4) * 5, dy - Math.cos(q + 2.4) * 5); c.lineTo(dx - Math.sin(q - 2.4) * 5, dy - Math.cos(q - 2.4) * 5); c.closePath(); c.fill(); c.stroke(); }
   }
+
+  // ---------- mines: pre-laid fields on the roads ahead (buried, a faint disturbance in the snow) and rocket-laid mines on the surface ----------
+  // state MS: 0 free, 1 buried, 2 on the surface, 3 falling (rocket-laid, MT s to impact); MA arming delay; MR revealed (drone, crew or seen landing); MP snow stamp pending
+  const MX = new Float32Array(MAXM), MY = new Float32Array(MAXM), MZ = new Float32Array(MAXM), MT = new Float32Array(MAXM), MA = new Float32Array(MAXM), MW = new Float32Array(MAXM);
+  const MS = new Uint8Array(MAXM), MR = new Uint8Array(MAXM), MP = new Uint8Array(MAXM), FLD = new Float32Array(NFLD * 4); // field: x z radius on
+  let rlAt = -1, rlT = 0, rlX = 0, rlZ = 0, crewT = 0, immS = -1, fixT = 0, mineSeq = 0;
+  const mesh = (i) => { if (C.mineMesh) C.mineMesh(i, MX[i], MY[i], MZ[i], MW[i], MS[i] === 2, MR[i] && (MS[i] === 1 || MS[i] === 2)); };
+  function mineSlot() { let o = -1, oa = 1e9; for (let i = 0; i < MAXM; i++) { if (!MS[i]) return i; if (MS[i] === 2 && MT[i] < oa) { oa = MT[i]; o = i; } } return o; } // full: reuse the oldest surface mine
+  function mineAt(x, z, st, t) {
+    const i = mineSlot(); if (i < 0) return -1;
+    MX[i] = x; MZ[i] = z; MY[i] = hAt(x, z); MS[i] = st; MT[i] = st === 3 ? t : ++mineSeq; MA[i] = 1.5; MR[i] = 0; MP[i] = st === 1 ? 1 : 0; MW[i] = rnd() * 6.283; mesh(i); return i;
+  }
+  const inField = (x, z, pad) => { for (let f = 0; f < NFLD; f++) { const o = f * 4; if (FLD[o + 3] && Math.hypot(x - FLD[o], z - FLD[o + 1]) < FLD[o + 2] + pad) return true; } return false; };
+  // a field across a road: two staggered rows over both track lanes, along about 20 m
+  function layField(cx, cz, dx, dz) {
+    let f = 0; while (f < NFLD && FLD[f * 4 + 3]) f++; if (f >= NFLD) return 0;
+    const n = 6 + ((rnd() * 4) | 0); let made = 0;
+    for (let k = 0; k < n; k++) { const a = (k - (n - 1) / 2) * 2.8 + sr() * 1.2, c = (k & 1 ? 1 : -1) * (0.8 + rnd() * 2.2), x = cx + dx * a - dz * c, z = cz + dz * a + dx * c;
+      if (C.bld.at(x, hAt(x, z) + 0.5, z, 0.5) >= 0 || C.collAt(x, z)) continue; if (mineAt(x, z, 1, 0) >= 0) made++; }
+    const o = f * 4; FLD[o] = cx; FLD[o + 1] = cz; FLD[o + 2] = n * 1.45 + 3; FLD[o + 3] = 1;
+    return made;
+  }
+  // on a wave start (rare event): mine one or two road or trail stretches 120–380 m out towards the main axis
+  function planFields(w) {
+    if (w < 2 || rnd() > 0.65) return 0;
+    const want = w >= 4 && rnd() < 0.5 ? 2 : 1; let laid = 0, bx = 0, bz = 0;
+    for (let m = 0; m < want; m++) { let best = -1e9, px = 0, pz = 0, ux = 0, uz = 0;
+      for (let k = 0; k < 300; k++) { const n = k % 3 ? 1 : 0, L = NETS[n]; if (!L.length) continue; const t = L[(rnd() * L.length) | 0]; if (!t || t.n < 12) continue;
+        const i = 3 + ((rnd() * (t.n - 6)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
+        if (d < 120 || d > 380 || Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || inField(x, z, 60)) continue;
+        const sc = 2 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - G.lastAxis)) / 1.1) + (n ? 1 : 0) + rnd() * 0.6 - Math.abs(d - 230) / 300;
+        if (sc > best) { best = sc; px = x; pz = z; const ex = t.pts[i * 2 + 2] - t.pts[i * 2 - 2], ez = t.pts[i * 2 + 3] - t.pts[i * 2 - 1], l = Math.hypot(ex, ez) || 1; ux = ex / l; uz = ez / l; } }
+      if (best > -1e9) { const n0 = layField(px, pz, ux, uz); if (n0) { laid += n0; bx = px; bz = pz; } } }
+    return laid ? dirName(bx - veh.x, bz - veh.z) : 0;
+  }
+  function mineBoom(i, under) {
+    const x = MX[i], y = MY[i], z = MZ[i]; MS[i] = 0; MR[i] = 0; MP[i] = 0; mesh(i);
+    explode(x, y + 0.15, z, 1.5);
+    for (let k = 0; k < 14; k++) parts.emit(x, y + 0.3, z, sr() * 10, 3 + rnd() * 8, sr() * 10, 0.4 + rnd() * 0.5, 0.05 + rnd() * 0.06, 0, 0, 0.05, 0.05, 0.05, 1); // track links and fuze debris
+    if (under) { // the tank rolled onto it: damage and a broken track
+      const d = 15 + rnd() * 10; hurtPlayer(d, 0, false); veh.immob = Math.max(veh.immob, 4 + rnd() * 4); veh.shake = 1.2; veh.v *= 0.2; hudDirty = true;
+      ui.toast('MINE! Track blown — repairing'); return; }
+    const dp = Math.hypot(veh.x - x, veh.z - z); if (dp < 7) hurtPlayer(6 * (1 - dp / 7), 1, false);
+  }
+  // ground impacts and blasts set off mines nearby (HE clears a lane; the MG can pick off a mine it hits)
+  function mineHit(x, z, r) { for (let i = 0; i < MAXM; i++) { if (MS[i] !== 1 && MS[i] !== 2) continue; if (Math.hypot(MX[i] - x, MZ[i] - z) < (MS[i] === 1 ? r * 0.8 : r)) mineBoom(i, false); } }
+  // rocket-laid mines: a warning, then a cassette bursts over the spot the tank was at and scatters mines on the snow around it
+  function strike() { rlT = 4; rlX = veh.x; rlZ = veh.z; C.sfx('whistle', veh.x, veh.y + 40, veh.z, 1); ui.toast('Incoming rockets — remote mining! Move!'); }
+  function updateMines(dt) {
+    let stamps = 0;
+    for (let i = 0; i < MAXM; i++) { const st = MS[i]; if (!st) continue;
+      if (MP[i] && G.blastN < 12 && stamps < 4) { MP[i] = 0; stamps++; blast(MX[i], MZ[i], 1.3, 0.3); } // fresh digging: a faint scar in the snow (and a little warmth in the thermal sight)
+      if (st === 3) { MT[i] -= dt; const h = MT[i] * 45;
+        if (MT[i] > 0) { if (h < 160) glow(MX[i], MY[i] + h, MZ[i], 0.35 + h * 0.004, 5, 3, 1.5); continue; }
+        MS[i] = 2; MT[i] = ++mineSeq; MR[i] = 1; MA[i] = 2; mesh(i);
+        for (let k = 0; k < 8; k++) parts.emit(MX[i] + sr() * 0.4, MY[i] + 0.15, MZ[i] + sr() * 0.4, sr() * 3, 1 + rnd() * 2.5, sr() * 3, 0.5 + rnd() * 0.5, 0.03 + rnd() * 0.04, 0, 0, 1, 1, 1, 0.9);
+        C.sfx('hit', MX[i], MY[i], MZ[i], 0.2); continue; }
+      if (MA[i] > 0) { MA[i] -= dt; continue; }
+      // pressure fuze: a track rolling over it (on the ground: a tank in the air over a crest does not set it off)
+      if (!veh.dead && !veh.air && veh.y - MY[i] < 0.8 && (Math.abs(veh.v) > 0.2 || Math.abs(veh.yawRate) > 0.05)) { const dx = MX[i] - veh.x, dz = MZ[i] - veh.z;
+        if (dx * dx + dz * dz < 20) { const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw); if (Math.abs(c * dx - s * dz) < 1.95 && Math.abs(s * dx + c * dz) < 3.9) { mineBoom(i, true); continue; } } }
+      if (MR[i] && todCur[1] < 2) { const d = Math.hypot(MX[i] - cam.x, MZ[i] - cam.z); if (d < 450) glow(MX[i] + Math.cos(MW[i]) * 0.3, MY[i] + 0.8, MZ[i] - Math.sin(MW[i]) * 0.3, 0.12 * (1 + d * 0.012) * (0.75 + 0.25 * Math.sin(R.time * 5 + i)), 9, 1.2, 0.3); } // marked, in the dark: a pulsing red light on the picket
+    }
+    // the crew notices disturbed snow close ahead in the sight (every 0.5 s)
+    crewT -= dt; if (crewT <= 0 && !veh.dead) { crewT = 0.5; let seen = 0;
+      for (let i = 0; i < MAXM; i++) { if (MS[i] !== 1 || MR[i]) continue; const dx = MX[i] - veh.x, dz = MZ[i] - veh.z, d = Math.hypot(dx, dz);
+        if (d < 30 && d > 2 && Math.abs(wrap(Math.atan2(-dx, -dz) - aim.yaw)) < 0.45 && losVis(veh.x, veh.y + 3, veh.z, MX[i], MY[i] + 0.2, MZ[i]) > 0.3) { MR[i] = 1; mesh(i); seen++; } }
+      if (seen) ui.toast('Disturbed snow ahead — possible mines — marked'); }
+    // rocket strike: due in this wave, then the warning, then the scatter
+    if (rlAt > 0 && G.state === 1 && G.wt >= rlAt && !veh.dead) { rlAt = -1; strike(); }
+    if (rlT > 0) { rlT -= dt; if (rlT <= 0) { flashAdd(rlX, hAt(rlX, rlZ) + 75, rlZ, 2, 0.12, 30, 20, 8); C.sfx('boom', rlX, hAt(rlX, rlZ) + 75, rlZ, 0.3);
+      for (let k = 0; k < 10; k++) { const a = rnd() * 6.283, r = 18 + rnd() * 62; mineAt(rlX + Math.sin(a) * r, rlZ - Math.cos(a) * r, 3, 0.5 + k * 0.12 + rnd() * 0.2); } } }
+    // track repair: the pill counts down, a clank every so often
+    if (veh.immob > 0) { const s = Math.ceil(veh.immob); if (s !== immS) { immS = s; hudDirty = true; } fixT -= dt; if (fixT <= 0) { fixT = 1.1 + rnd() * 0.6; C.sfx('reload', veh.x, veh.y + 0.8, veh.z, 0.3); } }
+    else if (immS >= 0) { immS = -1; hudDirty = true; }
+  }
+  // drones see mines (buried ones by the disturbed snow) inside their camera cone
+  function droneMines(fx, fy, fz, range) {
+    let n = 0;
+    for (let i = 0; i < MAXM; i++) { if ((MS[i] !== 1 && MS[i] !== 2) || MR[i]) continue; const dx = MX[i] - D.x, dy = MY[i] - D.y, dz = MZ[i] - D.z, dd = Math.hypot(dx, dy, dz);
+      if (dd > range || (dx * fx + dy * fy + dz * fz) / dd < 0.72) continue; if (losVis(D.x, D.y, D.z, MX[i], MY[i] + 0.3, MZ[i]) > 0.1) { MR[i] = 1; mesh(i); n++; } }
+    if (n) ui.toast(`Drone: ${n} mine${n > 1 ? 's' : ''} spotted — marked`);
+  }
+  function minesReset() { MS.fill(0); MR.fill(0); MP.fill(0); FLD.fill(0); rlAt = -1; rlT = 0; for (let i = 0; i < MAXM; i++) mesh(i); }
 
   // ---------- per-frame update ----------
   G.update = (dt) => {
@@ -477,8 +592,10 @@ export function initCombat(C) {
       mgT += dt * 18;
       while (mgT >= 1 && G.mg > 0) { mgT--; G.mg--;
         const px = gM[0] * -0.32 + gM[4] * (LEO.gy + 0.15) + gM[8] * -2.4 + gM[12], py = gM[1] * -0.32 + gM[5] * (LEO.gy + 0.15) + gM[9] * -2.4 + gM[13], pz = gM[2] * -0.32 + gM[6] * (LEO.gy + 0.15) + gM[10] * -2.4 + gM[14];
-        const r = Math.min(aim.range, 1500), up = 0.5 * GRAV * r * (1 / (MGV * MGV) - 1 / (R.shellV * R.shellV));
-        fire(0, 3, px, py, pz, aim.gx, aim.gy + up, aim.gz, MGV, 0.0035, 2.2);
+        // the coax follows the sight's aim point (its own fire control: parallax to the sight head and the MG's drop) while the gun is laid near it; otherwise it fires along the bore
+        let cx = aim.x - px, cy = aim.y - py, cz = aim.z - pz; const cl = Math.hypot(cx, cy, cz) || 1, tg = Math.min(cl, 1500) / MGV; let drop = 0.5 * GRAV * tg * tg; // hold-over aiming straight at the point
+        if ((cx * aim.gx + cy * aim.gy + cz * aim.gz) / cl < 0.99) { const r = Math.min(aim.range, 1500); cx = aim.gx * cl; cy = (aim.gy + 0.5 * GRAV * r * (1 / (MGV * MGV) - 1 / (R.shellV * R.shellV))) * cl; cz = aim.gz * cl; drop = 0; } // along the bore: the bore already holds over for the main gun, add only the difference
+        fire(0, 3, px, py, pz, cx / cl, (cy + drop) / cl, cz / cl, MGV, 0.0035, 2.2);
         if ((G.mg & 1) === 0) glow(px + aim.gx * 0.4, py + aim.gy * 0.4, pz + aim.gz * 0.4, 0.7, 26, 14, 4);
         if (rnd() < 0.3) parts.emit(px, py, pz, aim.gx * 3 + sr(), 0.6, aim.gz * 3 + sr(), 0.5, 0.15, 0.6, 1, 0.3, 0.3, 0.31, 0.25);
       }
@@ -494,9 +611,11 @@ export function initCombat(C) {
       if (G.state === 0) { G.timer -= dt; if (G.timer <= 0) { G.wave++; G.wt = 0;
         for (const e of G.enemies) if (e.on && e.dead && Math.hypot(e.x - veh.x, e.z - veh.z) > 500) e.on = false; // recycle distant wrecks
         G.plan = planWave(G.wave); const more = PQ.slice(0, pqN).some((q) => q.ann); releaseWave(1e9);
-        G.state = 1; hudDirty = true; announce(`Wave ${G.wave} — ${G.plan}: `); if (more) setTimeout(() => { if (G.state === 1) ui.toast('More enemy movement reported — watch your flanks'); }, 3500); } }
+        const mf = planFields(G.wave); rlAt = G.wave >= 3 && rnd() < 0.55 ? 35 + rnd() * 45 : -1; // minefields ahead; maybe a rocket-laid strike later in the wave
+        G.state = 1; hudDirty = true; announce(`Wave ${G.wave} — ${G.plan}: `, mf ? ` · Mines reported on the roads to the ${mf}` : ''); if (more) setTimeout(() => { if (G.state === 1) ui.toast('More enemy movement reported — watch your flanks'); }, 3500); } }
       else {
-        if (pqN > 0) { G.wt += dt; const m = releaseWave(alive); if (m) { alive += m; hudDirty = true; if (annNow) announce('Contact! '); } } // staggered groups and reinforcements
+        G.wt += dt; // the wave clock runs for the whole wave (scheduled strikes come after the last reinforcement too)
+        if (pqN > 0) { const m = releaseWave(alive); if (m) { alive += m; hudDirty = true; if (annNow) announce('Contact! '); } } // staggered groups and reinforcements
         if (alive === 0 && pqN === 0) { G.state = 0; G.timer = 9; G.score += 150 * G.wave; hudDirty = true;
         for (let i = 0; i < 3; i++) G.n[i] = Math.min(AMMO[i].max, G.n[i] + [7, 4, 3][i]); G.mg = Math.min(2000, G.mg + 500); G.smokeN = Math.min(2, G.smokeN + 1); veh.hp = Math.min(100, veh.hp + 25);
         if (G.wave === WAVES && !G.won) { G.won = true; ui.over('Nordmarka held', `All ${WAVES} waves beaten · ${G.kills} vehicles destroyed · score ${G.score}. Press R to start over, or close this and keep fighting.`, true); }
@@ -506,7 +625,7 @@ export function initCombat(C) {
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on) updateEnemy(e, dt, i); }
     // vehicles are solid for each other
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz); if (d < 5.6 && d > 0.01) { const k = (5.6 - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
-    updateShells(dt);
+    updateShells(dt); updateMines(dt);
     for (let f = 0; f < 8; f++) { const o = f * 5; if (FI[o + 3] <= 0) continue; FI[o + 3] -= dt; const r = FI[o + 4]; // collapsed buildings burn for a few seconds
       if (rnd() < dt * 22) parts.emit(FI[o] + sr() * r, FI[o + 1] + 0.6 + rnd(), FI[o + 2] + sr() * r, sr(), 2 + rnd() * 2.5, sr(), 1 + rnd() * 0.8, 0.9 + rnd() * 1.1, 1.2, 4, 0.06, 0.06, 0.06, 0.85);
       if ((R.frame & 1) === 0) glow(FI[o] + sr() * r * 0.6, FI[o + 1] + 1.4, FI[o + 2] + sr() * r * 0.6, 2.6 + rnd() * 1.6, 9, 3.5, 0.8); }
@@ -528,46 +647,98 @@ export function initCombat(C) {
       fire(0, 6, T[0] * lx + T[4] * ly + T[8] * lz + T[12], T[1] * lx + T[5] * ly + T[9] * lz + T[13], T[2] * lx + T[6] * ly + T[10] * lz + T[14], dx, 0.57, dz, 24 + (k % 4) * 3, 0.03, 1.15 + rnd() * 0.2); }
     ui.toast('Smoke!');
   };
-  // ---------- FPV drone: recon and a one-way attack with a shaped charge ----------
-  function droneEnd(msg) { D.on = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; if (msg) ui.toast(msg); }
+  // ---------- drones: FPV (one-way shaped charge), bomber (drops VOG grenades), recon (high and long, spots for the map) ----------
+  function droneEnd(msg) { D.on = false; D.iok = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; if (msg) ui.toast(msg); }
   function droneBoom() {
     explode(D.x, D.y, D.z, 1.9); splash(D.x, D.y, D.z, 4, 115, 140, 0);
     const db = C.bld.at(D.x, D.y, D.z, 0.9); if (db >= 0) bldHit(db, 100, D.x, D.y, D.z, true); C.bld.splash(D.x, D.y, D.z, 5, 30, db, bldFx);
+    if (D.y - hAt(D.x, D.z) < 3) mineHit(D.x, D.z, 3.5);
     const d = Math.hypot(veh.x - D.x, veh.y + 1 - D.y, veh.z - D.z); if (d < 6.5) hurtPlayer(35 * clamp(1 - (d - 2.5) / 4, 0, 1), 1, false);
     D.on = false; D.vx = D.vy = D.vz = 0; D.hold = 4.5; D.bx = D.x; D.by = D.y; D.bz = D.z; hudDirty = true; // the camera stays on the blast (see updateCamera), then returns to the tank
+  }
+  // bomber: where a grenade released now would land (ballistic fall from the drone's height and velocity; ground, roofs and vehicles stop it)
+  // where the grenade stops: the same tests as updateShells (ground, round colliders, vehicles, buildings)
+  const dropHit = (x, y, z) => { if (y < hAt(x, z)) return true; if (y < hAt(x, z) + 9 && C.collAt(x, z)) return true; if (y < hAt(x, z) + 4) for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, x, y, z)) return true; } return C.bld.at(x, y, z, 0) >= 0; };
+  function predictDrop() {
+    let x = D.x, y = D.y - 0.25, z = D.z, vy = D.vy - 0.3; const h = 0.04; D.iok = false;
+    for (let k = 0; k < 400; k++) {
+      const nx = x + D.vx * h, ny = y + (vy - GRAV * h * 0.5) * h, nz = z + D.vz * h; vy -= GRAV * h;
+      if (dropHit(nx, ny, nz)) { let a = 0, b = 1; for (let it = 0; it < 6; it++) { const m = (a + b) * 0.5; if (dropHit(x + (nx - x) * m, y + (ny - y) * m, z + (nz - z) * m)) b = m; else a = m; } // refine to the surface
+        D.ix = x + (nx - x) * b; D.iz = z + (nz - z) * b; D.iy = Math.max(y + (ny - y) * b, hAt(D.ix, D.iz)); D.iok = true; return; }
+      x = nx; y = ny; z = nz;
+    }
+  }
+  // drone sensor: enemies inside the camera's view cone with a clear line are marked on the map (staggered: every 0.3 s)
+  function droneScan(T) {
+    const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
+    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || e.dead) continue;
+      const dx = e.x - D.x, dy = e.y + 1.5 - D.y, dz = e.z - D.z, dd = Math.hypot(dx, dy, dz); if (dd > T.see || dd < 1) continue;
+      if ((dx * fx + dy * fy + dz * fz) / dd < 0.72) continue; // about ±44°, the wide drone camera
+      if (losVis(D.x, D.y, D.z, e.x, e.y + 1.5, e.z) > 0.15) e.spotT = Math.max(e.spotT, T.mark); }
+    droneMines(fx, fy, fz, D.type ? 450 : 250);
   }
   function updateDrone(dt) {
     if (!D.on) { if (D.hold > 0) { D.hold -= dt; if (D.hold <= 0 || veh.dead || (inp.fire && !fireWas)) { D.hold = 0; droneEnd(null); } } return; }
     if (veh.dead) { droneEnd('Drone link lost'); return; }
+    const T = DTYPE[D.type], g0 = hAt(D.x, D.z);
     D.t -= dt; D.spin += dt * 95;
-    const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * 2.6);
-    D.vx += ((fx * inp.mvZ + rx * inp.mvX) * DRONE_V - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * DRONE_V - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * DRONE_V - D.vz) * k;
-    D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y += D.vy * dt; D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);
-    D.tp += (-inp.mvZ * 0.38 - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * 0.38 - D.tr) * Math.min(1, dt * 5); // lean into the motion
-    const gh = hAt(D.x, D.z); let boom = inp.fire && !fireWas;
-    if (D.y < gh + 0.35) { if (Math.hypot(D.vx, D.vy, D.vz) > 9) boom = true; else { D.y = gh + 0.35; D.vy = Math.max(0, D.vy); } }
-    if ((D.y < gh + 8 && C.collAt(D.x, D.z)) || C.bld.at(D.x, D.y, D.z, 0.3) >= 0) boom = true;
-    for (let i = 0; i < MAXE && !boom; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, D.x, D.y, D.z)) boom = true; }
-    if (boom) { droneBoom(); return; }
+    if (D.type === 0) { // FPV: flies where the camera points
+      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * 2.6);
+      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * T.v - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
+    } else { // bomber and recon: level flight on the heading, a stiff hover, height from Space/Shift (and the climb after launch); the camera gimbal tilts freely
+      const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = Math.min(1, dt * (D.type === 1 ? 3.2 : 2));
+      let vy = inp.mvY * (D.type === 2 ? 10 : 5);
+      if (D.climb > 0) { if (inp.mvY !== 0 || D.y - g0 > D.climb) D.climb = 0; else vy = D.type === 2 ? 14 : 7; }
+      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += (vy - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
+    }
+    D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y = Math.min(D.y + D.vy * dt, g0 + 250); D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);
+    const lean = D.type ? 0.22 : 0.38; D.tp += (-inp.mvZ * lean - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * lean - D.tr) * Math.min(1, dt * 5); // lean into the motion
+    const gh = hAt(D.x, D.z), press = inp.fire && !fireWas; let boom = D.type === 0 && press, crash = false;
+    if (D.y < gh + 0.35) { if (Math.hypot(D.vx, D.vy, D.vz) > 9) crash = true; else { D.y = gh + 0.35; D.vy = Math.max(0, D.vy); } }
+    if ((D.y < gh + 8 && C.collAt(D.x, D.z)) || C.bld.at(D.x, D.y, D.z, 0.3) >= 0) crash = true;
+    for (let i = 0; i < MAXE && !crash; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, D.x, D.y, D.z)) crash = true; }
+    if (D.type === 0 && (boom || crash)) { droneBoom(); return; }
+    if (crash) { explode(D.x, D.y, D.z, 0.35); droneEnd((D.type === 1 ? 'Bomber' : 'Recon drone') + ' crashed — lost'); return; }
+    if (D.type === 1) { // drop a grenade; the predicted impact point is drawn as the marker in the drone view
+      D.rel -= dt;
+      if (press) { if (D.bombs > 0 && D.rel <= 0) { D.bombs--; D.drops++; D.rel = BOMB_RL; hudDirty = true; const vy = D.vy - 0.3; fire(0, 7, D.x, D.y - 0.25, D.z, D.vx, vy, D.vz, Math.max(0.01, Math.hypot(D.vx, vy, D.vz)), 0, 30); C.sfx('reload', D.x, D.y, D.z, 0.4); if (!D.bombs) ui.toast('Grenades gone — fly back and land on the tank to rearm, or X to cut the link'); }
+        else if (!D.bombs) ui.toast('No grenades left — land on the tank'); }
+      if (cam.mode === 4) predictDrop(); else D.iok = false;
+    } else if (D.type === 2 && press) ui.toast('Recon drone: unarmed — spotted enemies go on the map');
+    // bomber and recon land back on the tank (on the engine deck, slowly) and are ready again
+    const dv = Math.hypot(D.x - veh.x, D.z - veh.z); if (dv > 15) D.away = true;
+    if (D.type && D.away && dv < 4.5 && D.y < veh.y + 4.5 && Math.hypot(D.vx, D.vy, D.vz) < 5) { G.dn[D.type]++; droneEnd(D.type === 1 ? 'Bomber landed — rearmed' : 'Recon drone landed'); return; }
     if (D.t <= 0) { droneEnd('Drone battery empty — lost'); return; }
-    if (Math.hypot(D.x - veh.x, D.z - veh.z) > DRONE_R) { droneEnd('Drone out of radio range — lost'); return; }
+    if (dv > T.r) { droneEnd('Drone out of radio range — lost'); return; }
+    D.scan -= dt; if (D.scan <= 0) { D.scan = 0.3; droneScan(T); }
     const sec = Math.ceil(D.t); if (sec !== D.sec) { D.sec = sec; hudDirty = true; }
     droneParts(C.dobj, D); C.dobj[131] = 1;
   }
-  // X: launch a drone from the turret roof, or cut the link to the one in the air (it is lost)
+  // X: launch the selected drone type from the turret roof, or cut the link to the one in the air (it is lost)
   G.droneKey = () => {
     if (D.hold > 0) { D.hold = 0; droneEnd(null); return; }
     if (D.on) { droneEnd('Drone link cut — back in the tank'); return; }
     if (veh.dead || cam.mode === 3) return;
-    if (G.drones <= 0) { ui.toast('No drones left'); return; }
-    G.drones--; Object.assign(D, { on: true, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: -0.12, t: DRONE_T, spin: 0, tp: 0, tr: 0, sec: DRONE_T });
+    const ty = G.dsel, T = DTYPE[ty];
+    if (G.dn[ty] <= 0) { ui.toast(`No ${T.name} drones left` + (G.dn[0] + G.dn[1] + G.dn[2] ? ' — Z picks another type' : '')); return; }
+    G.dn[ty]--; Object.assign(D, { on: true, type: ty, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: ty ? -0.5 : -0.12, t: T.t, spin: 0, tp: 0, tr: 0, sec: T.t,
+      bombs: ty === 1 ? BOMBS : 0, rel: 0, climb: T.climb, away: false, scan: 0, iok: false });
     cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
-    ui.toast('Drone away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank');
+    ui.toast(ty === 0 ? 'FPV away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank'
+      : ty === 1 ? 'Bomber away — WASD fly · mouse tilts the camera · LMB drops a grenade on the marker · land on the tank to rearm'
+        : 'Recon drone climbing — enemies in its camera go on the map · land on the tank to recover it');
+  };
+  // Z: pick the drone type for the next launch
+  G.droneType = (i) => {
+    if (D.on) { ui.toast('Land the drone or cut the link first'); return; }
+    G.dsel = i === undefined || i < 0 ? (G.dsel + 1) % 3 : i; hudDirty = true;
+    const T = DTYPE[G.dsel]; ui.toast(`Drone: ${T.name} (${G.dn[G.dsel]} left)` + [' — one-way shaped charge', ' — hovers and drops grenades', ' — flies high and spots for the map'][G.dsel]);
   };
   G.restart = () => {
-    for (const e of G.enemies) e.on = false; pqN = 0; G.bag = null; G.lastAxis = NaN; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
+    for (const e of G.enemies) e.on = false; minesReset(); veh.immob = 0; pqN = 0; G.bag = null; G.lastAxis = NaN; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
     D.on = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
-    Object.assign(G, { drones: DRONES, sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
+    for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; D.iok = false;
+    Object.assign(G, { sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;
     R.snap = true; hudDirty = true; ui.over(null); ui.toast('Stand by — contact expected from the north');
   };
@@ -577,6 +748,7 @@ export function initCombat(C) {
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const cx = e.x - ox, cy = e.y + 1.3 - oy, cz = e.z - oz, b = cx * dx + cy * dy + cz * dz, q = cx * cx + cy * cy + cz * cz - b * b; if (b > 0 && q < 6.8 && b - 1.5 < t) t = b - Math.sqrt(6.8 - q) * 0.6; }
     return t;
   };
+  G.mines = { x: MX, z: MZ, y: MY, s: MS, r: MR, fld: FLD, lay: layField, at: mineAt, plan: planFields, strike, hit: mineHit, armed: () => { let n = 0; for (let i = 0; i < MAXM; i++) if (MS[i] === 1 || MS[i] === 2) n++; return n; } };
   G.spawn = spawn; G.ROLES = ROLES; G.pending = () => pqN; G.bldHit = bldHit; G.los = losBlocked; G.vis = losVis; G.hurt = hurtPlayer; G.S = S; G.inside = inside;
   hud();
   return G;
