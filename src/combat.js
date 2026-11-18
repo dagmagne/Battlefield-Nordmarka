@@ -13,7 +13,7 @@ export const MAXE = 14, MAXG = 760, MAXM = 48, MAXA = 6; // enemies, glow sprite
 export { MAXI }; // infantry slots (phase 6, defined in infantry.js; main.js imports it from here)
 // drone types: 0 FPV (one-way shaped charge), 1 bomber (hovers, drops VOG grenades, lands back on the tank to rearm), 2 recon (high, long, quiet, unarmed)
 // n per game, battery t (s), top speed v (m/s), radio range r (m), spotting range see (m), how long a sighting stays on the map mark (s), climb after launch (m above ground)
-export const DTYPE = [{ name: 'FPV', n: 5, t: 75, v: 26, r: 1500, see: 800, mark: 20, climb: 0 }, { name: 'BOMB', n: 2, t: 120, v: 14, r: 1500, see: 900, mark: 25, climb: 30 }, { name: 'RECON', n: 2, t: 180, v: 18, r: 2200, see: 1500, mark: 40, climb: 110 }];
+export const DTYPE = [{ name: 'FPV', n: 5, t: 120, v: 26, r: 1500, see: 800, mark: 20, climb: 0 }, { name: 'BOMB', n: 2, t: 240, v: 14, r: 1500, see: 900, mark: 25, climb: 30 }, { name: 'RECON', n: 2, t: 360, v: 18, r: 2200, see: 1500, mark: 40, climb: 110 }];
 // grenades per bomber sortie, seconds between drops; a lost contact fades from the map over LOST_T s; NFLD pre-laid minefields enemies know about and drive around
 const BOMBS = 3, BOMB_RL = 0.7, LOST_T = 40, NFLD = 6;
 // mine damage by shell type (radius in m around a ground impact that sets a mine off): APFSDS, HEAT, HE, MG, 125 mm, 30 mm, smoke, VOG
