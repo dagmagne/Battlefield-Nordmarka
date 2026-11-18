@@ -178,9 +178,10 @@ export function initUI(api, isTouch) {
   };
 
   // ---- per-frame poll (no allocation) ----
-  let lSpd = -1, lC = -1, lR = -1;
+  let lSpd = -1, lC = -1, lR = -1, lPad = false;
   U.poll = (fly) => { // 0 tank, 1 free-fly camera, 2 drone
     pollPad(fly);
+    if ((U.pad !== null) !== lPad) { lPad = U.pad !== null; document.body.classList.toggle('pad', lPad); } // hint bar: pad or keyboard (rare)
     const k = (c) => (keys.has(c) ? 1 : 0);
     const f = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown'), r = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
     let jxx = jx, jyy = jy; const jl = Math.hypot(jxx, jyy);
