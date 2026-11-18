@@ -9,7 +9,7 @@ export function initHaptics(o) {
   const { veh, game, ui } = o, D = game.drone;
   const KS = new Float32Array(NK), KW = new Float32Array(NK), KT = new Float32Array(NK), KD = new Float32Array(NK);
   const P = { startDelay: 0, duration: 120, strongMagnitude: 0, weakMagnitude: 0 };
-  let tIss = 0, active = false, fresh = false, ld = 0, tPrev = veh.turYaw, mgF = 0, act = null;
+  let tIss = 0, active = false, fresh = false, ld = 0, rpm = 0.85, ep = 0, iv = 0.045, tPrev = veh.turYaw, mgF = 0, act = null;
   const H = { level: o.level === undefined ? 2 : o.level, strong: 0, weak: 0, calls: 0, events: 0, ev, update, setLevel, stop };
 
   function kick(s, w, dur) {
@@ -30,7 +30,7 @@ export function initHaptics(o) {
       case 'crash': if (k < 1) { if (!fly && d < 9) kick(0.28, 0.6, 0.15); } else if (!fly && d < 10) { const s = cl(k / 10, 0.3, 1); kick(s, s * 0.7, 0.3); } break; // tree felled / wall
       case 'egun': { const a = 0.3 / (1 + (d / 40) ** 2); if (a > 0.04) kick(a, a * 0.5, 0.15); break; }
       case 'smoke': if (!fly && d < 5) kick(0.2, 0.4, 0.12); break; // own smoke grenades
-      case 'reload': if (!fly && d < 6) kick(0.05, 0.3 * k, 0.07); break; // breech closes (k 1), repair clank (k 0.3)
+      case 'reload': if (!fly && d < 6) kick(0.05, 0.3 * k, 0.07); else if (fly && d < 3) kick(0, 0.25, 0.06); break; // breech closes (k 1), repair clank (k 0.3); a bomber grenade released
       case 'land': if (!fly && k > 1) kick(cl(k / 8, 0.2, 1), cl(k / 12, 0.1, 0.8), 0.25); break; // touchdown after a crest (k = impact speed)
     }
   }
@@ -53,17 +53,23 @@ export function initHaptics(o) {
     if (pad && !pad.vibrationActuator && !pad.hapticActuators) pad = null;
     if (!pad || !H.level || (typeof document !== 'undefined' && document.hidden)) { if (active) stop(); return; }
     const menu = ui.modalOpen && ui.modalOpen(); // help or menu open: only kicks (the test buzz of the menu row)
-    // continuous layer: engine load (as the sound), tracks by speed (softer on a plowed road), turret traverse, MG
+    // continuous layer: engine (pulses that follow the rpm of the sound), tracks by speed (softer on a plowed road), turret traverse, MG
     const alive = !veh.dead, av = Math.abs(veh.v), sv = Math.min(1, av / 18), th = alive ? Math.abs(veh.throttle) : 0;
     ld += (cl(0.7 * th + 0.45 * sv, 0, 1) - ld) * Math.min(1, dt * 4);
+    rpm += ((0.85 + 0.4 * sv + 0.2 * th) - rpm) * Math.min(1, dt * 2.5); // the same rpm as the engine sound: 0.85 idle .. 1.45
+    const r = cl((rpm - 0.85) / 0.6, 0, 1), ef = 3 + 4 * r; // engine pulse rate: a slow chug at idle (3 Hz) to a fast throb (7 Hz at full revs)
+    ep += dt * ef; if (ep > 1) ep -= Math.floor(ep);
+    iv = cl(0.24 / ef, 0.03, 0.045); // send often enough for about four samples per pulse (on average: the interval accumulates)
     let dy = veh.turYaw - tPrev; tPrev = veh.turYaw; dy = Math.abs(Math.atan2(Math.sin(dy), Math.cos(dy)));
     const tr = dt > 0 ? Math.min(1, dy / dt / 0.75) : 0, fly = D.on && !D.auto;
     let s = 0, w = 0;
     if (alive && !menu) {
       const trk = veh.air ? 0 : Math.min(1, av / 2.5) * (0.06 + 0.2 * sv) * (1 - 0.45 * veh.road);
-      s = 0.08 + 0.12 * ld + 0.25 * veh.shake; w = trk * (0.8 + 0.4 * Math.random()) + 0.06 * tr;
+      const dep = 0.8 - 0.5 * r, wave = 0.5 + 0.5 * Math.sin(ep * 6.2832); // deep pulses at idle, smoother when revving
+      s = (0.035 + 0.045 * r + 0.02 * ld) * (1 - dep + dep * wave) + 0.2 * veh.shake;
+      w = 0.03 * r * r + trk * (0.8 + 0.4 * Math.random()) + 0.06 * tr; // a little of the fast motor joins at high rpm
       if (game.mgOn || game.hmgOn) { w += mgF ? 0.42 : 0.18; s += 0.08; } // alternates per effect sent: a rattle
-      if (fly) { s *= 0.25; w = w * 0.25 + 0.05; } // in the drone: its rotors, the tank far away
+      if (fly) { s = 0; w = D.type === 0 ? 0.025 + 0.04 * Math.min(1, Math.hypot(D.vx, D.vy, D.vz) / 26) : 0; } // flying a drone: the tank is out of mind; the FPV hums faintly with its speed, bomber and recon are still
     }
     // kicks: linear fade with a little hold at the start
     for (let i = 0; i < NK; i++) { if (KT[i] <= 0) continue; const f = Math.min(1, 1.25 * KT[i] / KD[i]); s += KS[i] * f; w += KW[i] * f; KT[i] -= dt; }
@@ -71,7 +77,7 @@ export function initHaptics(o) {
     H.strong = s = cl(s * g, 0, 1); H.weak = w = cl(w * g, 0, 1);
     tIss -= dt;
     if (tIss > 0 && !fresh) return;
-    tIss = 0.045; fresh = false; mgF ^= 1;
+    tIss = Math.max(tIss + iv, 0.5 * iv); fresh = false; mgF ^= 1;
     if (s < 0.01 && w < 0.01) { if (active) stop(); return; }
     P.strongMagnitude = s; P.weakMagnitude = w; P.duration = Math.round(Math.max(120, dt * 2500));
     send(pad); active = true;
