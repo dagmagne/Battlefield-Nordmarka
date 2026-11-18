@@ -12,12 +12,15 @@ import shTreeW from './shadowtree.wgsl';
 import shObjW from './shadowobj.wgsl';
 import tshW from './tshadow.wgsl';
 import particleW from './particle.wgsl';
+import soldierW from './soldier.wgsl';
+import soldierShW from './soldiershadow.wgsl';
 import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
 import { buildLeopard, buildT72, buildBMP, buildTigr, buildBTR, buildBuggy, buildMoto, buildDrone, buildMine, buildLancet, buildOrlan, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
-import { initCombat, MAXE, MAXG, MAXM, MAXA } from './combat.js';
+import { initCombat, MAXE, MAXG, MAXM, MAXA, MAXI } from './combat.js';
+import { buildSoldier, initSoldiers, IST, WALK_V, RUN_V } from './soldier.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { initBuildings, DMAX } from './buildings.js';
@@ -54,7 +57,7 @@ const GU = new Float32Array(188);
 const R = { frame: 0, time: 0, scale: 1, drs: true, snow: 0, snowAmt: 0, debug: false, manual: false, pose: null, therm: 0, thAll: false, gpuMs: 0, ft: 16.7, ftMax: 0, fovK: 1 };
 const cam = { x: 0, y: 300, z: 0, yaw: 0, pitch: -0.1, fov: 55 * Math.PI / 180, mode: 0, prevMode: 0, dist: 13, zoom: 0, fovNow: 1, sightK: 0 };
 // where the player is aiming: world yaw/pitch of the sight line, the point it hits, and the gun's own state
-const aim = { yaw: 0, pitch: 0, x: 0, y: 0, z: 0, range: 800, dx: 0, dy: 0, dz: -1, sx: 9, sy: 9, ready: 0, err: 1, mx: 0, my: 0, mz: 0, gx: 0, gy: 0, gz: -1 };
+const aim = { hit: false, yaw: 0, pitch: 0, x: 0, y: 0, z: 0, range: 800, dx: 0, dy: 0, dz: -1, sx: 9, sy: 9, ready: 0, err: 1, mx: 0, my: 0, mz: 0, gx: 0, gy: 0, gz: -1 };
 const veh = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, v: 0, steer: 0, throttle: 0, dist: 0, trL: 0, trR: 0, yawRate: 0, air: false, vy: 0, airT: 0, gPrev: 0, shake: 0, land: 0, turYaw: 0, gunPitch: 0, recoil: 0, dp: 0, dr: 0, tl: 0, tt: 0, dpV: 0, drV: 0, acc: 0, road: 0, hp: 100, dead: false, immob: 0 };
 const view = new Float32Array(16), proj = new Float32Array(16), vp = new Float32Array(16), ivp = new Float32Array(16);
 let seed = 12345; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 8) / 16777216; };
@@ -264,6 +267,24 @@ async function main() {
   const layS = device.createPipelineLayout({ bindGroupLayouts: [bglO, bglO] });
   const objShMod = mod(shadowW + objDefW + shObjW, 'objshadow');
   const objShPipe = device.createRenderPipeline({ layout: layS, vertex: { module: objShMod, entryPoint: 'vs', buffers: objVB }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
+
+  // ---------- infantry: one instanced draw per LOD; part matrices per soldier in a storage buffer, object.wgsl shading ----------
+  const bglI = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } }] });
+  const infMod = mod(common + objDefW + objectW + soldierW, 'soldier');
+  const infPipe = device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bgl0, bglI] }), vertex: { module: infMod, entryPoint: 'vsInf', buffers: objVB },
+    fragment: { module: infMod, entryPoint: 'fs', targets: [{ format: HDR }] }, primitive: { cullMode: 'back', frontFace: 'ccw' }, depthStencil: depthGE, multisample: msState,
+  });
+  const infShMod = mod(shadowW + soldierShW, 'soldiershadow');
+  const infShPipe = device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bglO, bglI] }), vertex: { module: infShMod, entryPoint: 'vs', buffers: objVB }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
+  const infMesh = [buildSoldier(0), buildSoldier(1)].map((m) => ({ vb: mkBuf(m.v, U.VERTEX), ib: mkBuf(m.i, U.INDEX), n: m.i.length }));
+  const infBuf = device.createBuffer({ size: MAXI * IST * 4, usage: U.STORAGE | U.COPY_DST }), infU = mkBuf(new Float32Array(132), U.UNIFORM);
+  const infBG = device.createBindGroup({ layout: bglI, entries: [{ binding: 0, resource: { buffer: infU } }, { binding: 1, resource: { buffer: infBuf } }] });
+  let infN = 0;
+  function drawInf(p, shadow) {
+    const S = SOL; if (shadow && S.nNear) { p.setVertexBuffer(0, infMesh[0].vb); p.setIndexBuffer(infMesh[0].ib, 'uint32'); p.drawIndexed(infMesh[0].n, S.nNear); return; }
+    for (let l = 0; l < 2; l++) { const c = l ? S.nFar : S.nNear; if (!c) continue; const m = infMesh[l]; p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n, c, 0, 0, l ? S.nNear : 0); }
+  }
 
   // ---------- trees ----------
   const TM = buildTrees();
@@ -550,7 +571,9 @@ async function main() {
   const api = {
     cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
     drone() { if (R.game) R.game.droneKey(); },
+    bigMap(on) { if (R.game) R.game.bigMap(on); },
     droneType(i) { if (R.game) R.game.droneType(i); },
+    arty() { if (R.game) R.game.support.key(); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
@@ -573,6 +596,7 @@ async function main() {
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
   const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
+  const SOL = initSoldiers(MAXI, W.heightAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
   let sndOn = true; /* on by default; a stored choice (M or the menu) and ?mute win */ try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
@@ -596,6 +620,7 @@ async function main() {
   R.auto = auto;
 
   let wallC = false; // in contact with a building last frame
+  let infDemo = null; // __infDemo's per-frame update
   function collide(dt) {
     const C = W.colliders, fx = -Math.sin(veh.yaw), fz = -Math.cos(veh.yaw);
     // buildings: the hull as three circles (front, middle, rear); push out along the smallest penetration, slide along the wall
@@ -697,7 +722,8 @@ async function main() {
     let t = 8, tp = 8, hit = false;
     while (t < 3500) { if (oy + dy * t < W.heightAt(ox + dx * t, oz + dz * t)) { hit = true; break; } tp = t; t += Math.max(2, t * 0.035); }
     if (hit) for (let i = 0; i < 7; i++) { const m = (t + tp) / 2; if (oy + dy * m < W.heightAt(ox + dx * m, oz + dz * m)) t = m; else tp = m; }
-    t = R.aimHit ? R.aimHit(ox, oy, oz, dx, dy, dz, t) : t;
+    const tr = t; t = R.aimHit ? R.aimHit(ox, oy, oz, dx, dy, dz, t) : t;
+    aim.hit = hit || t < tr - 0.01; // the sight ray met terrain, a building or a vehicle (not the sky)
     aim.x = ox + dx * t; aim.y = oy + dy * t; aim.z = oz + dz * t;
     // ballistic solution from the trunnion (the fire control computer adds the superelevation)
     const B = hullM, tx = B[4] * LEO.gy + B[8] * LEO.gz + B[12], ty = B[5] * LEO.gy + B[9] * LEO.gz + B[13], tz = B[6] * LEO.gy + B[10] * LEO.gz + B[14];
@@ -832,6 +858,9 @@ async function main() {
     if (R.snowAmt > 0.01) { const k = 1 - 0.55 * R.snowAmt; GU[O.sunCol] *= k; GU[O.sunCol + 1] *= k; GU[O.sunCol + 2] *= k; GU[O.fogCol + 3] *= 1 + 5 * R.snowAmt; GU[O.skyHor + 3] = Math.min(1.6, GU[O.skyHor + 3] + R.snowAmt); }
     updateCascades(rw / rh, fovy);
     planesFrom(camPlanes, vp, 5); draws = 0; triStat.fill(0);
+    if (infDemo) infDemo(dt);
+    infN = game.inf ? SOL.update(game.inf, dt, cam.x, cam.y, cam.z, camPlanes, 5) : 0;
+    if (infN) device.queue.writeBuffer(infBuf, 0, SOL.out, 0, infN * IST);
     updateStamps();
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[130] = veh.dead ? Math.min(1, (game.burnP || 0) * 0.5) : 0; groomer.d[131] = 1;
@@ -877,6 +906,7 @@ async function main() {
       if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
         if (BL.dN) { sp.setVertexBuffer(0, debO.vb); sp.setIndexBuffer(debO.ib, 'uint32'); sp.drawIndexed(BL.dN * 36); }
         if (mineO.n && c === 0) { sp.setVertexBuffer(0, mineO.vb); sp.setIndexBuffer(mineO.ib, 'uint32'); sp.drawIndexed(MAXM * mNI); } }
+      if (infN && c < 2) { sp.setPipeline(infShPipe); sp.setBindGroup(1, infBG); drawInf(sp, true); }
       if (R.trees) { sp.setPipeline(treeShPipe); drawTrees(sp, shPlanes[c], 4, 3, c + 1); }
       }
       sp.end();
@@ -892,6 +922,7 @@ async function main() {
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
       if (BL.dN) { p.setVertexBuffer(0, debO.vb); p.setIndexBuffer(debO.ib, 'uint32'); p.drawIndexed(BL.dN * 36); }
       if (mineO.n) { p.setVertexBuffer(0, mineO.vb); p.setIndexBuffer(mineO.ib, 'uint32'); p.drawIndexed(MAXM * mNI); } }
+    if (infN && !hV) { p.setPipeline(infPipe); p.setBindGroup(1, infBG); drawInf(p, false); }
     if (R.trees) { p.setPipeline(treePipe); drawTrees(p, camPlanes, 5, 4, 0); }
     p.setPipeline(terrPipe); p.setVertexBuffer(0, tvb);
     for (let l = 0; l < NL && !hT; l++) {
@@ -970,6 +1001,22 @@ async function main() {
   if (qs.has('nohud')) { $('ui').style.display = 'none'; R.nohud = true; }
   requestAnimationFrame(frame);
   window.__bld = BL; // building records, boxes and states (test hook)
+  window.__sol = SOL; // soldier renderer: out (packed instance matrices), nNear, nFar
+  // test hook: soldiers in every pose around (x, z). o: { poses: [..], n, cols, sp (m), yaw, aim, move (walkers and runners advance at their cycle speed), dead: seconds already dead }
+  // walkers/runners get their phase advanced every frame; the dead ones fall and then lie still
+  window.__infDemo = (x, z, o = {}) => {
+    const I = game.inf, d = I.d, poses = o.poses || [0, 1, 2, 5, 3, 7, 4, 6], n = Math.min(MAXI, o.n || poses.length), cols = o.cols || n, sp = o.sp || 2.2, yaw = o.yaw || 0;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = -fz, rz = fx, sx = new Float32Array(n), sz = new Float32Array(n);
+    d.fill(0); SOL.reset();
+    for (let i = 0; i < n; i++) { const c = i % cols, r = (i / cols) | 0, ps = poses[i % poses.length], k = i * 8;
+      sx[i] = x + rx * (c - (cols - 1) / 2) * sp - fx * r * sp * 1.6; sz[i] = z + rz * (c - (cols - 1) / 2) * sp - fz * r * sp * 1.6;
+      d[k] = sx[i]; d[k + 2] = sz[i]; d[k + 1] = W.heightAt(sx[i], sz[i]); d[k + 3] = yaw + (o.jit ? (rnd() - 0.5) * o.jit : 0); d[k + 4] = ps === 6 ? 6 : ps; d[k + 5] = ps === 6 ? (o.dead || 0) : i * 0.37; d[k + 6] = o.aim || 0; d[k + 7] = ps === 6 ? 2 : 1; }
+    I.n = n;
+    infDemo = (dt) => { for (let i = 0; i < I.n; i++) { const k = i * 8, ps = d[k + 4]; if (d[k + 7] < 0.5) continue; d[k + 5] += dt;
+      if (o.move && (ps === 1 || ps === 2)) { const v = ps === 1 ? WALK_V : RUN_V, ax = -Math.sin(d[k + 3]), az = -Math.cos(d[k + 3]); d[k] += ax * v * dt; d[k + 2] += az * v * dt;
+        if (Math.hypot(d[k] - sx[i], d[k + 2] - sz[i]) > (o.move > 1 ? o.move : 8)) { d[k] = sx[i]; d[k + 2] = sz[i]; } d[k + 1] = W.heightAt(d[k], d[k + 2]); } } };
+    return n;
+  };
   window.__collBench = (n = 10000) => { const x = veh.x, z = veh.z, v = veh.v, t0 = performance.now(); for (let i = 0; i < n; i++) { veh.x = x; veh.z = z; veh.v = v; collide(1 / 60); } const ms = performance.now() - t0; veh.x = x; veh.z = z; veh.v = v; return ms; }; // collide() cost test
   window.__ready = true;
 }
