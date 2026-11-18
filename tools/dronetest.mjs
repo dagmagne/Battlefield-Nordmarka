@@ -71,13 +71,22 @@ r = await ev('({seen:B.seen, spot:+B.spotT.toFixed(1), range:RV, los:+__game.vis
 check('recon drone puts the BMP on the map', r.seen && r.spot > 30, r);
 await shot('recon-view'); await mapShot('map-3-recon');
 await ev('__game.droneKey(); __sim(1/60, 5)');
-r = await ev('({on:__game.drone.on, n:Array.from(__game.dn), hud:document.getElementById("sD").textContent})');
-check('cutting the recon link loses it', !r.on && r.n[2] === 1, r);
+r = await ev('({on:__game.drone.on, auto:__game.drone.auto, mode:__cam.mode, n:Array.from(__game.dn), hud:document.getElementById("sD").textContent})');
+check('X with the recon up hands it to its autopilot (still flying, you are back in the tank)', r.on && r.auto && r.mode === 0 && r.n[2] === 1, r);
+await ev('__game.drone.t=0.5; __sim(1/60, 60)');
+r = await ev('({on:__game.drone.on, n:Array.from(__game.dn)})');
+check('the recon on autopilot is lost when its battery is flat', !r.on && r.n[2] === 1, r);
 
 // FPV still works: launch, detonate
 await ev('__game.droneType(0); __game.droneKey(); __sim(1/60, 30); __inp.fire=true; __sim(1/60,2); __inp.fire=false; __sim(1/60,10)');
 r = await ev('({on:__game.drone.on, hold:+__game.drone.hold.toFixed(1), n:Array.from(__game.dn)})');
 check('FPV detonates on the button as before', !r.on && r.hold > 3 && r.n[0] === 4, r);
+// recon on autopilot: X with the recon up puts you back in the tank while it keeps circling and spotting until the battery is flat
+r = await ev(`(()=>{ const D=__game.drone; __sim(1/60, 60*6); __game.dn[2]=2; __game.droneType(2); __game.droneKey(); __sim(1/60, 60*10); __game.droneKey(); __sim(1/60, 30);
+  const out={on:D.on, auto:D.auto, mode:__cam.mode}; const rl0=__game.rl; __inp.fire=true; __sim(1/60,2); __inp.fire=false; out.fired=__game.rl>rl0;
+  B.seen=false; B.spotT=0; D.ax=B.x; D.az=B.z; D.x=B.x+80; D.z=B.z; D.y=__W.heightAt(D.x,D.z)+100; __sim(1/60, 60*20); out.spotted=B.seen; out.circleR=Math.round(Math.hypot(D.x-D.ax,D.z-D.az));
+  D.t=1; __sim(1/60, 90); out.endOn=D.on; out.endMode=__cam.mode; return out; })()`);
+check('recon on autopilot: back in the tank (gun fires), the drone circles, spots and flies until its battery is flat', r.on && r.auto && r.mode === 0 && r.fired && r.spotted && r.circleR > 50 && r.circleR < 110 && !r.endOn && r.endMode === 0, r);
 check('no page errors', errs === 0, errs);
 await browser.close();
 console.log(fails ? `${fails} FAILED` : 'all passed');
