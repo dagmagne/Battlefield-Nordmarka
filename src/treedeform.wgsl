@@ -42,7 +42,7 @@ fn treeDeform(pos: vec3f, nrm: vec3f, kind: f32, i0: vec4f, i1: vec4f, cam: vec3
   // fragment noise cost several ms on fill-bound GPUs); a function of the unit-height position, so every LOD carries the same amount
   let m = pos * i0.w + vec3f(r1, r2, r3) * 40.0;
   let cl = 0.5 + 0.32 * sin(m.x * 1.7 + m.y * 0.6) * sin(m.z * 1.9 - m.y * 0.8 + 1.3) + 0.18 * sin(m.x * 3.3 - m.z * 2.1 + m.y * 1.9);
-  let snow = (0.42 + 0.58 * fract(r1 * 7.13 + r4 * 3.71)) * mix(1.0, clamp(0.15 + 1.7 * smoothstep(0.3, 0.7, cl), 0.0, 1.0), 0.85 * (1.0 - smoothstep(140.0, 420.0, d)));
+  let snow = (0.48 + 0.52 * fract(r1 * 7.13 + r4 * 3.71)) * mix(1.0, clamp(0.22 + 1.6 * smoothstep(0.3, 0.7, cl), 0.0, 1.0), 0.85 * (1.0 - smoothstep(140.0, 420.0, d)));
   o.sv = vec4f(snow, dead, r1, r2);
   let c = cos(i1.x); let s = sin(i1.x);
   var q = vec3f(p.x * i1.w, p.y, p.z * i1.w) * i0.w;

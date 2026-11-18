@@ -11,7 +11,7 @@ const ctx = await browser.newContext({ viewport: { width: w, height: h }, device
 const page = await ctx.newPage();
 page.on('console', (m) => { const t = m.type(); if ((t === 'error' && !/404/.test(m.text())) || t === 'warning' || a.includes('--log')) console.log(`[${t}]`, m.text().slice(0, 1200)); });
 page.on('pageerror', (e) => console.log('[pageerror]', String(e.stack || e).slice(0, 1200)));
-await page.goto(`${base}?${a[0]}`);
+await page.goto(`${process.env.TFILE ? base.replace(/index\.html$/, process.env.TFILE) : base}?${a[0]}`);
 await page.waitForFunction('window.__ready===true', null, { timeout: 90000 }); await logAdapter(page);
 for (const j of jobs) {
   if (j.eval) { const r = await page.evaluate(j.eval); if (r !== undefined && r !== null) console.log(j.out || '', JSON.stringify(r)); }
