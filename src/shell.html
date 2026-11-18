@@ -80,9 +80,30 @@ kbd{margin:0 1px}
 .touch #dbg{top:calc(var(--st) + 80px)}
 .touch #hud{gap:8px;padding:6px 10px}
 #ovP{opacity:.85;line-height:1.5}
+#osd{left:50%;top:50%;transform:translate(-50%,-50%);width:min(70vw,112vh);height:min(64vh,46vw);display:none;color:#fff;font:700 15px/1.35 ui-monospace,Menlo,Consolas,monospace;text-shadow:0 0 2px #000,0 0 3px #000,1px 1px 0 #000}
+#osd.a,#osd.d{display:block}
+#osd>div{position:absolute;white-space:pre}
+#oTL{left:0;top:0}#oTR{right:0;top:0;text-align:right}#oBL{left:0;bottom:0}#oBR{right:0;bottom:0;text-align:right}#oBC{left:50%;bottom:0;transform:translateX(-50%);text-align:center}
+#oTC{left:50%;top:22%;transform:translateX(-50%);color:#ff5a4a;font-size:17px;animation:oblink 1s steps(2) infinite}
+@keyframes oblink{50%{opacity:.25}}
+#oX{left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;background:linear-gradient(#fff,#fff) center/2px 10px no-repeat,linear-gradient(#fff,#fff) center/10px 2px no-repeat;filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000)}
+#osd.d{font:650 13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.05em;text-shadow:0 0 2px #000,0 0 4px #000,0 1px 2px #000}
+#osd.d #oX{display:none}
+.droning #keys,.droning #padd,.droning #padk{opacity:.6}
+#hold{left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;display:none}
+#hold.show{display:block}
+#hold svg{width:84px;height:84px;transform:rotate(-90deg);filter:drop-shadow(0 1px 3px #000a)}
+#hold circle{fill:none;stroke-width:5}
+#hold .hb{stroke:#0b142080}
+#hold .hf{stroke:#eef3f8;stroke-linecap:round;stroke-dasharray:213.6;stroke-dashoffset:213.6}
+#hold.show .hf{animation:hfill 1s linear forwards}
+@keyframes hfill{to{stroke-dashoffset:0}}
+#holdT{position:absolute;left:50%;top:94px;transform:translateX(-50%);white-space:nowrap;padding:4px 11px;font-weight:650;font-size:12px;letter-spacing:.06em}
 #toast{left:50%;top:calc(var(--st) + 60px);transform:translateX(-50%);padding:7px 14px;font-weight:600;opacity:0;transition:opacity .25s}
-#keys{left:var(--sl);bottom:var(--sb);padding:6px 11px;font-size:11.5px;opacity:.92}
-.touch #keys{display:none}
+#keys,#padk,#padd{left:var(--sl);bottom:var(--sb);padding:6px 11px;font-size:11.5px;opacity:.92}
+#padk,#padd,.pad #keys,.pad.droning #padk{display:none}
+.pad #padk,.pad.droning #padd{display:block}
+.touch #keys,.touch #padk,.touch #padd{display:none}
 .modal{inset:0;display:none;align-items:center;justify-content:center;background:#060b12a0;pointer-events:auto;padding:12px}
 .modal.show{display:flex}
 .card{max-width:560px;width:100%;max-height:100%;overflow:auto;padding:18px 20px;border-radius:18px}
@@ -134,9 +155,13 @@ kbd{margin:0 1px}
     <button class="btn donly" id="bA2" aria-label="Artillery"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>ARTY</button>
     <button class="btn donly" id="bB"><svg viewBox="0 0 24 24"><path d="M12 2l2 6 6-2-4 5 5 4-6 1 1 6-4-5-4 5 1-6-6-1 5-4-4-5 6 2z"/></svg><span id="bBl">BOOM</span></button>
   </div>
+  <div id="padk" class="pill"><b>L stick</b> drive · <b>R stick</b> aim · <kbd>R2</kbd> fire · <kbd>L2</kbd> sight · <kbd>R1</kbd> MG · <kbd>L1</kbd> smoke · <kbd>□</kbd> ammo · <kbd>△</kbd> thermal · hold <kbd>✕</kbd> drone · hold <kbd>○</kbd> artillery · <kbd>↑</kbd><kbd>↓</kbd> zoom · <kbd>←</kbd><kbd>→</kbd> type · <kbd>Create</kbd> map</div>
+  <div id="padd" class="pill"><b>L stick</b> height · turn · <b>R stick</b> fly · <kbd>L1</kbd><kbd>L2</kbd> tilt camera · <kbd>R2</kbd> detonate / drop · hold <kbd>✕</kbd> back to the tank · hold <kbd>○</kbd> artillery · <kbd>△</kbd> thermal · <kbd>↑</kbd><kbd>↓</kbd> view · <kbd>Create</kbd> map</div>
   <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>Tab</kbd> map · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>Z</kbd> type · <kbd>B</kbd> artillery · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
+  <div id="osd"><div id="oTL"></div><div id="oTR"></div><div id="oTC"></div><div id="oBL"></div><div id="oBC"></div><div id="oBR"></div><div id="oX"></div></div>
+  <div id="hold"><svg viewBox="0 0 84 84"><circle class="hb" cx="42" cy="42" r="34"/><circle class="hf" cx="42" cy="42" r="34"/></svg><div id="holdT" class="pill"></div></div>
   <div id="help" class="modal"><div class="card pill">
     <h2>Battlefield Nordmarka — Leopard 2A4NO</h2>
     <div class="grid desk-only" id="hD">
@@ -148,12 +173,13 @@ kbd{margin:0 1px}
       <b><kbd>Space</kbd> <kbd>Q</kbd></b><span>Hold Space for the machine gun: the coaxial MG3 by default; when you look higher than the gun can elevate (up to 70°) or put the crosshair on a drone, the commander's hatch MG3 fires instead — the answer to enemy drones. <kbd>Q</kbd> forces the hatch MG. Red arrows round the crosshair point to incoming FPV drones and Lancets (blinking: diving at you). Smoke breaks a Lancet's lock; trees and moving make you harder to find. An Orlan circling high tells the enemy where you are — shoot it down. Some T-72s carry a cope cage that blunts drone attacks from above</span>
       <b><kbd>G</kbd></b><span>Smoke grenades — breaks the enemy's line of sight, and blinds thermal sights too</span>
       <b><kbd>V</kbd></b><span>Thermal imager in the gunner sight and on the drone: off · white-hot · black-hot. Sees engines, tracks and fires through darkness, haze and dust</span>
-      <b><kbd>X</kbd> <kbd>Z</kbd></b><span>Launch a drone; <kbd>Z</kbd> picks the type. Mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. <b>FPV</b> (5): fly into a vehicle, left button detonates. <b>BOMB</b> (2): hovers, the camera tilts straight down, left button drops one of 3 grenades on the marker (roof and engine deck are weak); land on the tank to rearm. <b>RECON</b> (2): climbs to 110 m, 3 min, unarmed; what its camera sees goes on the map; <kbd>X</kbd> with it up hands it to its autopilot (it circles and keeps watching until the battery is flat) and puts you back in the tank, <kbd>X</kbd> again takes it back. <kbd>X</kbd> again cuts the link (the drone is lost). The tank stands still and exposed meanwhile</span>
+      <b><kbd>X</kbd> <kbd>Z</kbd></b><span>Launch a drone; <kbd>Z</kbd> picks the type. Mouse + <kbd>WASD</kbd> fly, <kbd>Space</kbd>/<kbd>Shift</kbd> up/down. <b>FPV</b> (5): fly into a vehicle, left button detonates. <b>BOMB</b> (2): hovers, the camera tilts straight down, left button drops one of 3 grenades on the marker (roof and engine deck are weak); land on the tank to rearm. <b>RECON</b> (2): climbs to 110 m, 6 min, unarmed; what its camera sees goes on the map; <kbd>X</kbd> with it up hands it to its autopilot (it circles and keeps watching until the battery is flat) and puts you back in the tank, <kbd>X</kbd> again takes it back. <kbd>X</kbd> again cuts the link (the drone is lost). The tank stands still and exposed meanwhile</span>
       <b><kbd>B</kbd></b><span>Artillery: one fire mission per wave (restocked when the wave is cleared) — six 155 mm rounds land around the point about 25 s later. In the tank it goes where the sight is laid; from a drone, where its camera looks (the bomber: on the drop marker). Kills light vehicles and BMPs, wrecks houses, often knocks out a T-72. Within 150 m of your tank it is danger close</span>
       <b>Mines</b><span>Enemy engineers mine roads ahead (a faint grey patch in the snow, warm in the thermal sight) and rockets can scatter mines around you. Driving onto one blows a track: you are stuck for a few seconds (TRACK) and lose hull. Drones and a close look mark them with red flags; HE or a burst of MG fire sets them off</span>
-      <b><kbd>T</kbd> <kbd>N</kbd> <kbd>F</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · free-fly camera · sound · music</span>
+      <b><kbd>T</kbd> <kbd>N</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · sound · music</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
-      <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight · ✕ MG · ○ smoke · □ ammo · △ camera · D-pad down drone · L3 drone type · L1 artillery · R3 force hatch MG · Options menu (Vibration: off / light / full)</span>
+      <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight (hold; L3 locks it) · R1 MG · R3 force hatch MG · L1 smoke · □ ammo · △ thermal · hold ✕ launch drone · hold ○ artillery · D-pad ↑↓ magnification, ←→ drone type · Create map · Options menu (Vibration: off / light / full)</span>
+      <b>Pad, drone</b><span>Like a DJI controller (Mode 2): left stick height and turn · right stick fly · L1/L2 tilt the camera · R2 detonate / drop · hold ✕ back to the tank (recon: autopilot) · hold ○ artillery where the camera looks · △ thermal · D-pad ↑↓ view: FPV chase far / chase / goggles, bomber and recon outside / camera / 2× / 4× (the mouse wheel and pinch do the same)</span>
     </div>
     <div class="grid" id="hT">
       <b>Left thumb</b><span>Joystick: push to drive, sideways to steer</span>

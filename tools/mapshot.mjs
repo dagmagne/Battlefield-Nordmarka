@@ -57,5 +57,8 @@ const b2 = await page.evaluate(() => { const v = window.__veh, b = document.getE
   const cx = b.x + b.width / 2 + v.x * s, cy = b.y + b.height / 2 + v.z * s, r = 700 * s; return { x: Math.max(0, cx - r), y: Math.max(0, cy - r), width: 2 * r, height: 2 * r }; });
 await page.screenshot({ path: `${out}/bigmap-crop.png`, clip: b2 });
 console.log('bigOpen', await page.evaluate(() => window.__game.bigOpen()), 'drawn soldiers', await page.evaluate(() => window.__game.inf.drawn));
+// back on the recon drone (its own view with the OSD): the minimap must clear it
+await page.evaluate(() => { window.__game.bigMap(false); window.__game.droneKey(); window.__step(1 / 60, 30); });
+await page.screenshot({ path: `${out}/drone.png` });
 await browser.close();
 console.log(errs ? `done with ${errs} error(s)` : 'ok', out);

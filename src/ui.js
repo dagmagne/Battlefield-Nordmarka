@@ -1,6 +1,6 @@
 // Input (keyboard, mouse, touch) and DOM UI. All state lives in `inp`; nothing here allocates per frame.
 const $ = (id) => document.getElementById(id);
-export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, aa: false, sight: false };
+export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, yawR: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, aa: false, sight: false };
 const keys = new Set();
 const SPD = []; for (let i = 0; i < 200; i++) SPD.push(String(i));
 const CAMN = ['CMDR', 'SIGHT', '', 'FLY', 'DRONE'];
@@ -28,7 +28,6 @@ export function initUI(api, isTouch) {
     else if (c === 'KeyT') api.tod(-1);
     else if (c === 'KeyC') api.cam();
     else if (c === 'KeyV') api.thermal();
-    else if (c === 'KeyF') api.fly();
     else if (c === 'KeyN') api.snow();
     else if (c === 'KeyM') api.sound();
     else if (c === 'KeyU') api.music();
@@ -136,31 +135,54 @@ export function initUI(api, isTouch) {
   let padN = 0; const pb = new Uint8Array(20);
   addEventListener('gamepadconnected', () => { padN++; });
   addEventListener('gamepaddisconnected', () => { padN = Math.max(0, padN - 1); });
+  const PADT = [2, 4, 10, 12, 13, 14, 15]; // buttons only the tank uses
   const dz = (v) => { const a = Math.abs(v); return a < 0.15 ? 0 : Math.sign(v) * (a - 0.15) / 0.85; };
-  let gTh = 0, gSt = 0, gX = 0, gZ = 0, gY = 0, gFast = false, gFire = false, gMg = false, gAA = false, gSight = false;
-  const pollPad = () => {
-    gTh = gSt = gX = gZ = gY = 0; gFast = gFire = gMg = gAA = gSight = false;
-    U.pad = null; if (!padN || !navigator.getGamepads) return;
+  let gTh = 0, gSt = 0, gX = 0, gZ = 0, gY = 0, gFire = false, gMg = false, gAA = false, gSight = false;
+  // Hold to confirm (pad only): ✕ drone and ○ artillery fire after a 1 s hold. The ring round the crosshair fills by a CSS
+  // animation that starts when #hold is shown, so nothing is written to the DOM while it fills.
+  const HOLD_MS = 1000; let hK = 0, hT = 0;
+  const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = text; $('hold').classList.add('show'); };
+  const holdEnd = () => { if (hK) { hK = 0; $('hold').classList.remove('show'); } };
+  const pollPad = (fly) => {
+    gTh = gSt = gX = gZ = gY = 0; gFire = gMg = gAA = gSight = false; inp.yawR = 0;
+    U.pad = null; if (!padN || !navigator.getGamepads) { holdEnd(); return; }
     const gl = navigator.getGamepads();
     let g = null; for (let i = 0; i < gl.length; i++) if (gl[i] && gl[i].connected) { g = gl[i]; break; }
-    U.pad = g; if (!g) return;
+    U.pad = g; if (!g) { holdEnd(); return; }
     const b = g.buttons, ax = g.axes, n = Math.min(b.length, 16);
-    const press = (i) => { const d = i < n && b[i].pressed; const e = d && !pb[i]; pb[i] = d ? 1 : 0; return e; };
+    const down = (i) => i < n && b[i].pressed;
+    const press = (i) => { const d = down(i); const e = d && !pb[i]; pb[i] = d ? 1 : 0; return e; };
     const bv = (i) => (i < n ? b[i].value : 0);
-    if (modalOpen()) { if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; return; }
-    if (press(1)) api.smoke(); if (press(2)) api.ammo(-1); if (press(3)) api.cam();
-    if (press(4)) api.arty(); if (press(9)) showMenu(true); if (press(8)) api.debug();
-    if (press(12)) api.snow(); if (press(13)) api.drone(); if (press(10)) api.droneType(); if (press(15)) api.tod((api.state().tod + 1) & 3); if (press(14)) api.tod((api.state().tod + 3) & 3);
-    const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0), tr = api.isFly() ? bv(7) - bv(6) : 0;
-    gFire = bv(7) > 0.5; gSight = bv(6) > 0.5; gMg = bv(0) > 0.5; gAA = bv(11) > 0.5;
-    gTh = Math.max(-1, Math.min(1, -ly)); gSt = -lx; gX = lx; gZ = -ly; gY = tr; gFast = bv(5) > 0.5;
+    const sync = () => { for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; };
+    if (modalOpen()) { holdEnd(); if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } sync(); return; }
+    if ($('over').classList.contains('show')) { holdEnd(); if (press(0)) api.restart(); else if (press(1) && overCont) U.over(null); sync(); return; } // end card: ✕ restart, ○ keep playing (after a victory)
+    // ✕ drone / ○ artillery: start on the press, cancel on release, fire after HOLD_MS
+    if (press(0)) { const l = api.droneLabel(); if (l) holdStart(1, 'HOLD ✕ · ' + l); else api.drone(); } // '' = no hold needed (skip the blast view, or nothing to launch: the toast says why)
+    if (press(1)) holdStart(2, 'HOLD ○ · FIRE MISSION');
+    if (hK && !down(hK === 1 ? 0 : 1)) holdEnd();
+    else if (hK && performance.now() - hT >= HOLD_MS) { const k = hK; holdEnd(); if (k === 1) api.drone(); else api.arty(); }
+    if (press(3)) api.thermal(); if (press(8)) api.bigMap(); if (press(9)) showMenu(true);
+    const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
+    gFire = bv(7) > 0.5;
+    if (fly) { // drone, DJI Mode 2 (yaw is a rate with momentum, see main.js): left stick height and yaw, right stick forward/back and sideways, L1/L2 tilt the gimbal (the FPV's nose)
+      gY = -ly; gZ = -ry; gX = rx; inp.yawR = lx; inp.lookY += (bv(6) - bv(4)) * 7;
+      if (press(12)) inp.zoom -= 0.35; if (press(13)) inp.zoom += 0.35; // view level: in towards goggles / zoom, out towards the chase or outside view
+      for (let j = 0; j < PADT.length; j++) pb[PADT[j]] = down(PADT[j]) ? 1 : 0; // tank-only buttons: track them so a press in flight does not fire on return
+      return;
+    }
+    if (press(4)) api.smoke(); if (press(2)) api.ammo(-1); if (press(10)) api.cam();
+    if (press(12)) inp.zoom -= 0.35; if (press(13)) inp.zoom += 0.35; // sight magnification (commander view: camera distance)
+    if (press(14)) api.droneType(-2); if (press(15)) api.droneType(-1);
+    gSight = bv(6) > 0.5; gMg = bv(5) > 0.5; gAA = bv(11) > 0.5;
+    gTh = Math.max(-1, Math.min(1, -ly)); gSt = -lx;
     inp.lookX += rx * 9; inp.lookY += ry * 9;
   };
 
   // ---- per-frame poll (no allocation) ----
-  let lSpd = -1, lC = -1, lR = -1;
+  let lSpd = -1, lC = -1, lR = -1, lPad = false;
   U.poll = (fly) => { // 0 tank, 1 free-fly camera, 2 drone
-    pollPad();
+    pollPad(fly);
+    if ((U.pad !== null) !== lPad) { lPad = U.pad !== null; document.body.classList.toggle('pad', lPad); } // hint bar: pad or keyboard (rare)
     const k = (c) => (keys.has(c) ? 1 : 0);
     const f = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown'), r = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
     let jxx = jx, jyy = jy; const jl = Math.hypot(jxx, jyy);
@@ -168,7 +190,7 @@ export function initUI(api, isTouch) {
     if (fly) { inp.mvZ = f - jyy + gZ; inp.mvX = r + jxx + gX; inp.mvY = k('KeyE') - k('KeyQ') + inp.holdY + gY; inp.th = 0; inp.st = 0;
       if (fly === 2) inp.mvY = Math.max(-1, Math.min(1, inp.mvY + k('Space') - k('ShiftLeft') - k('ShiftRight'))); }
     else { inp.th = Math.max(-1, Math.min(1, f - jyy + gTh)); inp.st = Math.max(-1, Math.min(1, -r - jxx * 1.15 + gSt)); inp.mvX = inp.mvZ = inp.mvY = 0; }
-    inp.fast = gFast || keys.has('ShiftLeft') || keys.has('ShiftRight');
+    inp.fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
     inp.fire = fly !== 1 && (mFire || tFire || gFire || keys.has('Enter')); inp.mg = !fly && (gMg || tMg || keys.has('Space')); inp.aa = !fly && (gAA || tAA || keys.has('KeyQ')); inp.sight = !fly && (mSight || gSight);
   };
   U.hud = (kmh, camMode, range) => {
@@ -181,6 +203,26 @@ export function initUI(api, isTouch) {
   U.show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
   // drone buttons (rare): the DRONE button names the selected type; in flight the action button reads BOOM (FPV), DROP (bomber) or is hidden (recon)
   U.droneUI = (name, flying) => { $('bXl').textContent = name; $('bBl').textContent = flying === 1 ? 'DROP' : 'BOOM'; $('bB').style.visibility = flying === 2 ? 'hidden' : ''; };
+  // drone OSD (rare writes: at most every 0.15 s and only for the corners whose text changed). mode 0 off, 1 analog FPV goggles, 2 digital DJI-style.
+  // o: [type, zoom, signal %, seconds left, battery %, speed m/s ×10, height m, distance m, bearing to the tank (0..7, 0 = ahead), grenades]
+  const OSDA = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'], OSDN = ['FPV', 'BOMB', 'RECON'], oL = new Float32Array(10).fill(-1); let oM = -1, oT = 0;
+  const oSet = (id, t) => { const e = $(id); if (e.textContent !== t) e.textContent = t; };
+  U.osd = (mode, o) => {
+    if (mode !== oM) { oM = mode; $('osd').className = mode === 1 ? 'a' : mode === 2 ? 'd' : ''; oL.fill(-1); oT = 0; }
+    if (!mode) return;
+    const now = performance.now(); if (now - oT < 150) return;
+    let same = true; for (let i = 0; i < 10; i++) if (oL[i] !== o[i]) { same = false; oL[i] = o[i]; } if (same) return; oT = now;
+    const sig = o[2], sec = o[3], mm = Math.floor(sec / 60), ss = String(sec % 60).padStart(2, '0'), ar = OSDA[o[8]];
+    if (mode === 1) {
+      oSet('oTL', 'RSSI ' + String(sig).padStart(3) + (sig < 25 ? ' !' : '')); oSet('oTR', mm + ':' + ss + '\nBAT ' + String(o[4]).padStart(3) + '%');
+      oSet('oBL', String(Math.round(o[5] * 0.36)).padStart(3) + ' KM/H'); oSet('oBR', 'ALT ' + String(o[6]).padStart(4) + ' M'); oSet('oBC', ar + ' HOME ' + o[7] + ' M');
+    } else {
+      const bars = '▮▮▮▮▮'.slice(0, Math.ceil(sig / 20)) + '▯▯▯▯▯'.slice(0, 5 - Math.ceil(sig / 20));
+      oSet('oTL', OSDN[o[0]] + (o[1] > 1 ? '   ' + o[1] + '×' : '')); oSet('oTR', 'SIG ' + bars + '    ' + o[4] + '%  ' + mm + ':' + ss);
+      oSet('oBL', 'H ' + o[6] + ' m    H.S ' + (o[5] / 10).toFixed(1) + ' m/s'); oSet('oBR', 'D ' + o[7] + ' m  ' + ar); oSet('oBC', o[0] === 1 ? 'GRENADES ' + o[9] : '');
+    }
+    oSet('oTC', sig < 25 ? (mode === 1 ? 'LOW SIGNAL' : 'WEAK SIGNAL — turn back') : '');
+  };
   // end-of-game card (knocked out / victory); `cont` lets the player close it and keep going
   let overCont = false;
   U.over = (title, text, cont) => { overCont = !!cont; $('over').classList.toggle('show', !!title); if (title) { $('ovT').textContent = title; $('ovP').textContent = text; if (document.pointerLockElement) document.exitPointerLock(); } };
