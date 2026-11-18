@@ -33,13 +33,13 @@ const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0, 120, 120, 25]; // direct-hit d
 const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'flanker', 'raider'], PQN = 16;
 const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 // enemy types: tracked T-72 and BMP, then the wheeled and light ones (phase 4). mgd: damage per coax / hatch MG round, score, sfx and muzzle size of the weapon,
-// wheels: K.ax axles get rolling parts; map: minimap marker (0 tank circle, 1 square, 2 ATGM diamond, 3 small dot)
+// road: 2 road-bound (wheeled: spawn on roads, keep to them, stay out of dense forest), 1 prefers roads (BMP); wheels: K.ax axles get rolling parts; map: minimap marker (0 tank circle, 1 square, 2 ATGM diamond, 3 small dot)
 const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1800, burst: 1, night: 0.35, name: 'T-72B3', fell: 10, mgd: 0, score: 100, sfx: 'egun', mz: 1, spread: 0.0016, map: 0 },
-  { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2', fell: 9, mgd: 3, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1 },
-  { K: TIGR, hp: 30, vmax: 15, slew: 0.6, v: 250, shell: 8, reload: 22, range: 2000, burst: 1, night: 0.6, name: 'Tigr-M Kornet', fell: 6, mgd: 0.5, turn: 0.9, score: 70, sfx: 'atgm', mz: 0.6, spread: 0, map: 2, wheels: 1 },
-  { K: BTR, hp: 50, vmax: 16, slew: 0.7, v: 960, shell: 5, reload: 3.4, range: 1200, burst: 5, night: 0.8, name: 'BTR-82A', fell: 8, mgd: 0.15, turn: 0.75, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1, wheels: 1 },
-  { K: BUGGY, hp: 16, vmax: 21, slew: 1.4, v: 850, shell: 9, reload: 2.6, range: 750, burst: 8, night: 0.9, name: 'assault buggy', fell: 4, mgd: 6, turn: 1.3, score: 25, sfx: 'mgb', mz: 0.12, spread: 0.008, map: 3, wheels: 1 },
-  { K: MOTO, hp: 8, vmax: 23, slew: 2, v: 850, shell: 9, reload: 3.2, range: 500, burst: 5, night: 0.95, name: 'motorcycle team', fell: 3, mgd: 8, turn: 1.8, score: 15, sfx: 'mgb', mz: 0.1, spread: 0.01, map: 3, wheels: 1 }];
+  { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2', road: 1, fell: 9, mgd: 3, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1 },
+  { K: TIGR, hp: 30, vmax: 15, slew: 0.6, v: 250, shell: 8, reload: 22, range: 2000, burst: 1, night: 0.6, name: 'Tigr-M Kornet', road: 2, fell: 6, mgd: 0.5, turn: 0.9, score: 70, sfx: 'atgm', mz: 0.6, spread: 0, map: 2, wheels: 1 },
+  { K: BTR, hp: 50, vmax: 16, slew: 0.7, v: 960, shell: 5, reload: 3.4, range: 1200, burst: 5, night: 0.8, name: 'BTR-82A', road: 2, fell: 8, mgd: 0.15, turn: 0.75, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1, wheels: 1 },
+  { K: BUGGY, hp: 16, vmax: 21, slew: 1.4, v: 850, shell: 9, reload: 2.6, range: 750, burst: 8, night: 0.9, name: 'assault buggy', road: 2, fell: 4, mgd: 6, turn: 1.3, score: 25, sfx: 'mgb', mz: 0.12, spread: 0.008, map: 3, wheels: 1 },
+  { K: MOTO, hp: 8, vmax: 23, slew: 2, v: 850, shell: 9, reload: 3.2, range: 500, burst: 5, night: 0.95, name: 'motorcycle team', road: 2, fell: 3, mgd: 8, turn: 1.8, score: 15, sfx: 'mgb', mz: 0.1, spread: 0.01, map: 3, wheels: 1 }];
 const T72T = 0, BMPT = 1, TIGRT = 2, BTRT = 3, BUGT = 4, MOTOT = 5;
 // spotting: e.see grows at vis·sig/(1+(d/SEE_R)²)·cue − SEE_FLOOR per second; 1 = detected (turret on, engages), the first shot needs 1 + d/1000.
 // vis: line-of-sight transmittance (foliage optical depth: one e-fold per FOL_L m of full canopy, blocked below 0.1);
@@ -57,7 +57,7 @@ export function initCombat(C) {
   let fireWas = false, fireBlock = false, inf = null; // inf: the infantry (src/infantry.js), set at the end of initCombat
   let hmgT = 0, sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i],
-    role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, tax: 0, taz: 0, tcT: 0, cage: false, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
+    role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, tax: 0, taz: 0, tcT: 0, fa: 0, faT: 0, cage: false, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
   const AIR = []; for (let i = 0; i < MAXA; i++) AIR.push({ on: false, type: 0, st: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, tp: 0, tr: 0, spin: 0, hp: 0, t: 0, chk: 0, tx: 0, tz: 0, ang: 0, warned: false, seen: false, d: C.aobj ? C.aobj[i] : new Float32Array(132) });
   // infantry (phase 6), read by the soldier renderer: n = slots in use; per soldier 8 floats [x, y, z, yaw, pose, phase, aim, state]
   G.air = AIR; G.thr = new Float32Array(4); G.orlan = 0; // HUD threat arrows (angle, strength) ×2; seconds an Orlan has held the player in view
@@ -273,7 +273,8 @@ export function initCombat(C) {
   function findRoute(e) {
     const dg = Math.hypot(e.gx - e.x, e.gz - e.z); if (dg < 160) return false;
     let best = 14, bn = -1, bp = -1, bi = 0, bd = 1;
-    for (let n = 0; n < 2; n++) { const L = NETS[n], R0 = n ? 60 : 45, bonus = n === 1 ? (e.role === RAID ? 30 : 10) : 0;
+    const rd = ETYPE[e.type].road || 0;
+    for (let n = 0; n < 2; n++) { const L = NETS[n], R0 = n ? (rd ? 240 : 60) : 45, bonus = n === 1 ? (rd === 2 ? 70 : rd ? 40 : e.role === RAID ? 30 : 10) : 0; // road-bound vehicles head for a road up to 240 m off
       for (let p = 0; p < L.length; p++) { const t = L[p], P = t.pts;
         for (let i = 2; i < t.n - 2; i += 3) { const px = P[i * 2], pz = P[i * 2 + 1], dx = px - e.x, dz = pz - e.z; if (dx * dx + dz * dz > R0 * R0) continue;
           const dp = Math.sqrt(dx * dx + dz * dz);
@@ -282,11 +283,12 @@ export function initCombat(C) {
     if (bn < 0) return false;
     e.net = bn; e.path = bp; e.pi = bi; e.dir = bd; return true;
   }
-  const okSpot = (x, z) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && (!R.trees || canAt(x, z) < 110) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2;
+  const okSpot = (x, z, lim = 110) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && (!R.trees || canAt(x, z) < lim) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2;
+  const canLim = (e) => ETYPE[e.type].road ? 45 : 110; // wheeled vehicles and BMPs only stop in open ground or thin forest
   // overwatch: a spot r0..r1 from the player around bearing b, scored by height over the player, a clear view and the drive to get there
   function pickSpot(e, b, r0, r1) {
     let best = -1e9, bx = e.x, bz = e.z;
-    for (let k = 0; k < 44; k++) { const a = b + (rnd() - 0.5) * 1.6, r = r0 + rnd() * (r1 - r0), x = veh.x + Math.sin(a) * r, z = veh.z - Math.cos(a) * r; if (!okSpot(x, z)) continue;
+    for (let k = 0; k < 44; k++) { const a = b + (rnd() - 0.5) * 1.6, r = r0 + rnd() * (r1 - r0), x = veh.x + Math.sin(a) * r, z = veh.z - Math.cos(a) * r; if (!okSpot(x, z, canLim(e))) continue;
       const y = hAt(x, z), sc = clamp((y - veh.y) * 0.04, -1, 1.5) - Math.hypot(x - e.x, z - e.z) / 380 + rnd() * 0.3 + (losBlocked(x, y + 2.4, z, veh.x, veh.y + 1.9, veh.z) ? 0 : 1.6);
       if (sc > best) { best = sc; bx = x; bz = z; } }
     e.ox = bx; e.oz = bz; e.ph = 0;
@@ -295,13 +297,13 @@ export function initCombat(C) {
   function scoot(e, fwd) {
     const b = brgOf(e.x, e.z), sd = rnd() < 0.5 ? -1 : 1, l = 22 + rnd() * 20; if (Math.hypot(e.x - veh.x, e.z - veh.z) < 200) fwd = -Math.abs(fwd) - 10; // too close already: hop back
     for (let k = 0; k < 4; k++) { const s = k & 1 ? -sd : sd, x = e.x + Math.cos(b) * s * l - Math.sin(b) * fwd, z = e.z + Math.sin(b) * s * l + Math.cos(b) * fwd;
-      if (okSpot(x, z)) { e.sx = x; e.sz = z; e.scT = 9; e.idleT = 0; return; } }
+      if (okSpot(x, z, canLim(e))) { e.sx = x; e.sz = z; e.scT = 9; e.idleT = 0; return; } }
   }
   // stuck again and again: pick the open direction (no wall or collider on the way) that best leads towards the goal and drive there first
   function escape(e) {
     let best = -9; const y = e.y + 1.4, gb = Math.atan2(e.gx - e.x, e.gz - e.z);
     for (let k = 0; k < 12; k++) { const a = k * 0.5236 + rnd() * 0.3, x = e.x + Math.sin(a) * 28, z = e.z + Math.cos(a) * 28;
-      if (!okSpot(x, z) || C.bld.seg(e.x, y, e.z, x, y, z) || C.collAt(e.x + Math.sin(a) * 14, e.z + Math.cos(a) * 14)) continue;
+      if (!okSpot(x, z, canLim(e)) || C.bld.seg(e.x, y, e.z, x, y, z) || C.collAt(e.x + Math.sin(a) * 14, e.z + Math.cos(a) * 14)) continue;
       const sc = Math.cos(a - gb) + rnd() * 0.6; if (sc > best) { best = sc; e.sx = x; e.sz = z; } }
     if (best > -9) { e.scT = 9; e.idleT = 0; }
   }
@@ -310,21 +312,20 @@ export function initCombat(C) {
     if (!e) { let fd = -1; for (const q of G.enemies) { const dq = Math.hypot(q.x - veh.x, q.z - veh.z), dc = Math.hypot(q.x - cam.x, q.z - cam.z); // full: recycle the farthest wreck that is out of the way
         if (q.dead && dq > fd && (anyWreck || (dc > 250 && dq > 250) || (dc > 150 && q.burn > 90))) { fd = dq; e = q; } }
       if (!e) { noSlot = true; return false; } }
-    const dir = brg === brg, net = role === RAID && roads.length ? 1 : 0, ga = grp >= 0 && GA[grp * 3 + 2] > 0;
+    const E = ETYPE[type], rd = E.road || 0, dir = brg === brg, net = (role === RAID || rd) && roads.length ? 1 : 0, ga = grp >= 0 && GA[grp * 3 + 2] > 0;
     let bx = 0, bz = 0, bp = -1, bi = 0, best = -1, bn = 0;
     for (let k = 0; k < (dir ? 420 : 260); k++) {
-      const n = k & 1 ? 0 : net, L = NETS[n], ti = (rnd() * L.length) | 0, t = L[ti]; if (!t || t.n < 30) continue;
+      const n = (rd === 2 ? (k & 3) === 3 : k & 1) ? 0 : net, L = NETS[n], ti = (rnd() * L.length) | 0, t = L[ti]; if (!t || t.n < 30) continue;
       const i = 4 + ((rnd() * (t.n - 8)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
-      if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380) continue;
+      if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380 || (rd && R.trees && canAt(x, z) > 90)) continue; // (wheeled ones never start in dense forest)
       let ok = true; for (const q of G.enemies) if (q.on && !q.dead && Math.hypot(q.x - x, q.z - z) < 45) { ok = false; break; } if (!ok) continue;
       let sc;
       if (!dir) sc = (d > 480 && d < 900 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 480–900 m away and to the north
-      else sc = (d > 520 && d < 950 ? 2 : d < 1250 ? 1 : -4 - (d - 1250) / 300) + 3 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - brg)) / 0.85) + 1.5 * (1 - Math.abs(wrap(brgOf(x, z) - brg)) / 3.1416) + (n === net ? 1.2 : 0) + (ga ? 2 * clamp(1 - Math.hypot(x - GA[grp * 3], z - GA[grp * 3 + 1]) / 260, 0, 1) : 0) + rnd() * 0.8;
+      else sc = (d > 520 && d < 950 ? 2 : d < 1250 ? 1 : -4 - (d - 1250) / 300) + 3 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - brg)) / 0.85) + 1.5 * (1 - Math.abs(wrap(brgOf(x, z) - brg)) / 3.1416) + (n === net ? (rd === 2 ? 2.5 : 1.2) : 0) + (ga ? 2 * clamp(1 - Math.hypot(x - GA[grp * 3], z - GA[grp * 3 + 1]) / 260, 0, 1) : 0) + rnd() * 0.8;
       if (sc > best) { best = sc; bx = x; bz = z; bp = ti; bi = i; bn = n; }
       if (!dir && best > 3.6) break;
     }
     if (bp < 0) return false;
-    const E = ETYPE[type];
     e.cage = type === 0 && G.wave >= 3 && rnd() < 0.4; // cope cage over the turret on some T-72s
     Object.assign(e, { on: true, dead: false, type, x: bx, z: bz, y: hAt(bx, bz), pitch: 0, roll: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: E.hp, state: 0, rl: 3 + rnd() * 4, path: bp, pi: bi, burn: 0, burnt: 0, see: 0, losT: rnd() * 0.3, los: false, known: 0, shots: 0, burstN: 0, immob: false, evalT: 0, errT: 0,
       role, grp, brg: dir ? brg : brgOf(bx, bz), side: rnd() < 0.5 ? -1 : 1, ph: 0, net: bn, gx: veh.x, gz: veh.z, scT: 0, shL: 0, hpL: E.hp, retT: 0, smk: 1, dsm: 0, revT: 0, stN: 0, cT: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: bx, stZ: bz, wantT: 0,
@@ -344,14 +345,25 @@ export function initCombat(C) {
     if (e.role === FLK && e.ph === 0) { const b = e.brg + e.side * 0.75, r = 560; e.gx = clamp(veh.x + Math.sin(b) * r, -PLAY + 80, PLAY - 80); e.gz = clamp(veh.z - Math.cos(b) * r, -PLAY + 80, PLAY - 80); return; }
     e.gx = veh.x; e.gz = veh.z;
   }
+  // off a road, a wheeled vehicle (or BMP) picks the heading within ±1 rad of the wanted one with the least canopy 20–45 m ahead (every 0.5 s)
+  function forestDir(e, E, ux, uz) {
+    e.faT = 0.5; const a0 = Math.atan2(ux, uz), w = E.road === 2 ? 3 : 1.6; let best = 1e9;
+    for (let k = -3; k <= 3; k++) { const a = a0 + k * 0.33, sx = Math.sin(a), cz = Math.cos(a);
+      const c = (canAt(e.x + sx * 20, e.z + cz * 20) + canAt(e.x + sx * 45, e.z + cz * 45) * 0.7) / 434, sc = c * w + Math.abs(k) * 0.16 + (k * 0.33 === e.fa ? -0.08 : 0);
+      if (sc < best) { best = sc; e.fa = k * 0.33; } }
+  }
   const toPt = (e, E, tx, tz, f) => {
-    let ux = tx - e.x, uz = tz - e.z; const l = Math.hypot(ux, uz) || 1; ux /= l; uz /= l; ux += e.tax * 1.3; uz += e.taz * 1.3; // weave round the trunks ahead
+    let ux = tx - e.x, uz = tz - e.z; const l = Math.hypot(ux, uz) || 1; ux /= l; uz /= l;
+    if (E.road && R.trees && e.path < 0) { e.faT -= driveDt; if (e.faT <= 0) forestDir(e, E, ux, uz); const c = Math.cos(e.fa), s = Math.sin(e.fa), rx = ux * c + uz * s; uz = uz * c - ux * s; ux = rx; } // off a road: bend round dense forest
+    ux += e.tax * 1.3; uz += e.taz * 1.3; // weave round the trunks ahead
     for (let f = 0; f < NFLD; f++) { const o = f * 4; if (!FLD[o + 3]) continue; const fx = e.x - FLD[o], fz = e.z - FLD[o + 1], fd = Math.hypot(fx, fz) || 1, rr = FLD[o + 2] + 14; // own minefields: swing round them
       if (fd < rr) { const w = (rr - fd) / 14 * 1.8; ux += fx / fd * w; uz += fz / fd * w; } }
     if (e.cT > 0) { const dn = ux * e.cnx + uz * e.cnz; if (dn < 0.2) { ux -= e.cnx * (dn - 0.2); uz -= e.cnz * (dn - 0.2); if (dn < -0.9) { ux -= e.cnz * e.side; uz += e.cnx * e.side; } } } // against a wall: slide along it
     const a = wrap(Math.atan2(-ux, -uz) - e.yaw); e.st = clamp(a * 2.2, -1, 1); e.tgt = E.vmax * f * (1 - 0.6 * Math.abs(e.st)) * (1 - (R.trees ? canAt(e.x, e.z) / 255 * (E.wheels ? 0.55 : 0.35) : 0)); }; // slower in thick forest (wheels more so)
   // movement: sets e.tgt (speed, negative = reverse) and e.st (steer) from the role, hit reactions, scoots and the route
+  let driveDt = 0; // toPt's time step (set by drive)
   function drive(e, E, d, dt) {
+    driveDt = dt;
     e.tgt = 0; e.st = 0; e.cT -= dt; e.noRt -= dt;
     const hit = e.hp < e.hpL - 0.5; e.hpL = e.hp;
     if (hit && e.smk > 0 && rnd() < (e.type ? 0.5 : 0.7)) { // smoke dischargers towards the threat, then back out of the line of fire
