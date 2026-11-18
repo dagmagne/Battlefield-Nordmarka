@@ -2,7 +2,7 @@
 // (relief shading, forest, water, bog, parking lots, ski trails, roads, buildings, the playable border), so a map
 // update is one integer-aligned drawImage of the window around the player plus the dynamic markers on top.
 // Building damage repaints just that building (B.onState, a rare event).
-export const MAP_M = 1800, MAP_PX = 352; // metres across the minimap, backing pixels (CSS shows it at 176 px, so 2x for Retina)
+export const MAP_M = 2400, MAP_PX = 464; // metres across the minimap, backing pixels (CSS shows it at 232 px on desktop, so 2x for Retina)
 
 // kOpt: pixels per metre (default the minimap's); the large map view builds a second, sharper copy on first use (a rare event)
 export function initMinimap(W, B, HALF, kOpt) {
