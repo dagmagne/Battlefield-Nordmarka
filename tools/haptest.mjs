@@ -27,14 +27,14 @@ const snap = () => ev('({ n: __vlog.length, last: __vlog[__vlog.length - 1] || n
 await step(30);
 let r = await snap(); check('no pad: nothing sent', r.n === 0, r);
 await ev("window.__padOn = true; dispatchEvent(new Event('gamepadconnected'))"); await step(30);
-// engine pulses: count the peaks of the strong motor over the last ~2 s of effects sent
-const pulses = (js) => ev(`(() => { const L = __vlog.slice(-${js}), v = L.map((e) => e[1]), m = v.reduce((a, b) => a + b, 0) / v.length; let c = 0; for (let i = 1; i < v.length - 1; i++) if (v[i] > v[i - 1] && v[i] >= v[i + 1] && v[i] > m * 0.9) c++; return { c, max: Math.max(...v), min: Math.min(...v), n: v.length }; })()`);
-await step(120); let pi = await pulses(40); r = await snap();
-check('idle engine: gentle chug on the strong motor (~3 pulses/s)', pi.max > 0.02 && pi.max < 0.06 && pi.min < 0.5 * pi.max && r.w < 0.02, pi);
+// engine pulses: count the strong motor's rises through the middle of its range over the last ~2 s of effects sent
+const pulses = (js) => ev(`(() => { const L = __vlog.slice(-${js}), v = L.map((e) => e[1]), hi = Math.max(...v), lo = Math.min(...v), m = (hi + lo) / 2, h = (hi - lo) * 0.2; let c = 0, up = v[0] > m; for (let i = 1; i < v.length; i++) { if (!up && v[i] > m + h) { up = true; c++; } else if (up && v[i] < m - h) up = false; } return { c, max: hi, min: lo, n: v.length }; })()`); // rising crossings with hysteresis
+await step(60); let t0i = await ev('__vlog.length'); await step(120); let pi = await pulses((await ev('__vlog.length')) - t0i); pi.c /= 2; r = await snap(); // per second
+check('idle engine: gentle chug on the strong motor (~3 pulses/s)', pi.max > 0.015 && pi.max < 0.04 && pi.min < 0.5 * pi.max && r.w < 0.02, pi);
 const n0 = r.n; await step(60); r = await snap(); check('re-issued about every 50 ms (~20 per s)', r.n - n0 >= 15 && r.n - n0 <= 25, { per_s: r.n - n0 });
 await ev('__R.force = [1, 0]'); await step(150); r = await snap(); check('driving: track rumble on the weak motor', r.w > 0.08, { ...r, v: await ev('__veh.v') });
 { const t0 = await ev('__vlog.length'); await step(60); const nn = (await ev('__vlog.length')) - t0; const pd = await pulses(nn);
-  check('full revs: faster pulses (per s) than at idle, still mild', pd.c >= pi.c / 2 * 1.6 && pd.max < 0.2, { idle_per_s: pi.c / 2, drive: pd.c, sent: nn, s: await ev('__vlog.slice(-' + nn + ').map((e) => e[1])'), v: await ev('[__veh.v, __veh.shake]') }); }
+  check('full revs: faster pulses (per s) than at idle, still mild', pd.c >= pi.c * 1.6 && pd.max < 0.2, { idle_per_s: pi.c, drive: pd.c, sent: nn, s: await ev('__vlog.slice(-' + nn + ').map((e) => e[1])'), v: await ev('[__veh.v, __veh.shake]') }); }
 await ev('__R.force = [0, 0]; __veh.v = 0'); await step(120);
 await ev('__ui._p = __ui.poll; __ui.poll = () => {}; __inp.fire = true'); await step(3); await ev('__inp.fire = false'); await step(1);
 r = await snap(); check('own main gun: strong kick', r.s > 0.8, r);
@@ -52,7 +52,7 @@ await ev('__game.droneKey()'); await step(30);
 await ev('__game.droneType(1); __game.droneKey()'); await step(60); r = await snap();
 check('bomber drone: still', r.s === 0 && r.w === 0, { ...r, on: await ev('__game.drone.on') });
 await ev('__game.droneKey()'); await step(300);
-await ev('__api.vib(1)'); await step(40); const sFull = 0.08; r = await snap(); check('light level scales down', r.lvl === 1 && r.s < 0.035, r);
+await ev('__api.vib(1)'); await step(40); const sFull = 0.08; r = await snap(); check('light level scales down', r.lvl === 1 && r.s < 0.025, r);
 await ev('__api.vib(0)'); await step(2); r = await snap(); const n1 = r.n; await step(30); r = await snap();
 check('off: a final zero effect, then silence', r.last && r.last[1] === 0 && r.last[2] === 0 && r.n === n1, r);
 await ev('__api.vib(2)');

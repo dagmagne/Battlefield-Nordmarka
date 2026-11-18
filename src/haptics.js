@@ -3,7 +3,7 @@
 // One effect with the current mix is re-issued about every 50 ms (a new playEffect replaces the running one); the parameter object is reused,
 // so the only allocation is the browser's promise at that rate. Nothing is sent without a pad that has an actuator.
 const cl = (v, a, b) => (v < a ? a : v > b ? b : v);
-const NK = 8, LV = [0, 0.55, 1]; // kick pool; level gain: off, light, full
+const NK = 8, LV = [0, 0.55, 1], ENG = 0.65; // kick pool; level gain: off, light, full; engine layer gain (owner: 'a bit less than the rest')
 
 export function initHaptics(o) {
   const { veh, game, ui } = o, D = game.drone;
@@ -66,8 +66,8 @@ export function initHaptics(o) {
     if (alive && !menu) {
       const trk = veh.air ? 0 : Math.min(1, av / 2.5) * (0.06 + 0.2 * sv) * (1 - 0.45 * veh.road);
       const dep = 0.8 - 0.5 * r, wave = 0.5 + 0.5 * Math.sin(ep * 6.2832); // deep pulses at idle, smoother when revving
-      s = (0.035 + 0.045 * r + 0.02 * ld) * (1 - dep + dep * wave) + 0.2 * veh.shake;
-      w = 0.03 * r * r + trk * (0.8 + 0.4 * Math.random()) + 0.06 * tr; // a little of the fast motor joins at high rpm
+      s = ENG * (0.035 + 0.045 * r + 0.02 * ld) * (1 - dep + dep * wave) + 0.2 * veh.shake;
+      w = ENG * 0.03 * r * r + trk * (0.8 + 0.4 * Math.random()) + 0.06 * tr; // a little of the fast motor joins at high rpm
       if (game.mgOn || game.hmgOn) { w += mgF ? 0.42 : 0.18; s += 0.08; } // alternates per effect sent: a rattle
       if (fly) { s = 0; w = D.type === 0 ? 0.025 + 0.04 * Math.min(1, Math.hypot(D.vx, D.vy, D.vz) / 26) : 0; } // flying a drone: the tank is out of mind; the FPV hums faintly with its speed, bomber and recon are still
     }
