@@ -8,6 +8,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
 }
 @fragment fn fs(in: OV, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   var n = normalize(in.n); if (!ff) { n = -n; }
+  let ts = texFetch(in.uv, in.wp, n); // textured imported model (objtex.wgsl; a constant stub elsewhere)
   let wp = in.wp;
   let V = G.camPos.xyz - wp; let dist = length(V); let v = V / dist;
   var alb = in.col; var spec = 0.04; var gloss = 24.0; var emis = vec3f(0.0); var snowy = 0.0; var refl = 0.0;
@@ -98,6 +99,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     alb = mix(alb, vec3f(0.6, 0.62, 0.64), 0.25 * smoothstep(0.9, 0.2, in.lp.y) * vn(in.lp.xz * 5.0 + 2.0));
     spec = 0.06; gloss = 16.0;
   }
+  if (m == 29u) { alb = ts.alb; n = ts.nrm; spec = 0.03 + 0.5 * ts.spec; gloss = 36.0; } // imported model: albedo, normal map, specular level
   if (OB.tr.z > 0.0) { alb = mix(alb, vec3f(0.012, 0.011, 0.01) * (0.6 + 0.8 * vn(in.lp.xz * 3.0 + in.lp.y * 2.0)), OB.tr.z * 0.93); spec *= 1.0 - OB.tr.z; refl *= 1.0 - OB.tr.z; emis *= 1.0 - OB.tr.z; }
   // snow settling on upward faces
   let sn = smoothstep(0.5, 0.78, n.y + (vn(wp.xz * 2.3 + wp.y) - 0.5) * 0.35) * min(snowy, 1.0) + max(snowy - 1.0, 0.0) * smoothstep(0.1, 0.5, n.y + (vn(wp.xz * 1.1) - 0.5) * 0.5);
@@ -115,6 +117,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     if (isG > 0.5) {
       th = 0.36 + 0.1 * vn(in.lp.xz * 2.1 + in.lp.y * 3.0);
       if (m == 8u || m == 9u || m == 14u) { th = 0.8; }
+      if (m == 29u) { th = in.col.r + 0.06 * vn(in.lp.xz * 31.0 + in.lp.y * 17.0); } // imported model: per-vertex heat
       th += 1.2 * smoothstep(0.7, 1.9, in.lp.z) * smoothstep(0.7, 1.1, in.lp.y) * smoothstep(1.75, 1.55, in.lp.y);
       th = mix(th, 1.0 + 0.9 * vn(in.lp.xz * 1.7 + in.lp.y * 2.0), OB.tr.z);
     }

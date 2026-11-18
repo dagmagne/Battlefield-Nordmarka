@@ -939,7 +939,7 @@ export function initCombat(C) {
     if (dv > T.r) { droneEnd('Drone out of radio range — lost'); return; }
     D.scan -= dt; if (D.scan <= 0) { D.scan = 0.3; droneScan(T); }
     const sec = Math.ceil(D.t); if (sec !== D.sec) { D.sec = sec; hudDirty = true; }
-    droneParts(C.dobj, D); C.dobj[131] = 1;
+    droneParts(C.dobj, D, D.type ? null : C.fpvHub); C.dobj[131] = 1;
   }
   // X: launch the selected drone type from the turret roof, or cut the link to the one in the air (it is lost)
   G.droneKey = () => {
@@ -952,7 +952,7 @@ export function initCombat(C) {
     if (G.dn[ty] <= 0) { ui.toast(`No ${T.name} drones left` + (G.dn[0] + G.dn[1] + G.dn[2] ? ' — Z picks another type' : '')); return; }
     G.dn[ty]--; Object.assign(D, { on: true, type: ty, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: ty ? -0.5 : -0.12, t: T.t, spin: 0, tp: 0, tr: 0, sec: T.t,
       bombs: ty === 1 ? BOMBS : 0, rel: 0, climb: T.climb, away: false, scan: 0, iok: false });
-    cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
+    cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D, D.type ? null : C.fpvHub); C.dobj[131] = 1;
     ui.toast(ty === 0 ? 'FPV away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank'
       : ty === 1 ? 'Bomber away — WASD fly · mouse tilts the camera · LMB drops a grenade on the marker · land on the tank to rearm'
         : 'Recon drone climbing — enemies in its camera go on the map · X: back to the tank (it keeps flying) · land on the tank to recover it');

@@ -30,6 +30,12 @@ import { initAudio } from './audio.js';
 import { REC, RECM } from './sndrec.js';
 import { initMusic } from './music.js';
 import TITLE from './data/title.webp';
+import FPVB from './data/fpv.bin';
+import FPVA from './data/fpv_a.webp';
+import FPVN from './data/fpv_n.webp';
+import objTexW from './objtex.wgsl';
+import objTexStubW from './objtexstub.wgsl';
+import { decodeModel, modelTexture } from './model.js';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
@@ -190,7 +196,7 @@ async function main() {
   });
 
   // ---------- objects (groomer + props) ----------
-  const objMod = mod(common + objDefW + objectW, 'object');
+  const objMod = mod(common + objDefW + objTexStubW + objectW, 'object');
   const objVB = [{ arrayStride: 56, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }, { shaderLocation: 3, offset: 40, format: 'float32x4' }] }];
   const objPipe = device.createRenderPipeline({
     layout: lay01, vertex: { module: objMod, entryPoint: 'vs', buffers: objVB }, fragment: { module: objMod, entryPoint: 'fs', targets: [{ format: HDR }] },
@@ -203,6 +209,13 @@ async function main() {
     return { vb: mkBuf(mesh.v, U.VERTEX), ib: mkBuf(mesh.i, U.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
   const groomer = mkObj(buildLeopard()), droneO = mkObj(buildDrone());
+  // the player's FPV drone: an imported, textured model (tools/assets/fpv.mjs; src/model.js), drawn with its own pipeline
+  const fpvM = decodeModel(FPVB, 29 /* MAT.tex */), fpvO = mkObj(fpvM);
+  const bglT = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: {} }] });
+  const objTexMod = mod(common + objDefW + objTexW + objectW, 'objtex');
+  const objTexPipe = device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bgl0, bglT] }), vertex: { module: objTexMod, entryPoint: 'vs', buffers: objVB }, fragment: { module: objTexMod, entryPoint: 'fs', targets: [{ format: HDR }] }, primitive: { cullMode: 'none' }, depthStencil: depthGE, multisample: msState });
+  { const [ta, tn] = await Promise.all([modelTexture(device, FPVA, true), modelTexture(device, FPVN, false)]), smp = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat', maxAnisotropy: 8 });
+    fpvO.bgT = device.createBindGroup({ layout: bglT, entries: [{ binding: 0, resource: { buffer: fpvO.u } }, { binding: 1, resource: ta.createView() }, { binding: 2, resource: tn.createView() }, { binding: 3, resource: smp }] }); }
   const propsMesh = buildProps(W), props = mkObj(propsMesh); // the CPU copy stays alive: building state changes edit and re-upload ranges of it
   const BL = initBuildings(W, propsMesh, HALF);
   BL.upload = (v0, v1) => device.queue.writeBuffer(props.vb, v0 * 56, propsMesh.v, v0 * 14, (v1 - v0) * 14);
@@ -270,7 +283,7 @@ async function main() {
 
   // ---------- infantry: one instanced draw per LOD; part matrices per soldier in a storage buffer, object.wgsl shading ----------
   const bglI = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } }] });
-  const infMod = mod(common + objDefW + objectW + soldierW, 'soldier');
+  const infMod = mod(common + objDefW + objTexStubW + objectW + soldierW, 'soldier');
   const infPipe = device.createRenderPipeline({
     layout: device.createPipelineLayout({ bindGroupLayouts: [bgl0, bglI] }), vertex: { module: infMod, entryPoint: 'vsInf', buffers: objVB },
     fragment: { module: infMod, entryPoint: 'fs', targets: [{ format: HDR }] }, primitive: { cullMode: 'back', frontFace: 'ccw' }, depthStencil: depthGE, multisample: msState,
@@ -594,7 +607,7 @@ async function main() {
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, fpvHub: fpvM.hubs, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
   const SOL = initSoldiers(MAXI, W.heightAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
@@ -894,7 +907,7 @@ async function main() {
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[130] = veh.dead ? Math.min(1, (game.burnP || 0) * 0.5) : 0; groomer.d[131] = 1;
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
-    const droneOn = game.drone.on; if (droneOn) device.queue.writeBuffer(droneO.u, 0, droneO.d);
+    const droneOn = game.drone.on, dO = game.drone.type ? droneO : fpvO; if (droneOn) device.queue.writeBuffer(dO.u, 0, droneO.d); // (the FPV is the imported model; combat writes the parts into droneO.d)
     for (let i = 0; i < MAXE; i++) if (game.enemies[i].on) device.queue.writeBuffer(eObj[i].u, 0, eObj[i].d);
     for (let i = 0; i < MAXA; i++) if (game.air[i].on) device.queue.writeBuffer(aObj[i].u, 0, aObj[i].d);
     if (game.fxN) device.queue.writeBuffer(fxBuf, 0, game.fx, 0, game.fxN * 12);
@@ -929,7 +942,7 @@ async function main() {
       sp.setBindGroup(0, shBG[c]);
       if (!hH) {
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
-      if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
+      if (droneOn) { sp.setBindGroup(1, dO.bg); sp.setVertexBuffer(0, dO.vb); sp.setIndexBuffer(dO.ib, 'uint32'); sp.drawIndexed(dO.n); }
       for (let i = 0; i < MAXA; i++) { const a = game.air[i]; if (!a.on || c > 0) continue; const m = aMesh[a.type]; sp.setBindGroup(1, aObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.cage ? 6 : e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
@@ -945,7 +958,7 @@ async function main() {
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
     if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
-    if (droneOn && !hV && !(cam.mode === 4 && game.drone.type)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
+    if (droneOn && !hV && !(cam.mode === 4 && game.drone.type)) { if (dO === fpvO) { p.setPipeline(objTexPipe); p.setBindGroup(1, fpvO.bgT); } else p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, dO.vb); p.setIndexBuffer(dO.ib, 'uint32'); p.drawIndexed(dO.n); p.setPipeline(objPipe); }
     for (let i = 0; i < MAXA; i++) { const a = game.air[i]; if (!a.on || hV) continue; const m = aMesh[a.type]; p.setBindGroup(1, aObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.cage ? 6 : e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);

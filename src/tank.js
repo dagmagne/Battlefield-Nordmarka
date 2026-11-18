@@ -407,9 +407,9 @@ export function buildDrone() {
   b.set(DARK, MAT.rubber); for (const z of [-0.04, 0.09]) b.box(-0.055, -0.12, z - 0.01, 0.055, 0.005, z + 0.01);
   return b.build();
 }
-export function droneParts(out, d) { // d: {x,y,z,yaw,tp,tr,spin}
+export function droneParts(out, d, H) { // d: {x,y,z,yaw,tp,tr,spin}; H: rotor hubs (x,z × 4) of an imported model, else the procedural drone's
   trs(BM, d.x, d.y, d.z, d.yaw, d.tp, d.tr); out.set(BM, 0);
-  for (let i = 0; i < 4; i++) { const px = i & 1 ? 0.3 : -0.3, pz = i & 2 ? 0.3 : -0.3;
+  for (let i = 0; i < 4; i++) { const px = H ? H[i * 2] : i & 1 ? 0.3 : -0.3, pz = H ? H[i * 2 + 1] : i & 2 ? 0.3 : -0.3;
     trs(T1, px, 0, pz, d.spin * (i === 0 || i === 3 ? 1 : -1), 0, 0); identity(T2); T2[12] = -px; T2[14] = -pz; mul(T3, T1, T2); mul(TM, BM, T3); out.set(TM, 16 * (i + 1)); }
 }
 
