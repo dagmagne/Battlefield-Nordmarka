@@ -79,6 +79,15 @@ kbd{margin:0 1px}
 .touch #dbg{top:calc(var(--st) + 80px)}
 .touch #hud{gap:8px;padding:6px 10px}
 #ovP{opacity:.85;line-height:1.5}
+#hold{left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;display:none}
+#hold.show{display:block}
+#hold svg{width:84px;height:84px;transform:rotate(-90deg);filter:drop-shadow(0 1px 3px #000a)}
+#hold circle{fill:none;stroke-width:5}
+#hold .hb{stroke:#0b142080}
+#hold .hf{stroke:#eef3f8;stroke-linecap:round;stroke-dasharray:213.6;stroke-dashoffset:213.6}
+#hold.show .hf{animation:hfill 1s linear forwards}
+@keyframes hfill{to{stroke-dashoffset:0}}
+#holdT{position:absolute;left:50%;top:94px;transform:translateX(-50%);white-space:nowrap;padding:4px 11px;font-weight:650;font-size:12px;letter-spacing:.06em}
 #toast{left:50%;top:calc(var(--st) + 60px);transform:translateX(-50%);padding:7px 14px;font-weight:600;opacity:0;transition:opacity .25s}
 #keys{left:var(--sl);bottom:var(--sb);padding:6px 11px;font-size:11.5px;opacity:.92}
 .touch #keys{display:none}
@@ -136,6 +145,7 @@ kbd{margin:0 1px}
   <div id="keys" class="pill"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> sight · <kbd>Space</kbd> MG · <kbd>Tab</kbd> map · <kbd>1</kbd>–<kbd>3</kbd> ammo · <kbd>G</kbd> smoke · <kbd>V</kbd> thermal · <kbd>X</kbd> drone · <kbd>Z</kbd> type · <kbd>B</kbd> artillery · <kbd>M</kbd> sound · <kbd>U</kbd> music · <kbd>H</kbd> help</div>
   <div id="dbg" class="pill"></div>
   <div id="toast" class="pill"></div>
+  <div id="hold"><svg viewBox="0 0 84 84"><circle class="hb" cx="42" cy="42" r="34"/><circle class="hf" cx="42" cy="42" r="34"/></svg><div id="holdT" class="pill"></div></div>
   <div id="help" class="modal"><div class="card pill">
     <h2>Battlefield Nordmarka — Leopard 2A4NO</h2>
     <div class="grid desk-only" id="hD">
@@ -152,7 +162,8 @@ kbd{margin:0 1px}
       <b>Mines</b><span>Enemy engineers mine roads ahead (a faint grey patch in the snow, warm in the thermal sight) and rockets can scatter mines around you. Driving onto one blows a track: you are stuck for a few seconds (TRACK) and lose hull. Drones and a close look mark them with red flags; HE or a burst of MG fire sets them off</span>
       <b><kbd>T</kbd> <kbd>N</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · sound · music</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
-      <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight · ✕ MG · ○ smoke · □ ammo · △ camera · D-pad down drone · L3 drone type · L1 artillery · R3 force hatch MG · Options menu (Vibration: off / light / full)</span>
+      <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight (hold; L3 locks it) · R1 MG · R3 force hatch MG · L1 smoke · □ ammo · △ thermal · hold ✕ launch drone · hold ○ artillery · D-pad ↑↓ magnification, ←→ drone type · Create map · Options menu (Vibration: off / light / full)</span>
+      <b>Pad, drone</b><span>Like a DJI controller (Mode 2): left stick height and turn · right stick fly · L1/L2 tilt the camera · R2 detonate / drop · hold ✕ back to the tank (recon: autopilot) · hold ○ artillery where the camera looks · △ thermal</span>
     </div>
     <div class="grid" id="hT">
       <b>Left thumb</b><span>Joystick: push to drive, sideways to steer</span>

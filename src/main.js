@@ -574,6 +574,7 @@ async function main() {
     drone() { if (R.game) R.game.droneKey(); },
     bigMap(on) { if (R.game) R.game.bigMap(on); },
     droneType(i) { if (R.game) R.game.droneType(i); },
+    droneLabel: () => (R.game ? R.game.droneLabel() : ''),
     arty() { if (R.game) R.game.support.key(); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },

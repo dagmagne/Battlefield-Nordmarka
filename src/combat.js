@@ -953,14 +953,19 @@ export function initCombat(C) {
     G.dn[ty]--; Object.assign(D, { on: true, type: ty, x: veh.x, y: veh.y + 3.4, z: veh.z, vx: 0, vy: 5, vz: 0, yaw: aim.yaw, pitch: ty ? -0.5 : -0.12, t: T.t, spin: 0, tp: 0, tr: 0, sec: T.t,
       bombs: ty === 1 ? BOMBS : 0, rel: 0, climb: T.climb, away: false, scan: 0, iok: false });
     cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1;
-    ui.toast(ty === 0 ? 'FPV away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank'
+    if (ui.pad) ui.toast((ty === 0 ? 'FPV away — R2 detonates' : ty === 1 ? 'Bomber away — R2 drops a grenade on the marker' : 'Recon drone climbing — hold ✕: autopilot')
+      + ' · left stick height/turn · right stick fly · L1/L2 tilt the camera' + (ty === 2 ? '' : ' · hold ✕: back to the tank'));
+    else ui.toast(ty === 0 ? 'FPV away — WASD fly · Space/Shift up/down · LMB detonate · X back to the tank'
       : ty === 1 ? 'Bomber away — WASD fly · mouse tilts the camera · LMB drops a grenade on the marker · land on the tank to rearm'
         : 'Recon drone climbing — enemies in its camera go on the map · X: back to the tank (it keeps flying) · land on the tank to recover it');
   };
-  // Z: pick the drone type for the next launch
+  // what a hold of pad ✕ would do now (for the hold ring's label); '' when it should act at once (skip the blast view, or nothing to launch)
+  G.droneLabel = () => D.hold > 0 ? '' : D.on && D.auto ? 'TAKE BACK RECON' : D.on && D.type === 2 ? 'RECON AUTOPILOT' : D.on ? 'CUT LINK'
+    : veh.dead || G.dn[G.dsel] <= 0 ? '' : 'LAUNCH ' + DTYPE[G.dsel].name;
+  // Z: pick the drone type for the next launch (i: index, -1 or undefined next, -2 previous)
   G.droneType = (i) => {
     if (D.on) { ui.toast(D.auto ? 'The recon drone is still up — X takes it back' : 'Land the drone or cut the link first'); return; }
-    G.dsel = i === undefined || i < 0 ? (G.dsel + 1) % 3 : i; hudDirty = true;
+    G.dsel = i === -2 ? (G.dsel + 2) % 3 : i === undefined || i < 0 ? (G.dsel + 1) % 3 : i; hudDirty = true;
     const T = DTYPE[G.dsel]; ui.toast(`Drone: ${T.name} (${G.dn[G.dsel]} left)` + [' — one-way shaped charge', ' — hovers and drops grenades', ' — flies high and spots for the map'][G.dsel]);
   };
   G.restart = () => {

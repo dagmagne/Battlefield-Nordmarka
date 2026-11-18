@@ -135,36 +135,57 @@ export function initUI(api, isTouch) {
   let padN = 0; const pb = new Uint8Array(20);
   addEventListener('gamepadconnected', () => { padN++; });
   addEventListener('gamepaddisconnected', () => { padN = Math.max(0, padN - 1); });
+  const PADT = [2, 4, 10, 12, 13, 14, 15]; // buttons only the tank uses
   const dz = (v) => { const a = Math.abs(v); return a < 0.15 ? 0 : Math.sign(v) * (a - 0.15) / 0.85; };
-  let gTh = 0, gSt = 0, gX = 0, gZ = 0, gFire = false, gMg = false, gAA = false, gSight = false;
-  const pollPad = () => {
-    gTh = gSt = gX = gZ = 0; gFire = gMg = gAA = gSight = false;
-    U.pad = null; if (!padN || !navigator.getGamepads) return;
+  let gTh = 0, gSt = 0, gX = 0, gZ = 0, gY = 0, gFire = false, gMg = false, gAA = false, gSight = false;
+  // Hold to confirm (pad only): ✕ drone and ○ artillery fire after a 1 s hold. The ring round the crosshair fills by a CSS
+  // animation that starts when #hold is shown, so nothing is written to the DOM while it fills.
+  const HOLD_MS = 1000; let hK = 0, hT = 0;
+  const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = text; $('hold').classList.add('show'); };
+  const holdEnd = () => { if (hK) { hK = 0; $('hold').classList.remove('show'); } };
+  const pollPad = (fly) => {
+    gTh = gSt = gX = gZ = gY = 0; gFire = gMg = gAA = gSight = false;
+    U.pad = null; if (!padN || !navigator.getGamepads) { holdEnd(); return; }
     const gl = navigator.getGamepads();
     let g = null; for (let i = 0; i < gl.length; i++) if (gl[i] && gl[i].connected) { g = gl[i]; break; }
-    U.pad = g; if (!g) return;
+    U.pad = g; if (!g) { holdEnd(); return; }
     const b = g.buttons, ax = g.axes, n = Math.min(b.length, 16);
-    const press = (i) => { const d = i < n && b[i].pressed; const e = d && !pb[i]; pb[i] = d ? 1 : 0; return e; };
+    const down = (i) => i < n && b[i].pressed;
+    const press = (i) => { const d = down(i); const e = d && !pb[i]; pb[i] = d ? 1 : 0; return e; };
     const bv = (i) => (i < n ? b[i].value : 0);
-    if (modalOpen()) { if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; return; }
-    if (press(1)) api.smoke(); if (press(2)) api.ammo(-1); if (press(3)) api.cam();
-    if (press(4)) api.arty(); if (press(9)) showMenu(true); if (press(8)) api.debug();
-    if (press(13)) api.drone(); if (press(10)) api.droneType();
+    const sync = () => { for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; };
+    if (modalOpen()) { holdEnd(); if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } sync(); return; }
+    if ($('over').classList.contains('show')) { holdEnd(); if (press(0)) api.restart(); else if (press(1) && overCont) U.over(null); sync(); return; } // end card: ✕ restart, ○ keep playing (after a victory)
+    // ✕ drone / ○ artillery: start on the press, cancel on release, fire after HOLD_MS
+    if (press(0)) { const l = api.droneLabel(); if (l) holdStart(1, 'HOLD ✕ · ' + l); else api.drone(); } // '' = no hold needed (skip the blast view, or nothing to launch: the toast says why)
+    if (press(1)) holdStart(2, 'HOLD ○ · FIRE MISSION');
+    if (hK && !down(hK === 1 ? 0 : 1)) holdEnd();
+    else if (hK && performance.now() - hT >= HOLD_MS) { const k = hK; holdEnd(); if (k === 1) api.drone(); else api.arty(); }
+    if (press(3)) api.thermal(); if (press(8)) api.bigMap(); if (press(9)) showMenu(true);
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
-    gFire = bv(7) > 0.5; gSight = bv(6) > 0.5; gMg = bv(0) > 0.5; gAA = bv(11) > 0.5;
-    gTh = Math.max(-1, Math.min(1, -ly)); gSt = -lx; gX = lx; gZ = -ly;
+    gFire = bv(7) > 0.5;
+    if (fly) { // drone, DJI Mode 2: left stick height and yaw, right stick forward/back and sideways, L1/L2 tilt the gimbal (the FPV's nose)
+      gY = -ly; gZ = -ry; gX = rx; inp.lookX += lx * 9; inp.lookY += (bv(6) - bv(4)) * 7;
+      for (let j = 0; j < PADT.length; j++) pb[PADT[j]] = down(PADT[j]) ? 1 : 0; // tank-only buttons: track them so a press in flight does not fire on return
+      return;
+    }
+    if (press(4)) api.smoke(); if (press(2)) api.ammo(-1); if (press(10)) api.cam();
+    if (press(12)) inp.zoom -= 0.35; if (press(13)) inp.zoom += 0.35; // sight magnification (commander view: camera distance)
+    if (press(14)) api.droneType(-2); if (press(15)) api.droneType(-1);
+    gSight = bv(6) > 0.5; gMg = bv(5) > 0.5; gAA = bv(11) > 0.5;
+    gTh = Math.max(-1, Math.min(1, -ly)); gSt = -lx;
     inp.lookX += rx * 9; inp.lookY += ry * 9;
   };
 
   // ---- per-frame poll (no allocation) ----
   let lSpd = -1, lC = -1, lR = -1;
   U.poll = (fly) => { // 0 tank, 1 free-fly camera, 2 drone
-    pollPad();
+    pollPad(fly);
     const k = (c) => (keys.has(c) ? 1 : 0);
     const f = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown'), r = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
     let jxx = jx, jyy = jy; const jl = Math.hypot(jxx, jyy);
     if (jl < 0.14) { jxx = 0; jyy = 0; } else { const g = (jl - 0.14) / 0.86 / jl; jxx *= g; jyy *= g; }
-    if (fly) { inp.mvZ = f - jyy + gZ; inp.mvX = r + jxx + gX; inp.mvY = k('KeyE') - k('KeyQ') + inp.holdY; inp.th = 0; inp.st = 0;
+    if (fly) { inp.mvZ = f - jyy + gZ; inp.mvX = r + jxx + gX; inp.mvY = k('KeyE') - k('KeyQ') + inp.holdY + gY; inp.th = 0; inp.st = 0;
       if (fly === 2) inp.mvY = Math.max(-1, Math.min(1, inp.mvY + k('Space') - k('ShiftLeft') - k('ShiftRight'))); }
     else { inp.th = Math.max(-1, Math.min(1, f - jyy + gTh)); inp.st = Math.max(-1, Math.min(1, -r - jxx * 1.15 + gSt)); inp.mvX = inp.mvZ = inp.mvY = 0; }
     inp.fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
