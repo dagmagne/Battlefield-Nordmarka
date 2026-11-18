@@ -33,7 +33,7 @@ const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0, 120, 120, 25]; // direct-hit d
 const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'flanker', 'raider'], PQN = 16;
 const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 // enemy types: tracked T-72 and BMP, then the wheeled and light ones (phase 4). mgd: damage per coax / hatch MG round, score, sfx and muzzle size of the weapon,
-// road: 2 road-bound (wheeled: spawn on roads, keep to them, stay out of dense forest), 1 prefers roads (BMP); wheels: K.ax axles get rolling parts; map: minimap marker (0 tank circle, 1 square, 2 ATGM diamond, 3 small dot)
+// road: 2 road-bound (wheeled: spawn on a road or ski trail, keep to them, stay out of dense forest), 1 prefers them (BMP); wheels: K.ax axles get rolling parts; map: minimap marker (0 tank circle, 1 square, 2 ATGM diamond, 3 small dot)
 const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1800, burst: 1, night: 0.35, name: 'T-72B3', fell: 10, mgd: 0, score: 100, sfx: 'egun', mz: 1, spread: 0.0016, map: 0 },
   { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2', road: 1, fell: 9, mgd: 3, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1 },
   { K: TIGR, hp: 30, vmax: 15, slew: 0.6, v: 250, shell: 8, reload: 22, range: 2000, burst: 1, night: 0.6, name: 'Tigr-M Kornet', road: 2, fell: 6, mgd: 0.5, turn: 0.9, score: 70, sfx: 'atgm', mz: 0.6, spread: 0, map: 2, wheels: 1 },
@@ -274,7 +274,7 @@ export function initCombat(C) {
     const dg = Math.hypot(e.gx - e.x, e.gz - e.z); if (dg < 160) return false;
     let best = 14, bn = -1, bp = -1, bi = 0, bd = 1;
     const rd = ETYPE[e.type].road || 0;
-    for (let n = 0; n < 2; n++) { const L = NETS[n], R0 = n ? (rd ? 240 : 60) : 45, bonus = n === 1 ? (rd === 2 ? 70 : rd ? 40 : e.role === RAID ? 30 : 10) : 0; // road-bound vehicles head for a road up to 240 m off
+    for (let n = 0; n < 2; n++) { const L = NETS[n], R0 = rd ? 240 : n ? 60 : 45, bonus = rd ? 0 : n === 1 ? (e.role === RAID ? 30 : 10) : 0; // road-bound vehicles head for a road or trail up to 240 m off (both count the same)
       for (let p = 0; p < L.length; p++) { const t = L[p], P = t.pts;
         for (let i = 2; i < t.n - 2; i += 3) { const px = P[i * 2], pz = P[i * 2 + 1], dx = px - e.x, dz = pz - e.z; if (dx * dx + dz * dz > R0 * R0) continue;
           const dp = Math.sqrt(dx * dx + dz * dz);
@@ -312,16 +312,16 @@ export function initCombat(C) {
     if (!e) { let fd = -1; for (const q of G.enemies) { const dq = Math.hypot(q.x - veh.x, q.z - veh.z), dc = Math.hypot(q.x - cam.x, q.z - cam.z); // full: recycle the farthest wreck that is out of the way
         if (q.dead && dq > fd && (anyWreck || (dc > 250 && dq > 250) || (dc > 150 && q.burn > 90))) { fd = dq; e = q; } }
       if (!e) { noSlot = true; return false; } }
-    const E = ETYPE[type], rd = E.road || 0, dir = brg === brg, net = (role === RAID || rd) && roads.length ? 1 : 0, ga = grp >= 0 && GA[grp * 3 + 2] > 0;
+    const E = ETYPE[type], rd = E.road || 0, dir = brg === brg, net = role === RAID && !rd && roads.length ? 1 : 0, ga = grp >= 0 && GA[grp * 3 + 2] > 0;
     let bx = 0, bz = 0, bp = -1, bi = 0, best = -1, bn = 0;
     for (let k = 0; k < (dir ? 420 : 260); k++) {
-      const n = (rd === 2 ? (k & 3) === 3 : k & 1) ? 0 : net, L = NETS[n], ti = (rnd() * L.length) | 0, t = L[ti]; if (!t || t.n < 30) continue;
+      const n = rd ? k & 1 : k & 1 ? 0 : net, L = NETS[n], ti = (rnd() * L.length) | 0, t = L[ti]; if (!t || t.n < 30) continue;
       const i = 4 + ((rnd() * (t.n - 8)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
       if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380 || (rd && R.trees && canAt(x, z) > 90)) continue; // (wheeled ones never start in dense forest)
       let ok = true; for (const q of G.enemies) if (q.on && !q.dead && Math.hypot(q.x - x, q.z - z) < 45) { ok = false; break; } if (!ok) continue;
       let sc;
       if (!dir) sc = (d > 480 && d < 900 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 480–900 m away and to the north
-      else sc = (d > 520 && d < 950 ? 2 : d < 1250 ? 1 : -4 - (d - 1250) / 300) + 3 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - brg)) / 0.85) + 1.5 * (1 - Math.abs(wrap(brgOf(x, z) - brg)) / 3.1416) + (n === net ? (rd === 2 ? 2.5 : 1.2) : 0) + (ga ? 2 * clamp(1 - Math.hypot(x - GA[grp * 3], z - GA[grp * 3 + 1]) / 260, 0, 1) : 0) + rnd() * 0.8;
+      else sc = (d > 520 && d < 950 ? 2 : d < 1250 ? 1 : -4 - (d - 1250) / 300) + 3 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - brg)) / 0.85) + 1.5 * (1 - Math.abs(wrap(brgOf(x, z) - brg)) / 3.1416) + (n === net && !rd ? 1.2 : 0) + (ga ? 2 * clamp(1 - Math.hypot(x - GA[grp * 3], z - GA[grp * 3 + 1]) / 260, 0, 1) : 0) + rnd() * 0.8;
       if (sc > best) { best = sc; bx = x; bz = z; bp = ti; bi = i; bn = n; }
       if (!dir && best > 3.6) break;
     }
