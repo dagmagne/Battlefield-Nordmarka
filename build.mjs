@@ -4,6 +4,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
 const dev = process.argv.includes('--dev');
+// a `//` comment in the middle of a line silently removes the code after it; tools/commentlint.mjs flags that before anything is built
+{ const { execFileSync } = await import('node:child_process'); try { execFileSync(process.execPath, [new URL('./tools/commentlint.mjs', import.meta.url).pathname], { stdio: 'pipe' }); }
+  catch (e) { process.stdout.write(String(e.stdout || '')); console.error('build stopped: code hidden after a // comment (see above)'); process.exit(1); } }
 
 const minWgsl = (s) =>
   s.replace(/\/\/[^\n]*/g, '')

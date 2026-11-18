@@ -34,12 +34,12 @@ const ASL = 0, OVW = 1, FLK = 2, RAID = 3, ROLES = ['assault', 'overwatch', 'fla
 const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 // enemy types: tracked T-72 and BMP, then the wheeled and light ones (phase 4). mgd: damage per coax / hatch MG round, score, sfx and muzzle size of the weapon,
 // wheels: K.ax axles get rolling parts; map: minimap marker (0 tank circle, 1 square, 2 ATGM diamond, 3 small dot)
-const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1800, burst: 1, night: 0.35, name: 'T-72B3', mgd: 0, score: 100, sfx: 'egun', mz: 1, spread: 0.0016, map: 0 },
-  { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2', mgd: 3, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1 },
-  { K: TIGR, hp: 30, vmax: 15, slew: 0.6, v: 250, shell: 8, reload: 22, range: 2000, burst: 1, night: 0.6, name: 'Tigr-M Kornet', mgd: 0.5, turn: 0.9, score: 70, sfx: 'atgm', mz: 0.6, spread: 0, map: 2, wheels: 1 },
-  { K: BTR, hp: 50, vmax: 16, slew: 0.7, v: 960, shell: 5, reload: 3.4, range: 1200, burst: 5, night: 0.8, name: 'BTR-82A', mgd: 0.15, turn: 0.75, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1, wheels: 1 },
-  { K: BUGGY, hp: 16, vmax: 21, slew: 1.4, v: 850, shell: 9, reload: 2.6, range: 750, burst: 8, night: 0.9, name: 'assault buggy', mgd: 6, turn: 1.3, score: 25, sfx: 'mgb', mz: 0.12, spread: 0.008, map: 3, wheels: 1 },
-  { K: MOTO, hp: 8, vmax: 23, slew: 2, v: 850, shell: 9, reload: 3.2, range: 500, burst: 5, night: 0.95, name: 'motorcycle team', mgd: 8, turn: 1.8, score: 15, sfx: 'mgb', mz: 0.1, spread: 0.01, map: 3, wheels: 1 }];
+const ETYPE = [{ K: T72, hp: 100, vmax: 9, slew: 0.45, v: 1700, shell: 4, reload: 8.5, range: 1800, burst: 1, night: 0.35, name: 'T-72B3', fell: 10, mgd: 0, score: 100, sfx: 'egun', mz: 1, spread: 0.0016, map: 0 },
+  { K: BMP, hp: 45, vmax: 12, slew: 0.7, v: 960, shell: 5, reload: 3.6, range: 1200, burst: 5, night: 0.8, name: 'BMP-2', fell: 9, mgd: 3, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1 },
+  { K: TIGR, hp: 30, vmax: 15, slew: 0.6, v: 250, shell: 8, reload: 22, range: 2000, burst: 1, night: 0.6, name: 'Tigr-M Kornet', fell: 6, mgd: 0.5, turn: 0.9, score: 70, sfx: 'atgm', mz: 0.6, spread: 0, map: 2, wheels: 1 },
+  { K: BTR, hp: 50, vmax: 16, slew: 0.7, v: 960, shell: 5, reload: 3.4, range: 1200, burst: 5, night: 0.8, name: 'BTR-82A', fell: 8, mgd: 0.15, turn: 0.75, score: 60, sfx: 'auto', mz: 0.3, spread: 0.004, map: 1, wheels: 1 },
+  { K: BUGGY, hp: 16, vmax: 21, slew: 1.4, v: 850, shell: 9, reload: 2.6, range: 750, burst: 8, night: 0.9, name: 'assault buggy', fell: 4, mgd: 6, turn: 1.3, score: 25, sfx: 'mgb', mz: 0.12, spread: 0.008, map: 3, wheels: 1 },
+  { K: MOTO, hp: 8, vmax: 23, slew: 2, v: 850, shell: 9, reload: 3.2, range: 500, burst: 5, night: 0.95, name: 'motorcycle team', fell: 3, mgd: 8, turn: 1.8, score: 15, sfx: 'mgb', mz: 0.1, spread: 0.01, map: 3, wheels: 1 }];
 const T72T = 0, BMPT = 1, TIGRT = 2, BTRT = 3, BUGT = 4, MOTOT = 5;
 // spotting: e.see grows at vis·sig/(1+(d/SEE_R)²)·cue − SEE_FLOOR per second; 1 = detected (turret on, engages), the first shot needs 1 + d/1000.
 // vis: line-of-sight transmittance (foliage optical depth: one e-fold per FOL_L m of full canopy, blocked below 0.1);
@@ -48,7 +48,7 @@ const SEE_R = 700, SEE_FLOOR = 0.12, FOL_L = 14, FOL_MAX = 255 * FOL_L * 2.3;
 
 export function initCombat(C) {
   const { W, R, veh, aim, cam, inp, parts, rnd, ui, HALF, WS, HN, PLAY } = C, hAt = W.heightAt, trails = W.trails;
-  const SO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
+  const SO = new Float32Array(5), TRO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
   const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
     type: 0, bombs: 0, rel: 0, climb: 0, away: false, auto: false, ax: 0, az: 0, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
@@ -57,7 +57,7 @@ export function initCombat(C) {
   let fireWas = false, fireBlock = false, inf = null; // inf: the infantry (src/infantry.js), set at the end of initCombat
   let hmgT = 0, sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
   for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i],
-    role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, cage: false, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
+    role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, tax: 0, taz: 0, tcT: 0, cage: false, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
   const AIR = []; for (let i = 0; i < MAXA; i++) AIR.push({ on: false, type: 0, st: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, tp: 0, tr: 0, spin: 0, hp: 0, t: 0, chk: 0, tx: 0, tz: 0, ang: 0, warned: false, seen: false, d: C.aobj ? C.aobj[i] : new Float32Array(132) });
   // infantry (phase 6), read by the soldier renderer: n = slots in use; per soldier 8 floats [x, y, z, yaw, pose, phase, aim, state]
   G.air = AIR; G.thr = new Float32Array(4); G.orlan = 0; // HUD threat arrows (angle, strength) ×2; seconds an Orlan has held the player in view
@@ -282,7 +282,7 @@ export function initCombat(C) {
     if (bn < 0) return false;
     e.net = bn; e.path = bp; e.pi = bi; e.dir = bd; return true;
   }
-  const okSpot = (x, z) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2;
+  const okSpot = (x, z) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && (!R.trees || canAt(x, z) < 110) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2;
   // overwatch: a spot r0..r1 from the player around bearing b, scored by height over the player, a clear view and the drive to get there
   function pickSpot(e, b, r0, r1) {
     let best = -1e9, bx = e.x, bz = e.z;
@@ -345,11 +345,11 @@ export function initCombat(C) {
     e.gx = veh.x; e.gz = veh.z;
   }
   const toPt = (e, E, tx, tz, f) => {
-    let ux = tx - e.x, uz = tz - e.z; const l = Math.hypot(ux, uz) || 1; ux /= l; uz /= l;
+    let ux = tx - e.x, uz = tz - e.z; const l = Math.hypot(ux, uz) || 1; ux /= l; uz /= l; ux += e.tax * 1.3; uz += e.taz * 1.3; // weave round the trunks ahead
     for (let f = 0; f < NFLD; f++) { const o = f * 4; if (!FLD[o + 3]) continue; const fx = e.x - FLD[o], fz = e.z - FLD[o + 1], fd = Math.hypot(fx, fz) || 1, rr = FLD[o + 2] + 14; // own minefields: swing round them
       if (fd < rr) { const w = (rr - fd) / 14 * 1.8; ux += fx / fd * w; uz += fz / fd * w; } }
     if (e.cT > 0) { const dn = ux * e.cnx + uz * e.cnz; if (dn < 0.2) { ux -= e.cnx * (dn - 0.2); uz -= e.cnz * (dn - 0.2); if (dn < -0.9) { ux -= e.cnz * e.side; uz += e.cnx * e.side; } } } // against a wall: slide along it
-    const a = wrap(Math.atan2(-ux, -uz) - e.yaw); e.st = clamp(a * 2.2, -1, 1); e.tgt = E.vmax * f * (1 - 0.6 * Math.abs(e.st)); };
+    const a = wrap(Math.atan2(-ux, -uz) - e.yaw); e.st = clamp(a * 2.2, -1, 1); e.tgt = E.vmax * f * (1 - 0.6 * Math.abs(e.st)) * (1 - (R.trees ? canAt(e.x, e.z) / 255 * (E.wheels ? 0.55 : 0.35) : 0)); }; // slower in thick forest (wheels more so)
   // movement: sets e.tgt (speed, negative = reverse) and e.st (steer) from the role, hit reactions, scoots and the route
   function drive(e, E, d, dt) {
     e.tgt = 0; e.st = 0; e.cT -= dt; e.noRt -= dt;
@@ -471,6 +471,12 @@ export function initCombat(C) {
       e.v += (tgt - e.v) * Math.min(1, dt * (E.wheels ? 1.4 : 0.9)); const yr = st * (E.turn || 0.55) * (Math.abs(e.v) > 0.5 || tgt !== 0 ? 1 : 0);
       e.yaw += yr * dt; e.x = clamp(e.x - Math.sin(e.yaw) * e.v * dt, -PLAY, PLAY); e.z = clamp(e.z - Math.cos(e.yaw) * e.v * dt, -PLAY, PLAY);
       for (let s = -1; s <= 1; s++) { const cs = K.cs || 1.8, px = e.x - Math.sin(e.yaw) * cs * s, pz = e.z - Math.cos(e.yaw) * cs * s; if (C.solid(px, pz, K.cr || 1.9, SO)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; if (SO[4] > 0) { e.cnx = SO[2]; e.cnz = SO[3]; e.cT = 1.2; } } } // buildings and colliders are solid
+      if (C.treeHit) { // trees: small ones go over, big ones are solid (slide along them like a wall); a nudge away from trunks just ahead
+        // pressing against a big tree: after 1.5 s a heavy vehicle fells trees up to 16 m, after 3 s anything (a light one then squeezes through)
+        const heavy = E.fell >= 8, tc = e.tcT, lim = heavy ? (tc > 3 || e.stN >= 2 ? 99 : tc > 1.5 || e.stN >= 1 ? 16 : E.fell) : E.fell;
+        const hit = C.treeHit(e.x, e.z, -Math.sin(e.yaw), -Math.cos(e.yaw), K.cs || 1.8, K.cr || 1.9, Math.abs(e.v) > 0.6 || Math.abs(e.tgt) > 1, TRO, lim); e.tax = TRO[2]; e.taz = TRO[3];
+        e.tcT = hit && TRO[4] > 0 && Math.abs(e.tgt) > 1 ? e.tcT + dt : Math.max(0, e.tcT - dt * 2);
+        if (hit && TRO[4] > 0 && (heavy || (tc < 3 && e.stN < 2))) { e.x += TRO[0]; e.z += TRO[1]; e.v *= 0.92; const l = Math.hypot(TRO[0], TRO[1]) || 1; e.cnx = TRO[0] / l; e.cnz = TRO[1] / l; e.cT = 1.2; } }
       if (C.bld.rubble(e.x, e.z)) e.v = Math.min(e.v, 4.5);
       e.trL += (e.v + yr * 1.43) * dt; e.trR += (e.v - yr * 1.43) * dt;
       const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw), hl = K.hl, hw = K.hw;

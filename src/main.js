@@ -348,9 +348,9 @@ async function main() {
         const nc = j * NCN + i, y0 = TT.nearY[nc * 2], y1 = TT.nearY[nc * 2 + 1]; if (y1 < y0) continue;
         const x0 = i * NEAR - HALF, z0 = j * NEAR - HALF, dh = Math.hypot(x0 + 16 - cam.x, z0 + 16 - cam.z);
         const dy = cam.y > y1 ? cam.y - y1 : cam.y < y0 ? y0 - cam.y : 0, dyM = Math.max(Math.abs(cam.y - y0), Math.abs(cam.y - y1));
-        const dmin = Math.hypot(Math.max(0, dh - 23), dy), dmax = Math.hypot(dh + 23, dyM);
+        const pn = padN[nc], dmin = Math.hypot(Math.max(0, dh - 23 - pn), dy), dmax = Math.hypot(dh + 23 + pn, dyM);
         if (dmin >= hi || dmax <= lo) continue;
-        if (!vis(pl, np, x0 - 5, y0 - 1, z0 - 5, x0 + NEAR + 5, y1 + 1, z0 + NEAR + 5)) continue;
+        if (!vis(pl, np, x0 - 5 - pn, y0 - 1, z0 - 5 - pn, x0 + NEAR + 5 + pn, y1 + 1, z0 + NEAR + 5 + pn)) continue;
         let st = TT.nearStart[nc];
         for (let s = 0; s < 3; s++) { const c = TT.nearCnt[nc * 3 + s]; if (c) { const P = TP[l * 3 + s]; p.drawIndexed(P.count, c, P.first, P.base, st); st += c; draws++; triStat[sb + l] += P.count / 3 * c; } }
       }
@@ -363,9 +363,9 @@ async function main() {
         const fi = cfx + di, fj = cfz + dj; if (fi < 0 || fj < 0 || fi >= FCN || fj >= FCN) continue;
         const fc = fj * FCN + fi, c = thin ? thinCnt[fc] : TT.farCnt[fc]; if (!c) continue;
         const x0 = (fc % FCN) * FAR - HALF, z0 = ((fc / FCN) | 0) * FAR - HALF, y0 = TT.farY[fc * 2], y1 = TT.farY[fc * 2 + 1];
-        const dh = Math.hypot(x0 + 64 - cam.x, z0 + 64 - cam.z), dmin = Math.max(0, dh - 91), dmax = dh + 91 + Math.abs(cam.y - y0);
+        const pf = padF[fc], dh = Math.hypot(x0 + 64 - cam.x, z0 + 64 - cam.z), dmin = Math.max(0, dh - 91 - pf), dmax = dh + 91 + pf + Math.abs(cam.y - y0);
         if (dmin >= hi || dmax <= lo) continue;
-        if (!vis(pl, np, x0 - 8, y0 - 1, z0 - 8, x0 + FAR + 8, y1 + 1, z0 + FAR + 8)) continue;
+        if (!vis(pl, np, x0 - 8 - pf, y0 - 1, z0 - 8 - pf, x0 + FAR + 8 + pf, y1 + 1, z0 + FAR + 8 + pf)) continue;
         p.drawIndexed(P.count, c, P.first, P.base, thin ? thinStart[fc] : TT.farStart[fc]); draws++; triStat[sb + l] += P.count / 3 * c;
       }
     }
@@ -577,7 +577,7 @@ async function main() {
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
-    restart() { if (R.game) R.game.restart(); },
+    restart() { treesRestore(); if (R.game) R.game.restart(); },
     fly() { if (cam.mode !== 4) setCam(cam.mode === 3 ? cam.prevMode : 3); },
     isFly: () => cam.mode === 3,
     snow(v) { R.snow = v === undefined ? 1 - R.snow : v; ui.toast(R.snow ? 'Snowfall on' : 'Snowfall off'); },
@@ -594,7 +594,7 @@ async function main() {
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
   const SOL = initSoldiers(MAXI, W.heightAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
@@ -639,13 +639,42 @@ async function main() {
     // circle colliders (lamps, pylons, boulders, landmark towers) from the grid cell under the tank
     const c = clamp(Math.floor((veh.z + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((veh.x + HALF) / CG), 0, NCG - 1);
     for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = veh.x - C[i], dz = veh.z - C[i + 1], rr = C[i + 2] + LEO.rad, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = (rr - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
-    if (!R.trees) return;
-    const cx = Math.floor((veh.x + HALF) / NEAR), cz = Math.floor((veh.z + HALF) / NEAR), T = TT.data;
+    if (!R.trees) return; // a 55 t tank fells trees up to about 10 m
+    if (treeHit(veh.x, veh.z, -Math.sin(veh.yaw), -Math.cos(veh.yaw), 1.8, 1.9, Math.abs(veh.v) > 0.6 || Math.abs(veh.yawRate) > 0.05, TO, 10)) { veh.x += TO[0]; veh.z += TO[1]; if (TO[4] > 0) veh.v *= 0.88; }
+  }
+  // ---------- trees and vehicles: a vehicle (a capsule: centre, forward, half-length, radius) knocks over small trees it drives into and is pushed off big ones ----------
+  // out: [0, 1] push to add to the centre, [2, 3] a steering nudge away from big trunks just ahead, [4] the deepest contact; returns trees touched
+  // felled trees: a restore list for a restart (rotation and species as they were), a small ring of falls in progress, and per-cell culling padding so a crown that fell over a cell edge is still drawn
+  const SMALL_T = 7, TO = new Float32Array(5), RMAX = 4096, RK = new Int32Array(RMAX), RR = new Float32Array(RMAX * 2), AMAX = 64, AK = new Int32Array(AMAX).fill(-1), AT = new Float32Array(AMAX);
+  const padN = new Float32Array(NCN * NCN), padF = new Float32Array(FCN * FCN); let rN = 0, aLive = 0;
+  function fell(k, dx, dz) { // rare event (a tree goes over); false when the restore list is full (the tree then stays solid)
+    if (rN >= RMAX) return false; const T = TT.data, o = k * 8; RK[rN] = k; RR[rN * 2] = T[o + 4]; RR[rN * 2 + 1] = T[o + 5]; rN++;
+    T[o + 4] = Math.atan2(dx, dz); T[o + 5] = Math.floor(T[o + 5]) + 0.004; device.queue.writeBuffer(treeInst, k * 32 + 16, T, o + 4, 2);
+    const ci = clamp(Math.floor((T[o] + HALF) / NEAR), 0, NCN - 1), cj = clamp(Math.floor((T[o + 2] + HALF) / NEAR), 0, NCN - 1), L = T[o + 3] * 1.15;
+    padN[cj * NCN + ci] = Math.max(padN[cj * NCN + ci], L); const fc = ((cj * NEAR / FAR) | 0) * FCN + ((ci * NEAR / FAR) | 0); padF[fc] = Math.max(padF[fc], L);
+    let a = 0; while (a < AMAX && AK[a] >= 0) a++;
+    if (a < AMAX) { AK[a] = k; AT[a] = 0; aLive++; } else { T[o + 5] = Math.floor(T[o + 5]) + 0.4; device.queue.writeBuffer(treeInst, k * 32 + 20, T, o + 5, 1); } // no animation slot: it is simply down
+    const y = T[o + 1] + 0.5; for (let i = 0; i < 8; i++) parts.emit(T[o] + (rnd() - 0.5), y + rnd() * 1.5, T[o + 2] + (rnd() - 0.5), (rnd() - 0.5) * 2 + dx * 2, 0.5 + rnd() * 1.5, (rnd() - 0.5) * 2 + dz * 2, 1.2 + rnd(), 0.5 + rnd() * 0.5, 1.2, 1, 1.15, 1.15, 1.18, 0.35); // snow off the branches
+    sfx('crash', T[o], y, T[o + 2], 0.12);
+    return true;
+  }
+  function fallStep(dt) { if (!aLive) return; const T = TT.data;
+    for (let a = 0; a < AMAX; a++) { const k = AK[a]; if (k < 0) continue; AT[a] = Math.min(1, AT[a] + dt / 0.7); const o = k * 8; T[o + 5] = Math.floor(T[o + 5]) + 0.004 + AT[a] * 0.396; device.queue.writeBuffer(treeInst, k * 32 + 20, T, o + 5, 1); if (AT[a] >= 1) { AK[a] = -1; aLive--; } } }
+  function treesRestore() { const T = TT.data; for (let i = 0; i < rN; i++) { const k = RK[i], o = k * 8; T[o + 4] = RR[i * 2]; T[o + 5] = RR[i * 2 + 1]; device.queue.writeBuffer(treeInst, k * 32 + 16, T, o + 4, 2); } rN = 0; aLive = 0; AK.fill(-1); padN.fill(0); padF.fill(0); }
+  function treeHit(x, z, fx, fz, half, r, moving, out, small = SMALL_T) { // small: the tallest tree this vehicle knocks over
+    out[0] = out[1] = out[2] = out[3] = out[4] = 0; if (!R.trees) return 0;
+    const T = TT.data, reach = half + r + 7, cx = Math.floor((x + HALF) / NEAR), cz = Math.floor((z + HALF) / NEAR); let hits = 0;
     for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) {
       if (i < 0 || j < 0 || i >= NCN || j >= NCN) continue;
       const nc = j * NCN + i, st = TT.nearStart[nc], n = TT.nearCnt[nc * 3] + TT.nearCnt[nc * 3 + 1] + TT.nearCnt[nc * 3 + 2];
-      for (let k = st; k < st + n; k++) { const h = T[k * 8 + 3]; if (h < 3.5) continue; const dx = veh.x - T[k * 8], dz = veh.z - T[k * 8 + 2], rr = LEO.rad - 0.4 + h * 0.012, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), q = (rr - d) / d; veh.x += dx * q; veh.z += dz * q; veh.v *= 0.88; } }
+      for (let k = st; k < st + n; k++) { const o = k * 8, tx = T[o] - x, tz = T[o + 2] - z; if (tx * tx + tz * tz > reach * reach || T[o + 5] - Math.floor(T[o + 5]) > 0.001) continue; // far, or already down
+        const h = T[o + 3], a = clamp(tx * fx + tz * fz, -half, half), px = tx - fx * a, pz = tz - fz * a, d = Math.hypot(px, pz) || 1e-3; // nearest point on the hull's spine
+        if (h < small) { if (!(d < r * 0.85 && moving)) continue; if (fell(k, fx * Math.sign(a || 1), fz * Math.sign(a || 1))) { hits++; continue; } } // could not be felled: solid like a big one
+        const rc = r + 0.25 + h * 0.012;
+        if (d < rc) { const q = rc - d; out[0] -= px / d * q; out[1] -= pz / d * q; if (q > out[4]) out[4] = q; hits++; }
+        else if (tx * fx + tz * fz > 0 && d < rc + 2.5) { const w = (rc + 2.5 - d) / 2.5; out[2] -= px / d * w; out[3] -= pz / d * w; } } // a trunk ahead: lean away from it
     }
+    return hits;
   }
   function simulate(dt) {
     let th = inp.th, st = inp.st;
@@ -836,7 +865,7 @@ async function main() {
     hullM.set(tankParts(groomer.d, veh, LEO)); turM.set(turMat()); gunM.set(gunMat());
     const BM = hullM;
     updateGun();
-    game.update(dt);
+    game.update(dt); fallStep(dt);
     updateCamera(dt, BM);
     cam.sightK += ((cam.mode === 1 && !R.pose ? 1 : 0) - cam.sightK) * Math.min(1, dt * 12);
     cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
@@ -1001,6 +1030,7 @@ async function main() {
   if (qs.has('nohud')) { $('ui').style.display = 'none'; R.nohud = true; }
   requestAnimationFrame(frame);
   window.__bld = BL; // building records, boxes and states (test hook)
+  let rSave = 0; window.__treesFull = (on) => { if (on) { rSave = rN; rN = RMAX; } else rN = rSave; }; // tests: pretend the felled-tree restore list is full
   window.__sol = SOL; // soldier renderer: out (packed instance matrices), nNear, nFar
   // test hook: soldiers in every pose around (x, z). o: { poses: [..], n, cols, sp (m), yaw, aim, move (walkers and runners advance at their cycle speed), dead: seconds already dead }
   // walkers/runners get their phase advanced every frame; the dead ones fall and then lie still

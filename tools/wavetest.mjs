@@ -21,8 +21,10 @@ const res = await page.evaluate(async ({ waves, seed, move }) => {
   const G = __game, R = __R, veh = __veh, B = __bld, I = G.inf; R.god = true; __ui.poll = () => {};
   for (let i = 0; i < seed; i++) { G.spawn(0); for (const e of G.enemies) e.on = false; } // spawn() draws from the game's rnd: shifts the stream for a different replay
   const sl = []; G.onStuck = (e) => { let nq = 1e9; for (const q of G.enemies) if (q !== e && q.on) nq = Math.min(nq, Math.hypot(q.x - e.x, q.z - e.z));
+    let nt = 99, ntH = 0; { const TT = __W.trees, T = TT.data, cx = Math.floor((e.x + 2048) / 32), cz = Math.floor((e.z + 2048) / 32); for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) { if (i < 0 || j < 0 || i > 127 || j > 127) continue; const nc = j * 128 + i, st = TT.nearStart[nc], n = TT.nearCnt[nc * 3] + TT.nearCnt[nc * 3 + 1] + TT.nearCnt[nc * 3 + 2]; for (let k = st; k < st + n; k++) { if (T[k * 8 + 5] % 1 > 0.001) continue; const d = Math.hypot(T[k * 8] - e.x, T[k * 8 + 2] - e.z); if (d < nt) { nt = d; ntH = T[k * 8 + 3]; } } } }
+    e._nt = +nt.toFixed(1); e._ntH = +ntH.toFixed(1); e._tc = +(e.tcT || 0).toFixed(1); e._v = +e.v.toFixed(1); e._tgt = +e.tgt.toFixed(1);
     let nb = 99; for (let r = 2; r < 12 && nb === 99; r += 2) for (let k = 0; k < 8; k++) if (B.at(e.x + Math.cos(k * 0.785) * r, e.y + 1.5, e.z + Math.sin(k * 0.785) * r, 0) >= 0) { nb = r; break; }
-    sl.push({ role: G.ROLES[e.role], rev: e.rvD > 0 ? 'was reversing' : 'was forward', nq: Math.round(nq), nb, d: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), stN: e.stN, x: Math.round(e.x), z: Math.round(e.z) }); };
+    sl.push({ role: G.ROLES[e.role], rev: e.rvD > 0 ? 'was reversing' : 'was forward', nq: Math.round(nq), nb, d: Math.round(Math.hypot(e.x - veh.x, e.z - veh.z)), stN: e.stN, x: Math.round(e.x), z: Math.round(e.z), tree: e._nt, treeH: e._ntH, tc: e._tc, v: e._v, tgt: e._tgt, type: e.type }); };
   const toasts = []; const t0 = __ui.toast; __ui.toast = (m) => { toasts.push(m); t0(m); if (/dismounting/.test(m) && info) info.inf.dis++; };
   const brg = (e) => Math.round(((Math.atan2(e.x - veh.x, -(e.z - veh.z)) * 57.3) + 360) % 360);
   const out = []; let bad = [], t = 0, w = 0, info = null; const cur = [];
