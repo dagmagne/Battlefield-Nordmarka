@@ -53,6 +53,12 @@ else {
     if (o>=0) { const x=G.S[o], z=G.S[o+2], y=G.S[o+1]-__W.heightAt(x,z); const ux=x-__veh.x, uz=z-__veh.z, l=Math.hypot(ux,uz)||1; __look(__veh.x-ux/l*9+uz/l*5, 3.5, __veh.z-uz/l*9-ux/l*5, x, y, z); } })()`); // camera from behind the tank, looking at the rocket
   await shot('rpg-rocket'); await ev('__R.pose=null; __veh.hp=100');
 
+  // ---- 1b (review fix): the house wall stops MG rounds aimed at a soldier standing just inside it ----
+  r = await ev(`(()=>{ I.reset(); G.peace=true; for (let o=0;o<960;o+=10) G.S[o+8]=0; const q=G.infSquad('rpg',0,0,2,H.b); const ids=[]; for (let i=0;i<I.n;i++) if (I.sq[i]===q) ids.push(i);
+    const i=ids[0], o=i*8; __aimAt(I.d[o], I.d[o+1]+0.9, I.d[o+2]); __cam.mode=1; __sim(1/60, 150); const mg0=G.mg; __inp.mg=true; __sim(1/60, 60*3); __inp.mg=false; __sim(1/60, 30); __aimAt(); __cam.mode=0;
+    return {rounds:mg0-G.mg, alive:ids.filter((k)=>I.d[k*8+7]===1).length, n:ids.length, inHouse:I.hb[i]===H.b}; })()`);
+  check('the house wall stops MG rounds aimed at a soldier just inside it', r.rounds > 20 && r.alive === r.n && r.inHouse, r);
+
   // ---- 2: an HE round into the house neutralises the team (a fresh team of three) ----
   r = await ev(`(()=>{ I.reset(); G.peace=true; for (let o=0;o<960;o+=10) G.S[o+8]=0; const q=G.infSquad('rpg',0,0,3,H.b); window.Q2=q; const ids=[]; for (let i=0;i<I.n;i++) if (I.sq[i]===q) ids.push(i); window.IDS=ids;
     const ex=ids.reduce((s,i)=>s+I.ex[i],0)/ids.length, ez=ids.reduce((s,i)=>s+I.ez[i],0)/ids.length, cx=__bld.x[H.b], cz=__bld.z[H.b]; // aim at the wall they stand behind
