@@ -912,14 +912,14 @@ export function initCombat(C) {
       const ox = D.x - D.ax, oz = D.z - D.az, od = Math.hypot(ox, oz) || 1, k = Math.min(1, dt * 1.2);
       const tx = -oz / od * T.v * 0.6 + (80 - od) / 80 * ox / od * T.v * 0.6, tz = ox / od * T.v * 0.6 + (80 - od) / 80 * oz / od * T.v * 0.6;
       D.vx += (tx - D.vx) * k; D.vz += (tz - D.vz) * k; D.vy += (0 - D.vy) * k; D.yaw += 0.35 * dt; D.pitch = -0.75;
-    } else if (D.type === 0) { // FPV: flies where the camera points
-      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, 2.6, 0.9, Math.hypot(inp.mvZ, inp.mvX, inp.mvY));
-      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * T.v - D.vy) * k; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
+    } else if (D.type === 0) { // FPV: flies where the camera points; height does not coast
+      const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp, rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, 2.6, 1.3, Math.hypot(inp.mvZ, inp.mvX));
+      D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += ((fy * inp.mvZ + inp.mvY * 0.55) * T.v - D.vy) * Math.min(1, dt * (Math.abs(inp.mvY) + Math.abs(inp.mvZ) > 0.05 ? 2.6 : 7)); D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     } else { // bomber and recon: level flight on the heading, a stiff hover, height from Space/Shift (and the climb after launch); the camera gimbal tilts freely
-      const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, D.type === 1 ? 3.2 : 2, D.type === 1 ? 1 : 0.8, Math.hypot(inp.mvZ, inp.mvX));
+      const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw), k = glide(dt, D.type === 1 ? 3.2 : 2, D.type === 1 ? 1.4 : 1.1, Math.hypot(inp.mvZ, inp.mvX));
       let vy = inp.mvY * (D.type === 2 ? 10 : 5);
       if (D.climb > 0) { if (inp.mvY !== 0 || D.y - g0 > D.climb) D.climb = 0; else vy = D.type === 2 ? 14 : 7; }
-      const ky = glide(dt, D.type === 1 ? 3.2 : 2, 1.4, D.climb > 0 ? 1 : Math.abs(inp.mvY)); // height settles a little quicker than the drift
+      const ky = Math.min(1, dt * (D.climb > 0 || Math.abs(inp.mvY) > 0.05 ? (D.type === 1 ? 3.2 : 2) : 7)); // height does not coast: it stops sharply when the stick is let go
       D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += (vy - D.vy) * ky; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     }
     D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y = Math.min(D.y + D.vy * dt, g0 + 250); D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);

@@ -797,7 +797,7 @@ async function main() {
     if (cam.mode === 4) { // FPV drone: the mouse turns it, the camera trails just behind and above
       const D = game.drone;
       if (D.on) { // pad yaw: a rate that spins up firmly and coasts down slowly when the stick is let go (mouse turns stay direct)
-        const u = inp.yawR; D.yr += (-u * 1.5 - D.yr) * Math.min(1, dt * (Math.abs(u) > 0.05 ? 5 : 3)); D.yaw += D.yr * dt;
+        const u = inp.yawR; D.yr += (-u * 1.5 - D.yr) * Math.min(1, dt * (Math.abs(u) > 0.05 ? 5 : 4)); D.yaw += D.yr * dt;
       }
       if (D.on && D.type) { // bomber and recon: the view from the gimbal camera under the airframe, which tilts down to the vertical
         D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.5707, 0.35);
