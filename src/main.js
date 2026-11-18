@@ -821,9 +821,14 @@ async function main() {
       } else if (D.on) { // FPV, rigidly attached: a lagging follow jitters at 26 m/s whenever the frame time varies
         D.yaw -= inp.lookX * sens * 0.6; D.pitch = clamp(D.pitch - inp.lookY * sens * 0.6, -1.3, 1.1);
         const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
-        if (D.view === 2) { // goggles: the camera in the nose
+        if (D.view === 2) { // goggles: the camera in the nose, bolted to the frame (no gimbal), so the picture banks and pitches with the airframe.
+          // Roll: the sideways lean plus a bank into pad yaw turns. Pitch: only the change of the forward lean (the nose dips as it speeds up and lifts
+          // as it brakes); a real FPV camera is tilted up to cancel the steady cruise lean, so the view is level again at constant speed.
+          D.tpS += (D.tp - D.tpS) * Math.min(1, dt * 1.2);
+          const ro = -D.tr - D.yr * 0.22, pa = D.pitch + (D.tp - D.tpS) * 0.8, cq = Math.cos(pa), gx = -Math.sin(D.yaw) * cq, gy = Math.sin(pa), gz = -Math.cos(D.yaw) * cq;
+          const rl = Math.hypot(gx, gz) || 1, rx = -gz / rl, rz = gx / rl, ux = -rz * gy, uy = rz * gx - rx * gz, uz = rx * gy, cr = Math.cos(ro), sr = Math.sin(ro);
           cam.x = D.x + fx * 0.3; cam.z = D.z + fz * 0.3; cam.y = Math.max(D.y + fy * 0.3 + 0.06, W.heightAt(cam.x, cam.z) + 0.2);
-          lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
+          lookAt(view, cam.x, cam.y, cam.z, cam.x + gx, cam.y + gy, cam.z + gz, ux * cr + rx * sr, uy * cr, uz * cr + rz * sr);
         } else {
           const cd = D.view ? 2.3 : 7, cu = D.view ? 0.55 : 1.9;
           cam.x = D.x - fx * cd; cam.z = D.z - fz * cd; cam.y = Math.max(D.y - fy * cd + cu, W.heightAt(cam.x, cam.z) + 0.4);
