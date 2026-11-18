@@ -1,4 +1,4 @@
-struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) @interpolate(flat) ks: vec4f, @location(4) ao: f32, @location(5) hy: f32, @location(6) fade: vec2f };
+struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) @interpolate(flat) ks: vec4f, @location(4) ao: f32, @location(5) hy: f32, @location(6) fade: vec2f, @location(7) sv: vec4f };
 @vertex fn vs(@location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) uk: vec4f, @location(3) i0: vec4f, @location(4) i1: vec4f) -> TV {
   var sc = 1.0;
   if (G.lod2.w > 0.0) {
@@ -8,7 +8,7 @@ struct TV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   }
   let d = treeDeform(pos * sc, nrm, uk.z, i0, i1, G.camPos.xyz);
   var o: TV;
-  o.wp = d.wp; o.n = d.n; o.uv = uk.xy; o.ks = vec4f(uk.z, i1.y, fract(i1.z), i0.w); o.ao = uk.w; o.hy = d.hy; o.fade = d.fade;
+  o.wp = d.wp; o.n = d.n; o.uv = uk.xy; o.ks = vec4f(uk.z, i1.y, fract(i1.z), i0.w); o.ao = uk.w * d.ao; o.hy = d.hy; o.fade = d.fade; o.sv = d.sv;
   o.pos = mix(vec4f(0.0, 0.0, -1.0, 1.0), G.viewProj * vec4f(d.wp, 1.0), d.keep);
   return o;
 }
@@ -37,6 +37,8 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       alpha = 1.0 - smoothstep(0.95 - aw, 0.95 + aw, fr);
       var g = mix(vec3f(0.028, 0.062, 0.03), vec3f(0.05, 0.082, 0.035), step(0.5, sp));
       g *= 0.75 + 0.5 * seed;
+      g *= (0.82 + 0.36 * in.sv.z) * vec3f(1.0 + 0.22 * (in.sv.w - 0.5), 1.0, 1.0 - 0.3 * (in.sv.w - 0.5)); // per tree: brightness, yellow-green to blue-green
+      g = mix(g, vec3f(0.07, 0.055, 0.04), in.sv.y * 0.85); // dead lower branches of a forest-grown spruce: grey-brown
       // needle rows: fine herringbone streaks along the branch
       let nd = tri(ux * 26.0 + e * 5.0 + seed * 3.0);
       g *= (0.65 + 0.55 * vn(vec2f(ux * 14.0 + seed * 40.0, uv.y * 5.0))) * (0.86 + 0.24 * nd * (1.0 - saturate(duv.x * 110.0)));
@@ -47,9 +49,10 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
         let m = max(e * 0.9, ux) + (vn(vec2f(ux * 5.0 + seed * 31.0, e * 3.0 + floor(in.hy * 0.7))) - 0.5) * 0.22;
         snow = (1.0 - smoothstep(TR.s.x - 0.05, TR.s.x + 0.05, m)) * smoothstep(0.03, 0.14, ux);
       }
+      snow *= 1.0 - in.sv.y * 0.7;
       if (under) { snow = 0.0; g *= 1.5; }
       if (skirt) { snow = 0.0; g *= 1.3; }
-      g = mix(g, vec3f(dot(g, vec3f(0.333))), 0.3);
+      g = mix(g, vec3f(dot(g, vec3f(0.333))), 0.38) * vec3f(0.92, 0.95, 1.06); // Norway spruce: dark, slightly blue-green
       snow *= 0.82 + 0.18 * vn(vec2f(ux * 9.0 + seed * 5.0, uv.y * 3.0 + in.hy));
       alb = g; trans = 0.45;
     }
@@ -93,7 +96,7 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
   alpha *= in.fade.x * in.fade.y;
   if (G.lod2.z < 1.5) { if (alpha < 0.5) { discard; } alpha = 1.0; }
   if (alpha < 0.02) { discard; }
-  snow *= 0.66 + 0.34 * fract(seed * 5.3);
+  snow *= in.sv.x; // per-tree load and clumps (treedeform.wgsl)
   alb = mix(alb, vec3f(0.93, 0.95, 0.99), snow);
   trans *= 1.0 - snow;
   let L = G.sunDir.xyz;

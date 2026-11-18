@@ -1,5 +1,5 @@
 // Batch screenshots in one headed Chrome session.
-// usage: node tools/multi.mjs "<query>" '<json [{out, eval, frames}]>' [--w --h --dpr --mobile]
+// usage: node tools/multi.mjs "<query>" '<json [{out, eval, frames | steps}]>' [--w --h --dpr --mobile]
 import { chromium } from 'playwright-core';
 import { base, chromeArgs, logAdapter } from './gpu.mjs';
 const a = process.argv.slice(2);
@@ -15,7 +15,9 @@ await page.goto(`${base}?${a[0]}`);
 await page.waitForFunction('window.__ready===true', null, { timeout: 90000 }); await logAdapter(page);
 for (const j of jobs) {
   if (j.eval) { const r = await page.evaluate(j.eval); if (r !== undefined && r !== null) console.log(j.out || '', JSON.stringify(r)); }
-  await page.evaluate((n) => window.__waitFrames(n), j.frames || 12);
+  // steps: manual stepping in chunks of 10 (deterministic; the real-time loop at full resolution can come out black in screenshots)
+  if (j.steps) { for (let k = 0; k < j.steps; k += 10) await page.evaluate((m) => window.__step(1 / 60, m), Math.min(10, j.steps - k)); await page.waitForTimeout(150); }
+  else await page.evaluate((n) => window.__waitFrames(n), j.frames || 12);
   if (j.out) { await page.screenshot({ path: j.out }); console.log('ok', j.out); }
 }
 await browser.close();
