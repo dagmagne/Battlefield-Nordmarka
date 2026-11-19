@@ -1,6 +1,6 @@
 // Nordmarka (Holmenkollen – Frognerseteren – Tryvann) from real map data, with procedural detail on top.
 // Macro shape comes from src/data/world.bin (built by tools/geo/prep.py from Kartverket elevation + OpenStreetMap):
-// 8 m height grid, water / wetland / tree-density rasters, nordic trail polylines, building rectangles.
+// 8 m height grid, water / wetland rasters, lidar tree cover + canopy height, nordic trail polylines, building rectangles.
 // Everything else (terrain detail, trees, snow, houses, landmarks) is generated here.
 // World frame: x = east, z = south, metres; origin 59.9753 N, 10.6800 E.
 import { clamp, lerp, smooth, hash1, hash2 } from './math.js';
@@ -12,8 +12,12 @@ export const NEAR = 32, NCN = WS / NEAR, FAR = 128, FCN = WS / FAR;
 // landmark geometry (from tools/geo/raw/landmarks.json)
 export const LM = {
   frogner: { x: -139.3, z: -266.1, yaw: 3.075 },
-  jump: { top: [-865.1, 1152.8], lip: [-774.2, 1207.0], end: [-542.2, 1340.4], h: 60 },
-  mid: { top: [-338.1, 932.8], lip: [-247.9, 957.4], end: [-28.3, 1018.6], h: 30 },
+  // jump profiles measured from the lidar surface model (tools/geo/jumps.py): deck [d, y], wing [d, t, top y], block [from d, half width]
+  jump: { top: [-865.1, 1152.8], lip: [-774.2, 1207.0], end: [-542.2, 1340.4], w: 6.5, plat: 18,
+    deck: [[20, 420.8], [32, 411.6], [44, 404.2], [56, 396.2], [68, 390.6], [80, 386.2], [92, 382.3], [106, 380.2]],
+    wing: [[56, 3.3, 399], [80, 9.2, 388], [104, 14, 379], [128, 22, 374.5], [146, 29, 367.4], [158, 33, 363.5], [176, 37, 358], [190, 40, 351], [198, 42, 343]], block: [60, 10] },
+  mid: { top: [-338.1, 932.8], lip: [-247.9, 957.4], end: [-28.3, 1018.6], w: 4.5, plat: 8, skirt: 1,
+    deck: [[0, 372.4], [8, 367.4], [16, 361.8], [24, 356.2], [32, 350.6], [40, 345.0], [48, 339.4], [56, 334.4], [64, 330.3], [72, 327.2], [80, 325.0], [94, 323.2]] },
   tower: { x: -662.7, z: -1485.7, h: 118 },
   chapel: { x: -427.3, z: 1074.0, yaw: -1.425 },
 };
@@ -62,7 +66,7 @@ export async function genWorld(tick, Q, startAt) {
       q[k] = (p + b[k] + (b[GN * GN + k] << 8)) & 0xFFFF; G[k] = meta.hmin + q[k] * 0.1;
     } }
   const cr = (a, b, c, d, t) => b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
-  const waterM = blob('water'), wetM = blob('wet'), treeM = blob('tree'), TN = meta.tn;
+  const waterM = blob('water'), wetM = blob('wet'), covM = blob('cov'), CN = meta.cn, chM = blob('canh'), CHN = meta.chn;
   const col = new Float32Array(4);
   const NZ = meta.hstep < 8 ? 0.2 : 1; // lidar terrain carries its own detail: only a little noise on top
   for (let j = 0; j < HN; j++) {
@@ -106,7 +110,16 @@ export async function genWorld(tick, Q, startAt) {
     for (let k = 0; k < HN * HN; k++) if (lab[k]) { const lv = lakes[lab[k] - 1].lv, c = smooth(0, 220, waterM[k]); H[k] = lerp(Math.max(H[k], lv + 0.25), lv, c); }
   }
   W.lakeAt = (x, z) => waterM[clamp(Math.round(w2t(z)), 0, HN - 1) * HN + clamp(Math.round(w2t(x)), 0, HN - 1)] / 255;
-  const dens = (x, z) => treeM[clamp(((z + HALF) / WS * TN) | 0, 0, TN - 1) * TN + clamp(((x + HALF) / WS * TN) | 0, 0, TN - 1)] / 255;
+  // lidar forest (tools/geo/canopy.py): tree cover per 4 m cell, the same blurred over ~20 m (forest vs garden), canopy height (p90, 16 m cells)
+  const cIdx = (x, z) => clamp(((z + HALF) / WS * CN) | 0, 0, CN - 1) * CN + clamp(((x + HALF) / WS * CN) | 0, 0, CN - 1);
+  const cover = (x, z) => covM[cIdx(x, z)] / 255, covA = new Float32Array(CN * CN);
+  { const t = new Float32Array(CN * CN);
+    for (let j = 0; j < CN; j++) { let s = 0; for (let i = -2; i < CN + 2; i++) { if (i + 2 < CN) s += covM[j * CN + i + 2]; if (i - 3 >= 0) s -= covM[j * CN + i - 3]; if (i >= 0 && i < CN) t[j * CN + i] = s; } }
+    for (let i = 0; i < CN; i++) { let s = 0; for (let j = -2; j < CN + 2; j++) { if (j + 2 < CN) s += t[(j + 2) * CN + i]; if (j - 3 >= 0) s -= t[(j - 3) * CN + i]; if (j >= 0 && j < CN) covA[j * CN + i] = s / (25 * 255); } } }
+  const canH = (x, z) => { // bilinear over the cells that have canopy (0 = none), in metres; 0 where no cell has any
+    const fx = clamp((x + HALF) / WS * CHN - 0.5, 0, CHN - 1.001), fz = clamp((z + HALF) / WS * CHN - 0.5, 0, CHN - 1.001), ix = fx | 0, iz = fz | 0, u = fx - ix, v = fz - iz, k = iz * CHN + ix;
+    const a = chM[k], b = chM[k + 1], c = chM[k + CHN], d = chM[k + CHN + 1], wa = a ? (1 - u) * (1 - v) : 0, wb = b ? u * (1 - v) : 0, wc = c ? (1 - u) * v : 0, wd = d ? u * v : 0, ws = wa + wb + wc + wd;
+    return ws > 0 ? (a * wa + b * wb + c * wc + d * wd) / ws * 0.5 : 0; };
 
   const flatten = (cx, cz, r0, r1, y, k_ = 1) => {
     const i0 = Math.max(0, Math.floor(w2t(cx - r1))), i1 = Math.min(HN - 1, Math.ceil(w2t(cx + r1))), j0 = Math.max(0, Math.floor(w2t(cz - r1))), j1 = Math.min(HN - 1, Math.ceil(w2t(cz + r1)));
@@ -120,13 +133,19 @@ export async function genWorld(tick, Q, startAt) {
   cabin.y = heightAt(cabin.x, cabin.z) + 0.3;
   flatten(cabin.x, cabin.z, 30, 55, cabin.y);
 
+  // inside a ski jump's footprint (inrun, wind screens, landing hill out to d = far along its axis, widened by m)?
+  const inJump = (x, z, far, m) => { for (const J of [LM.jump, LM.mid]) { const ex = J.end[0] - J.top[0], ez = J.end[1] - J.top[1], l = Math.hypot(ex, ez), d = ((x - J.top[0]) * ex + (z - J.top[1]) * ez) / l, t = Math.abs((x - J.top[0]) * -ez + (z - J.top[1]) * ex) / l;
+    if (d > -6 && d < (far || l) && t < m + 13 + 0.3 * clamp(d - 60, 0, 110)) return true; } return false; };
   // ---- buildings: rotated rectangles on levelled pads ----
   const buildings = [];
-  { const b = blob('bld'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  { const b = blob('bld'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength), bh = meta.blobs.bldh ? blob('bldh') : null; // bldh (tools/geo/buildings.py): lidar eave 0.2 m, rise 0.1 m, flags 1 valid 2 flat 4 ridge along d
     for (let i = 0; i < meta.nb; i++) {
       const o = i * 12, B = { x: dv.getInt16(o, true) / 8, z: dv.getInt16(o + 2, true) / 8, w: dv.getUint16(o + 4, true) / 8, d: dv.getUint16(o + 6, true) / 8, yaw: dv.getInt16(o + 8, true) / 1e4, kind: b[o + 10], lv: b[o + 11] / 10 };
+      if (bh && bh[i * 3 + 2] & 1) B.h = { eave: bh[i * 3] * 0.2, rise: bh[i * 3 + 1] * 0.1, flat: (bh[i * 3 + 2] & 2) > 0, alt: (bh[i * 3 + 2] & 4) > 0 };
       if (Math.hypot(B.x - cabin.x, B.z - cabin.z) < 50 || Math.hypot(B.x - LM.chapel.x, B.z - LM.chapel.z) < 22 || W.lakeAt(B.x, B.z) > 0.3) continue;
       if (B.w * B.d > 2600) continue; // arena stands, hotel complexes: not box-shaped
+      if (bh && bh[i * 3 + 2] & 8) continue; // an outline with no roof in the lidar (stands, ski-jump parts)
+      if (inJump(B.x, B.z, 205, 0)) continue; // inside a ski jump: the jump itself is a prop
       B.y = heightAt(B.x, B.z); const r = Math.hypot(B.w, B.d) / 2;
       flatten(B.x, B.z, r * 0.7, r * 0.7 + 12, B.y, 0.75); buildings.push(B);
     } }
@@ -207,17 +226,19 @@ export async function genWorld(tick, Q, startAt) {
       parks.push({ px, pz, x: cx + mx, z: cz + mz, area: s1 * TEX * TEX });
     } }
   { // roads: flat bed along a smoothed profile, sunk under the ski bridges (tunnels) with headwalls as props
-    const TUN = meta.tunnels, DEPTH = 5, b = blob('roads'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let o = 0;
+    const TUN = meta.tunnels, LID = meta.hstep < 8, DEPTH = LID ? 0 : 5, b = blob('roads'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let o = 0;
     const dTun = (x, z) => { let m = 1e9; for (const t of TUN) for (let i = 0; i + 3 < t.length; i += 2) { const ax = t[i], az = t[i + 1], vx = t[i + 2] - ax, vz = t[i + 3] - az, u = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz), 0, 1); m = Math.min(m, Math.hypot(x - ax - vx * u, z - az - vz * u)); } return m; };
     const rE = new Float32Array(HN * HN).fill(99), rY = new Float32Array(HN * HN);
     for (const [n, w10] of meta.roads) {
       let pts = []; for (let i = 0; i < n; i++, o += 4) pts.push([dv.getInt16(o, true) / 8, dv.getInt16(o + 2, true) / 8]);
       pts = polish(pts, 3); mapRoads.push({ pts: Float32Array.from(pts.flat()), hw: w10 / 20 }); const m = pts.length, hw = w10 / 20, hs = new Float32Array(m), y = new Float32Array(m), dk = new Float32Array(m), dk2 = new Float32Array(m), cov = new Uint8Array(m);
-      for (let i = 0; i < m; i++) hs[i] = heightAt(pts[i][0], pts[i][1]);
+      for (let i = 0; i < m; i++) { hs[i] = heightAt(pts[i][0], pts[i][1]); dk2[i] = dTun(pts[i][0], pts[i][1]); }
       for (let i = 0; i < m; i++) {
-        let s = 0, c = 0; for (let k = Math.max(0, i - 8); k <= Math.min(m - 1, i + 8); k++) { s += hs[k]; c++; }
-        const dt = dTun(pts[i][0], pts[i][1]); dk[i] = s / c; dk2[i] = dt; y[i] = dk[i] - DEPTH * (1 - smooth(8, 95, dt)); cov[i] = dt < 1 ? 2 : dt < 8 ? 1 : 0; // 1 = recess behind the portal face
+        // lidar terrain already has the road at its real level and the earth on top of the tunnel: keep the bump out of the road profile and do not sink anything
+        let s = 0, c = 0; for (let k = Math.max(0, i - 8); k <= Math.min(m - 1, i + 8); k++) if (!LID || dk2[k] >= 8) { s += hs[k]; c++; }
+        const dt = dk2[i]; dk[i] = c ? s / c : hs[i]; y[i] = dk[i] - DEPTH * (1 - smooth(8, 95, dt)); cov[i] = dt < 1 ? 2 : dt < 8 ? 1 : 0; // 1 = recess behind the portal face
       }
+      if (LID) { for (let i = 1; i < m; i++) if (cov[i]) y[i] = y[i - 1]; for (let i = 0; i < m; i++) if (cov[i]) dk[i] = Math.max(hs[i], y[i] + 3.5); }
       for (let q0 = 0; q0 < m;) { let q1 = q0; while (q1 < m && dk2[q1] > 100) q1++; // runs of road well away from the tunnels
         if (q1 - q0 >= 20) { const f = new Float32Array((q1 - q0) * 2); for (let q = q0; q < q1; q++) { f[(q - q0) * 2] = pts[q][0]; f[(q - q0) * 2 + 1] = pts[q][1]; } roadNet.push({ pts: f, n: q1 - q0, hw }); }
         q0 = q1 + 1; }
@@ -273,12 +294,15 @@ export async function genWorld(tick, Q, startAt) {
     }
   }
 
-  // ---- trees: procedural placement steered by the mapped forest / clearings ----
-  let cap = 520000, td = new Float32Array(cap * 8), tc = 0;
+  // ---- trees: jittered grid, kept with a chance from the lidar cover, heights from the lidar canopy height ----
+  let cap = 520000, td = new Float32Array(cap * 8), tc = 0; const TK_IN = 0.5, TK_OUT = 0.72;
   const nearStart = new Uint32Array(NCN * NCN), nearCnt = new Uint16Array(NCN * NCN * 3), nearY = new Float32Array(NCN * NCN * 2);
   const farStart = new Uint32Array(FCN * FCN), farCnt = new Uint32Array(FCN * FCN), farY = new Float32Array(FCN * FCN * 2);
   const tmp = [new Float32Array(8 * 128), new Float32Array(8 * 128), new Float32Array(8 * 128)], tn = [0, 0, 0];
-  const can = new Float32Array(HN * HN);
+  const can = new Float32Array(HN * HN), bm = new Uint8Array(HN * HN); // bm: house footprints + 1.5 m, no trunks there
+  for (const B of buildings) { const cs = Math.cos(B.yaw), sn = Math.sin(B.yaw), hw = B.w / 2 + 1.5, hd = B.d / 2 + 1.5, r = Math.hypot(hw, hd);
+    for (let j = Math.max(0, Math.floor(w2t(B.z - r))); j <= Math.min(HN - 1, Math.ceil(w2t(B.z + r))); j++) for (let i = Math.max(0, Math.floor(w2t(B.x - r))); i <= Math.min(HN - 1, Math.ceil(w2t(B.x + r))); i++) {
+      const dx = (i + 0.5) * TEX - HALF - B.x, dz = (j + 0.5) * TEX - HALF - B.z; if (Math.abs(dx * cs - dz * sn) < hw && Math.abs(dx * sn + dz * cs) < hd) bm[j * HN + i] = 1; } }
   for (let fz = 0; fz < FCN; fz++) {
     for (let fx = 0; fx < FCN; fx++) {
       const fc = fz * FCN + fx; farStart[fc] = tc; let fy0 = 1e9, fy1 = -1e9;
@@ -289,25 +313,26 @@ export async function genWorld(tick, Q, startAt) {
         for (let b = 0; b < g; b++) for (let a = 0; a < g; a++) {
           const hx = cx * 16 + a, hz = cz * 16 + b, r0 = hash2(hx, hz), x = x0 + (a + 0.15 + 0.7 * r0) * st, z = z0 + (b + 0.15 + 0.7 * hash2(hx + 7919, hz)) * st;
           const ti = clamp(Math.round(w2t(z)), 1, HN - 2) * HN + clamp(Math.round(w2t(x)), 1, HN - 2);
-          const dn = dens(x, z);
-          if (dn < 0.04 || mat[ti * 4] > 8 || tD[ti] < 6.2 || mat[ti * 4 + 1] > 40) continue;
+          const cv = cover(x, z);
+          if (cv < 0.02 || bm[ti] || mat[ti * 4] > 8 || tD[ti] < 6.2 || mat[ti * 4 + 1] > 40) continue;
           const y = heightAt(x, z), slope = Math.hypot(H[ti + 1] - H[ti - 1], H[ti + HN] - H[ti - HN]) / (2 * TEX);
           if (slope > 1.1) continue;
           { const dx = x - cabin.x, dz = z - cabin.z, fr = Math.cos(cabin.yaw) * dz + Math.sin(cabin.yaw) * dx; if (Math.hypot(dx, dz) < (fr > 0 ? 75 : 34)) continue; } // open view in front of the lodge
+          if (inJump(x, z, 0, 4)) continue;
           const bog = mat[ti * 4 + 2] / 255, r1 = hash2(hx, hz + 104729), r2 = hash2(hx + 31337, hz + 17), r3 = hash2(hx - 999, hz + 5);
-          const fo = 0.6 + 0.9 * fbm(x * 0.006 + 40, z * 0.006, 2);
-          let p = (0.35 + 0.65 * smooth(0.18, 0.5, fo)) * dn * (inner ? 0.5 : 0.62) * smooth(6.2, 9, tD[ti]);
+          let p = Math.min(1, cv * 1.35) * (inner ? TK_IN : TK_OUT) * smooth(6.2, 9, tD[ti]); // planting chance follows the measured cover (full from 75 %: the slim crowns leave gaps)
+          const hc = canH(x, z) || 9, hf = 0.6 + 0.45 * Math.sqrt(r2); // p90 of the cell = its tallest trees; the rest stand lower
           let sp = 0, ht = 0, wd = 1;
-          if (bog > 0.5) { p = 0.05; sp = 1; ht = 1.6 + 2.6 * r2; wd = 1.5; }
+          if (bog > 0.5) { p *= 0.6; sp = 1; ht = clamp(hc * hf * 0.8, 2, 12); wd = 1.4; }
           else {
-            const bf = fbm(x * 0.008 + 90, z * 0.008 - 20, 2), pf = fbm(x * 0.005 - 30, z * 0.005 + 70, 2), gard = 1 - smooth(0.3, 0.7, dn);
+            const bf = fbm(x * 0.008 + 90, z * 0.008 - 20, 2), pf = fbm(x * 0.005 - 30, z * 0.005 + 70, 2), gard = 1 - smooth(0.15, 0.5, covA[cIdx(x, z)]);
             const pb = 0.05 + smooth(0.12, 0.3, bf) * 0.6 + bog * 0.5 + gard * 0.35, pp = 0.03 + smooth(0.2, 0.36, pf) * 0.14 + bog * 0.4 + smooth(0.45, 0.9, slope) * 0.3;
-            if (r3 < pb) { sp = 2; ht = 6 + 9 * r2; wd = 0.9 + 0.3 * r1; }
-            else if (r3 < pb + pp) { sp = 1; ht = 11 + 10 * r2; wd = 0.9 + 0.3 * r1; }
-            else { sp = 0; ht = (7 + 17 * r2 * Math.sqrt(r2)) * (1 - 0.3 * gard); wd = 0.85 + 0.35 * r1; }
+            if (r3 < pb) { sp = 2; ht = clamp(hc * hf, 4, 20); wd = 0.9 + 0.3 * r1; }
+            else if (r3 < pb + pp) { sp = 1; ht = clamp(hc * hf, 6, 28); wd = 0.9 + 0.3 * r1; }
+            else { sp = 0; ht = clamp(hc * hf, 3.5, 32); wd = 0.85 + 0.35 * r1; }
           }
           if (r1 > p * Q.trees || tn[sp] >= 127) continue;
-          if (!inner) { ht *= 1.35; wd *= 1.25; }
+          if (!inner) { ht *= 1.1; wd *= 1.3; }
           const o = tn[sp]++ * 8, T = tmp[sp];
           T[o] = x; T[o + 1] = y - 0.15; T[o + 2] = z; T[o + 3] = ht; T[o + 4] = r0 * 6.283; T[o + 5] = sp; T[o + 6] = r2 * 0.999 + ((hx * 7 + hz * 13) & 7); T[o + 7] = wd;
           if (y < y0) y0 = y; if (y + ht > y1) y1 = y + ht;

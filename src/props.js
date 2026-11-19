@@ -1,6 +1,6 @@
 // Static set pieces merged into one mesh: cabin, bridge, dam, power line, lamp posts, signs, boulders.
 import { MB, MAT, VS } from './mesh.js';
-import { hash1, clamp } from './math.js';
+import { hash1, clamp, lerp } from './math.js';
 
 const RED = [0.4, 0.055, 0.04], WHITE = [0.85, 0.85, 0.82], WOOD = [0.2, 0.13, 0.08], DWOOD = [0.1, 0.07, 0.05], STONE = [0.36, 0.36, 0.37], DARK = [0.03, 0.03, 0.035];
 
@@ -158,28 +158,30 @@ function gable(b, hw, hd, y0, rise, o) { // snow-covered pitched roof, ridge alo
   b.quad([hw + o, e, -hd - o], [-hw - o, e, -hd - o], [-hw - o, t, 0], [hw + o, t, 0]);
 }
 function house(b, B, i, W) {
-  const r = hash1(i * 13 + 1), r2 = hash1(i * 29 + 7), r3 = hash1(i * 53 + 3), hw = B.w / 2, hd = B.d / 2, k = B.kind;
-  const wall = k === 2 ? 2.5 : k === 1 ? 2.7 : k === 3 ? Math.max(6.5, (B.lv || 3) * 3) : B.lv ? B.lv * 2.8 : 4.4 + 2.4 * r2;
-  const flat = k === 3 && (B.w > 34 || r > 0.6), rise = flat ? 0 : Math.min(hd * (k === 1 ? 0.6 : 0.8), 4.8);
+  const r = hash1(i * 13 + 1), r2 = hash1(i * 29 + 7), r3 = hash1(i * 53 + 3), k = B.kind, H = B.h, alt = H && H.alt; // lidar heights from world.js; with alt the ridge runs along the short side
+  const hw = (alt ? B.d : B.w) / 2, hd = (alt ? B.w : B.d) / 2, yaw = alt ? B.yaw + Math.PI / 2 : B.yaw, L = 2 * hw; // builder frame: ridge along local x
+  const flat = H ? H.flat : k === 3 && (B.w > 34 || r > 0.6), rise = flat ? 0 : H ? H.rise : Math.min(hd * (k === 1 ? 0.6 : 0.8), 4.8);
+  const wall = H ? Math.max(1.8, H.eave - (flat ? 0.3 : 0)) : k === 2 ? 2.5 : k === 1 ? 2.7 : k === 3 ? Math.max(6.5, (B.lv || 3) * 3) : B.lv ? B.lv * 2.8 : 4.4 + 2.4 * r2;
   const col = k === 1 ? HCOL[3] : k === 3 ? HCOL[r < 0.5 ? 0 : 5] : HCOL[(r * 9) | 0];
   const v0 = b.v.length / VS;
-  b.at(B.x, B.y, B.z, -B.yaw);
+  b.at(B.x, B.y, B.z, -yaw);
   b.set(col, MAT.paint); b.box(-hw, -5, -hd, hw, wall, hd);
   if (flat) { b.set(SNOWC, MAT.snow); b.box(-hw - 0.2, wall, -hd - 0.2, hw + 0.2, wall + 0.4, hd + 0.2); }
   else {
     for (const s of [-1, 1]) { const a = b.vert(s * hw, wall, s * hd, s, 0, 0), d = b.vert(s * hw, wall, -s * hd, s, 0, 0), e = b.vert(s * hw, wall + rise, 0, s, 0, 0); b.tri(a, d, e); }
     b.set(SNOWC, MAT.snow); gable(b, hw, hd, wall, rise, 0.45);
   }
-  if (k !== 2 && r3 < 0.6) { // a row of lit windows on each long wall
+  const y = k === 1 ? 1.1 : 1.3, nf = H ? Math.min(10, Math.floor((wall - y - 1.45) / 2.8) + 1) : wall > 5.6 && r2 > 0.4 ? 2 : 1, tall = nf > 2;
+  if (k !== 2 && (r3 < 0.6 || tall)) { // rows of lit windows on the eave walls: measured walls get one row per 2.8 m storey that fits, blocks of 3+ storeys on both walls
     b.set([1, 0.78, 0.45], MAT.window);
-    const n = Math.max(1, Math.min(5, (B.w / 4.2) | 0)), y = k === 1 ? 1.1 : 1.3;
-    for (let f = 0; f < (wall > 5.6 && r2 > 0.4 ? 2 : 1); f++) for (let q = 0; q < n; q++) {
-      if (hash1(i * 7 + q * 3 + f) < 0.35) continue;
-      const x = (q + 0.5) / n * B.w - hw, s = hash1(i + q) < 0.5 ? 1 : -1, yy = y + f * 2.8;
+    const n = Math.max(1, Math.min(tall ? 14 : 5, (L / 4.2) | 0));
+    for (let f = 0; f < nf; f++) for (let q = 0; q < n; q++) for (const s of tall ? [-1, 1] : [hash1(i + q + f * 17) < 0.5 ? 1 : -1]) {
+      if (hash1(i * 7 + q * 3 + f + (tall && s < 0 ? 977 : 0)) < 0.35) continue;
+      const x = (q + 0.5) / n * L - hw, yy = y + f * 2.8;
       b.quad([x - s * 0.55, yy, s * (hd + 0.03)], [x + s * 0.55, yy, s * (hd + 0.03)], [x + s * 0.55, yy + 1.15, s * (hd + 0.03)], [x - s * 0.55, yy + 1.15, s * (hd + 0.03)]);
     }
   }
-  W.bld.push({ x: B.x, y: B.y, z: B.z, th: -B.yaw, v0, v1: b.v.length / VS, area: B.w * B.d, col, boxes: [box(B.x, B.z, -B.yaw, hw, hd, B.y, flat ? wall + 0.4 : wall, rise)] });
+  W.bld.push({ x: B.x, y: B.y, z: B.z, th: -yaw, v0, v1: b.v.length / VS, area: B.w * B.d, col, boxes: [box(B.x, B.z, -yaw, hw, hd, B.y, flat ? wall + 0.4 : wall, rise)] });
 }
 // a solid oriented box: centre, yaw of the builder frame (local x = (cos, -sin)), half-extents, pad height, wall height, gable rise (ridge along local x)
 const box = (x, z, th, hw, hd, y, wall, rise) => ({ x, z, th, hw, hd, y, wall, rise });
@@ -221,31 +223,66 @@ function lodge(b, c, W) {
   W.bld.push({ x: c.x, y: c.y, z: c.z, th: c.yaw, v0, v1: b.v.length / VS, area: 32 * 12 + 16 * 10.4 + 9 * 7.2, col: TIM,
     boxes: [box(c.x, c.z, c.yaw, 16, 6, c.y, 7.25, 5.6), box(q1[0], q1[1], c.yaw + Math.PI / 2, 8, 5.2, c.y, 7.25, 5), box(q2[0], q2[1], c.yaw + Math.PI / 2, 4.5, 3.6, c.y, 4.85, 3.4)] });
 }
-// Ski jump: cantilevered inrun from the tower top down to the take-off; the landing hill is real terrain.
-function skiJump(b, W, J, wd) {
-  const dx = J.top[0] - J.lip[0], dz = J.top[1] - J.lip[1], L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L, rx = -uz, rz = ux;
-  const yl = W.heightAt(J.lip[0], J.lip[1]) + 2.5, yt = Math.max(yl + J.h, W.heightAt(J.top[0], J.top[1]) + J.h * 0.45), N = 14;
-  const P = (s, y, t) => [J.lip[0] + ux * s + rx * t, y, J.lip[1] + uz * s + rz * t];
-  const yd = (u) => yl + (yt - yl) * (0.12 * u + 0.88 * u * u * (1.6 - 0.6 * u)), yb = (u) => yd(u) - 1.2 - J.h * 0.22 * Math.sin(Math.PI * Math.min(1, u * 1.15)) ** 1.5;
+// Ski jumps from lidar profiles (LM.jump / LM.mid in world.js). Positions are (d, t): d metres from the top along the axis
+// top -> end, t to the side; heights are absolute. `deck` is the inrun track, flat for `plat` metres at the top.
+// Cantilevered steel inrun (Holmenkollbakken): girder, back leg, wind-screen `wing`s down both sides of the landing hill
+// and the block under the take-off. With `skirt` the inrun stands on the ground (Midtstubakken). The landing hills are terrain.
+function skiJump(b, W, J) {
+  const ex = J.end[0] - J.top[0], ez = J.end[1] - J.top[1], El = Math.hypot(ex, ez), ux = ex / El, uz = ez / El, rx = -uz, rz = ux;
+  const L = Math.hypot(J.lip[0] - J.top[0], J.lip[1] - J.top[1]), wd = J.w, h = wd / 2, STEEL = [0.5, 0.52, 0.55], D = J.deck, d0 = D[0][0], dP = d0 - J.plat, N = 20, TOP = J.skirt ? 1.2 : 3.2;
+  const P = (d, y, t) => [J.top[0] + ux * d + rx * t, y, J.top[1] + uz * d + rz * t];
+  const G = (d, t) => W.heightAt(J.top[0] + ux * d + rx * t, J.top[1] + uz * d + rz * t);
+  const tab = (T, d, c) => { let i = 0; while (i < T.length - 2 && d > T[i + 1][0]) i++; const a = T[i], q = T[i + 1], f = clamp((d - a[0]) / (q[0] - a[0]), 0, 1); return a[c] + (q[c] - a[c]) * f; };
+  const yd = (d) => { const e = 5; return d <= d0 ? D[0][1] : (tab(D, d - e, 1) + 2 * tab(D, d, 1) + tab(D, d + e, 1)) / 4 + (d < d0 + e ? (D[0][1] - tab(D, d0 + e, 1)) * (1 - (d - d0) / e) / 4 : 0); };
+  const dep = (d) => 2.2 + 6 * Math.sin(Math.PI * clamp((d - dP) / (L - dP), 0, 1)) ** 1.3;
+  const yb = (d, t) => J.skirt ? Math.min(G(d, t), yd(d)) - 1 : yd(d) - dep(d);
+  const wall = (p0, p1, p2, p3) => { b.quad(p0, p1, p2, p3); b.quad(p1, p0, p3, p2); };
+  const up = (da, db, ya, yb_, hw) => b.quad(P(db, yb_, -hw), P(db, yb_, hw), P(da, ya, hw), P(da, ya, -hw));
   b.at(0, 0, 0);
   for (let i = 0; i < N; i++) {
-    const u0 = i / N, u1 = (i + 1) / N, s0 = u0 * L, s1 = u1 * L, a0 = yd(u0), a1 = yd(u1), c0 = yb(u0), c1 = yb(u1), h = wd / 2;
-    b.set(SNOWC, MAT.snow); b.quad(P(s0, a0, h), P(s0, a0, -h), P(s1, a1, -h), P(s1, a1, h));
-    b.set([0.5, 0.52, 0.55], MAT.metal);
-    for (const s of [-1, 1]) { // wind screens + girder flanks, both faces
-      const w = s * h, top = 2.6;
-      const q = [P(s0, c0, w), P(s1, c1, w), P(s1, a1 + top, w), P(s0, a0 + top, w)];
-      if (s > 0) { b.quad(q[1], q[0], q[3], q[2]); b.quad(q[0], q[1], q[2], q[3]); } else { b.quad(q[0], q[1], q[2], q[3]); b.quad(q[1], q[0], q[3], q[2]); }
-    }
-    b.quad(P(s0, c0, -h), P(s0, c0, h), P(s1, c1, h), P(s1, c1, -h));
+    const s0 = dP + (L - dP) * i / N, s1 = dP + (L - dP) * (i + 1) / N, a0 = yd(s0), a1 = yd(s1);
+    b.set(SNOWC, MAT.snow); up(s0, s1, a0, a1, h);
+    b.set(STEEL, MAT.metal);
+    for (const s of [-1, 1]) wall(P(s0, yb(s0, s * h), s * h), P(s1, yb(s1, s * h), s * h), P(s1, a1 + TOP, s * h), P(s0, a0 + TOP, s * h));
+    if (!J.skirt) wall(P(s0, yb(s0, 0), -h), P(s0, yb(s0, 0), h), P(s1, yb(s1, 0), h), P(s1, yb(s1, 0), -h));
+    if (yb(s0, 0) - G(s0, 0) < 3.6) W.colliders.push(P(s0, 0, 0)[0], P(s0, 0, 0)[2], wd * 0.55);
   }
-  b.set([0.42, 0.44, 0.47], MAT.metal);
-  for (const [u, t] of [[0.3, 0.6], [0.3, -0.6], [0.62, 1], [0.62, -1]]) { const p = P(u * L, yb(u) + 0.5, t * wd * 0.45), g = P(u * L + J.h * 0.12, 0, t * wd * 1.1); b.cyl(g[0], W.heightAt(g[0], g[2]) - 2, g[2], p[0], p[1], p[2], wd * 0.2, wd * 0.14, 8); W.colliders.push(g[0], g[2], wd * 0.2); }
-  for (let u = 0; u <= 0.5; u += 0.04) { const s = u * L, p = P(s, 0, 0), g = W.heightAt(p[0], p[2]); if (yb(u) - g < 3.6) W.colliders.push(p[0], p[2], wd * 0.55); } // the low end of the inrun is hull height
-  // start house on top
-  const tp = P(L + wd * 0.5, yt, 0);
-  b.at(tp[0], tp[1], tp[2], Math.atan2(-ux, -uz));
-  b.set([0.5, 0.52, 0.55], MAT.metal); b.box(-wd * 0.7, -1.5, -wd * 0.6, wd * 0.7, 0.4, wd * 0.6);
+  const yt = D[0][1];
+  wall(P(dP, yb(dP, 0), -h), P(dP, yb(dP, 0), h), P(dP, yt + TOP, h), P(dP, yt + TOP, -h));
+  wall(P(L, yb(L, 0), -h), P(L, yb(L, 0), h), P(L, yd(L), h), P(L, yd(L), -h));
+  if (!J.skirt) { // back leg: a tapering shaft from the ground to the platform
+    const g = G(dP + 5, 0) - 2, e = J.plat * 0.55, w = h * 0.85;
+    for (const s of [-1, 1]) wall(P(dP, g, s * w), P(dP + e, g, s * w), P(dP + J.plat, yt - 2.2, s * w), P(dP, yt - 2.2, s * w));
+    wall(P(dP, g, -w), P(dP, g, w), P(dP, yt - 2.2, w), P(dP, yt - 2.2, -w)); wall(P(dP + e, g, -w), P(dP + e, g, w), P(dP + J.plat, yt - 2.2, w), P(dP + J.plat, yt - 2.2, -w));
+    W.colliders.push(P(dP + e / 2, 0, 0)[0], P(dP + e / 2, 0, 0)[2], e * 0.6);
+  }
+  if (J.block) { // the building the take-off rests on
+    const [da, hw] = J.block, n = 4; b.set([0.62, 0.62, 0.6], MAT.stone);
+    for (let i = 0; i < n; i++) {
+      const s0 = da + (L - da) * i / n, s1 = da + (L - da) * (i + 1) / n, t0 = yd(s0) - dep(s0) + 0.3, t1 = yd(s1) - dep(s1) + 0.3, g = Math.min(G(s0, 0), G(s1, 0), G(s0, hw), G(s1, -hw)) - 3;
+      for (const s of [-1, 1]) wall(P(s0, g, s * hw), P(s1, g, s * hw), P(s1, t1, s * hw), P(s0, t0, s * hw));
+      if (!i) wall(P(s0, g, -hw), P(s0, g, hw), P(s0, t0, hw), P(s0, t0, -hw));
+      if (i === n - 1) wall(P(s1, g, -hw), P(s1, g, hw), P(s1, t1, hw), P(s1, t1, -hw));
+      b.set(SNOWC, MAT.snow); up(s0, s1, t0, t1, hw); b.set([0.62, 0.62, 0.6], MAT.stone);
+      for (const t of [-hw * 0.5, hw * 0.5]) W.colliders.push(P((s0 + s1) / 2, 0, t)[0], P((s0 + s1) / 2, 0, t)[2], hw * 0.62);
+    }
+  }
+  if (J.wing) { // wind screens: they leave the inrun walls and sweep out and down beside the landing hill
+    const Wg = J.wing; b.set([0.56, 0.58, 0.6], MAT.metal);
+    for (const s of [-1, 1]) for (let i = 0; i + 1 < Wg.length; i++) {
+      const a = Wg[i], q = Wg[i + 1], n = Math.ceil((q[0] - a[0]) / 6);
+      for (let k = 0; k < n; k++) {
+        const f0 = k / n, f1 = (k + 1) / n, dA = lerp(a[0], q[0], f0), dB = lerp(a[0], q[0], f1), tA = s * lerp(a[1], q[1], f0), tB = s * lerp(a[1], q[1], f1), yA = lerp(a[2], q[2], f0), yB = lerp(a[2], q[2], f1);
+        const gA = Math.max(Math.min(G(dA, tA), yA) - 1, yA - 22), gB = Math.max(Math.min(G(dB, tB), yB) - 1, yB - 22);
+        wall(P(dA, gA, tA), P(dB, gB, tB), P(dB, yB, tB), P(dA, yA, tA));
+        if (gA < G(dA, tA) + 2.5 && yA > G(dA, tA) + 1.5) W.colliders.push(P(dA, 0, tA)[0], P(dA, 0, tA)[2], 1.8);
+      }
+    }
+  }
+  // start house on the platform
+  const tp = P(dP + J.plat * 0.3, yt, 0);
+  b.at(tp[0], tp[1], tp[2], Math.atan2(ux, uz));
+  b.set(STEEL, MAT.metal); b.box(-wd * 0.7, -1.5, -wd * 0.6, wd * 0.7, 0.4, wd * 0.6);
   b.set([0.03, 0.05, 0.075], MAT.glass); b.box(-wd * 0.62, 0.4, -wd * 0.52, wd * 0.62, 3.6, wd * 0.52);
   b.set(SNOWC, MAT.snow); b.box(-wd * 0.75, 3.6, -wd * 0.65, wd * 0.75, 4.0, wd * 0.65);
   b.set([1, 0.2, 0.1], MAT.beacon); b.cyl(0, 4, 0, 0, 4.6, 0, 0.25, 0.2, 6);
@@ -292,7 +329,7 @@ export function buildProps(W) {
   W.colliders = []; W.bld = []; // circle colliders (x, z, r); building records with their solid boxes (see buildings.js)
   const PLAY = W.PLAY;
   if (W.name === 'fantasy') { cabin(b, W.cabin, W); bridge(b, W.bridge); dam(b, W.dam); }
-  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump, 6.5); skiJump(b, W, W.lm.mid, 4.5); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
+  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump); skiJump(b, W, W.lm.mid); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
   for (let i = 0; i < W.pylons.length; i++) { pylon(b, W.pylons[i]); if (i) wires(b, W.pylons[i - 1], W.pylons[i]); W.colliders.push(W.pylons[i].x + Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z - Math.sin(W.pylons[i].yaw) * 2.6, 0.5, W.pylons[i].x - Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z + Math.sin(W.pylons[i].yaw) * 2.6, 0.5); }
   for (const L of W.lamps) { lamp(b, L); W.colliders.push(L.x, L.z, 0.35); }
   for (const S of W.signs) { sign(b, S); W.colliders.push(S.x, S.z, 0.3); }

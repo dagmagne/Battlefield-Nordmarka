@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Compare the height grid the game ships (world.bin, 8 m) with the lidar DTM / DOM from fetch_hoyde.py.
+"""Compare the height grid the game ships (world.bin; 8 m before terrain.py, 4 m after) with the lidar DTM / DOM from fetch_hoyde.py.
 Prints error statistics and writes hillshades of a crop to ../../shots/geo/.
 .venv/bin/python compare.py [x0 z0 x1 z1]   (world metres, default: the Holmenkollen arena)"""
 import sys, json, zlib, struct, os
 import numpy as np
 from PIL import Image, ImageDraw
-from scipy.ndimage import zoom
 from geo import SIZE
 
 HALF = SIZE / 2
@@ -29,15 +28,14 @@ def shade(h, step=1.0, az=315, alt=40):
 if __name__ == '__main__':
     box = [float(v) for v in sys.argv[1:5]] if len(sys.argv) > 4 else [-1050, 800, 150, 1500]
     meta, blobs = load_world(); g8 = height8(meta, blobs)
-    cur = zoom(g8, 8, order=3, grid_mode=False)[:4097, :4097] if False else None
     # exact resample of the 8 m grid (samples at -HALF + i*8) onto the 1 m grid
     from scipy.ndimage import map_coordinates
-    c = np.arange(4097) / 8.0; J, I = np.meshgrid(c, c, indexing='ij')
+    c = np.arange(4097) / meta['hstep']; J, I = np.meshgrid(c, c, indexing='ij')
     cur = map_coordinates(g8, [J, I], order=3, mode='nearest')
     dtm = np.load('raw/dtm1.npy').astype(np.float64); dom = np.load('raw/dom1.npy').astype(np.float64)
     d = cur - dtm
     def stats(name, a): print(f'{name:28s} mean {a.mean():+6.2f}  rms {np.sqrt((a * a).mean()):5.2f}  p95 |e| {np.percentile(np.abs(a), 95):5.2f}  max |e| {np.abs(a).max():6.2f}')
-    stats('whole window (8 m vs DTM)', d)
+    stats('whole window (shipped grid vs DTM)', d)
     i0, j0, i1, j1 = [int(v + HALF) for v in box]
     stats('crop', d[j0:j1, i0:i1])
     # horizontal offset check: shift that minimises the rms in the crop
