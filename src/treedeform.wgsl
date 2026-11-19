@@ -30,7 +30,7 @@ fn treeDeform(pos: vec3f, nrm: vec3f, kind: f32, i0: vec4f, i1: vec4f, cam: vec3
   if (sp < 0.5) {
     wv = (0.8 + 0.32 * r2) * mix(1.1, 0.88, clamp((i0.w - 8.0) / 14.0, 0.0, 1.0));
     let cb = clamp((i0.w - 11.0) / 9.0, 0.0, 1.0) * max(r4 - 0.3, 0.0) * 0.5; // crown base (unit height) of a forest-grown spruce
-    if (kind > 0.5) { let k = smoothstep(cb - 0.07, cb + 0.01, y); dead = (1.0 - k) * step(0.001, cb); f *= mix(0.3, 1.0, k); }
+    if (kind > 0.5 && cb > 0.001) { let k = smoothstep(cb - 0.07, cb + 0.01, y); dead = 1.0 - k; f *= mix(0.3, 1.0, k); } // (only on lifted crowns: drooping tips near y = 0 must not be pulled in)
   }
   p = vec3f(p.x * f * wv, p.y, p.z * f * wv);
   let la = 6.283 * r3; let ln = (0.015 + 0.04 * r4 * r4) * y * y;
