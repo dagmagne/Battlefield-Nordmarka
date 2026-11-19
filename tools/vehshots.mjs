@@ -1,6 +1,6 @@
 // Look-check renders of the vehicle models: the Leopard, the Tigr, the buggy, the motorcycle (and the other enemy types) staged
 // one at a time on the open lake, plus the parked MX3000 metro units at Frognerseteren.
-// usage: node tools/vehshots.mjs outdir [--only leo,tigr,buggy,moto,train,t72,bmp,btr] [--tod 1] [--w 1728 --h 1117 --dpr 1] (+ the GPU tools options)
+// usage: node tools/vehshots.mjs outdir [--only leo,tigr,buggy,moto,train,t72,bmp,btr] [--tod 1] [--aim] [--q therm=1] [--w 1728 --h 1117 --dpr 1] (+ the GPU tools options)
 // Views per vehicle: fq (front quarter), side, rq (rear quarter), front, rear, top (high three-quarter), close (detail, front quarter), low.
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -13,7 +13,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: false, args
 const page = await (await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr })).newPage();
 page.on('pageerror', (e) => console.log('[pageerror]', String(e.stack || e).slice(0, 600)));
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) console.log('[error]', m.text().slice(0, 600)); });
-await page.goto(`${base}?w=frogner&nohint&nohud&peace&q=high&drs=0&tod=${tod}`);
+await page.goto(`${base}?w=frogner&nohint&nohud&peace&q=high&drs=0&tod=${tod}${opt('q', '') ? '&' + opt('q', '') : ''}`);
 await page.waitForFunction('window.__ready===true', null, { timeout: 120000 }); await logAdapter(page);
 const ev = (js) => page.evaluate(js);
 const shot = async (name) => { await ev('__step(1/60,4)'); await page.waitForTimeout(120); await page.screenshot({ path: `${out}/${name}.png` }); console.log('ok', `${out}/${name}.png`); };
@@ -45,6 +45,13 @@ for (const k of Object.keys(EN)) {
   const [t, L, H] = EN[k];
   const p = await ev(`(()=>{ for (const e of G.enemies) e.on=false; G.spawn(${t},3); const e=G.enemies.find((q)=>q.on&&q.type===${t}); e.x=L.x+FX*25; e.z=L.z+FZ*25; e.y=__W.heightAt(e.x,e.z); e.yaw=Math.atan2(-FX,-FZ)+2.2; e.path=-1; e.immob=true; e.v=0; __sim(1/60,20); return [e.x,e.z,e.yaw]; })()`);
   await ring(k, p[0], p[1], p[2], L, H);
+  if (a.includes('--aim')) { // the weapon laid on the player's tank (parts 1/2 turned away from the hull)
+    await ev(`(()=>{ const e=G.enemies.find((q)=>q.on&&q.type===${t}); for (let i=0;i<150;i++){ e.known=9; e.see=1; e.v=0; __sim(1/60,1); } })()`);
+    for (const [vn, br, dk, hk, tk] of [['aim_fq', 0.65, 1.3, 0.95, 0.5], ['aim_rq', Math.PI - 0.7, 1.3, 0.95, 0.5], ['aim_top', -0.8, 1.2, 2.3, 0.4]]) {
+      await ev(`(()=>{const a=${p[2]}+${br},d=${dk * L + 1.2};__look(${p[0]}-Math.sin(a)*d,${hk * H + 0.25},${p[1]}-Math.cos(a)*d,${p[0]},${tk * H},${p[1]});})()`);
+      await shot(`${k}_${vn}`);
+    }
+  }
 }
 if (only.includes('train')) {
   const T = await ev(`(()=>{ const r=[]; for (const B of __W.bld) if (B.fix && B.boxes && B.boxes.length===3 && B.boxes[0].hd>8) r.push(B.boxes.map((b)=>[b.x,b.z,b.th,b.hd])); return r; })()`);
