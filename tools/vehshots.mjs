@@ -20,6 +20,7 @@ const shot = async (name) => { await ev('__step(1/60,4)'); await page.waitForTim
 // [name, bearing from the vehicle's nose (rad, + = its right side), distance in vehicle lengths, eye height in vehicle heights, target height fraction]
 const VIEWS = [['fq', 0.65, 1.55, 0.95, 0.45], ['side', Math.PI / 2, 1.5, 0.6, 0.45], ['rq', Math.PI - 0.7, 1.55, 0.95, 0.45], ['front', 0, 1.5, 0.6, 0.45], ['rear', Math.PI, 1.5, 0.7, 0.45],
   ['top', -0.8, 1.35, 2.3, 0.4], ['close', -0.55, 0.85, 0.75, 0.55], ['low', -2.3, 1.2, 0.3, 0.5]];
+if (a.includes('--near')) VIEWS.push(['nfq', 0.75, 0.5, 0.75, 0.5], ['nside', Math.PI / 2, 0.55, 0.5, 0.45], ['nrq', Math.PI - 0.8, 0.5, 0.8, 0.5], ['nrear', Math.PI + 0.25, 0.55, 0.6, 0.45], ['nwheel', 1.15, 0.28, 0.3, 0.25], ['nroof', -0.5, 0.45, 1.5, 0.85]); // --near: detail views
 // a camera on a ring round (x, z): size = [length, height]
 const ring = async (name, x, z, yaw, L, H) => {
   for (const [vn, br, dk, hk, tk] of VIEWS) {
@@ -45,6 +46,10 @@ for (const k of Object.keys(EN)) {
   const [t, L, H] = EN[k];
   const p = await ev(`(()=>{ for (const e of G.enemies) e.on=false; G.spawn(${t},3); const e=G.enemies.find((q)=>q.on&&q.type===${t}); e.x=L.x+FX*25; e.z=L.z+FZ*25; e.y=__W.heightAt(e.x,e.z); e.yaw=Math.atan2(-FX,-FZ)+2.2; e.path=-1; e.immob=true; e.v=0; __sim(1/60,20); return [e.x,e.z,e.yaw]; })()`);
   await ring(k, p[0], p[1], p[2], L, H);
+  if (a.includes('--aim')) { // the weapon traversed and elevated, and the wheels rolled on a little
+    await ev(`(()=>{ const e=G.enemies.find((q)=>q.on&&q.type===${t}); e.turYaw=1.0; e.gunPitch=0.25; e.trL+=0.4; e.trR+=0.4; const a=${p[2]}+0.3,d=${0.55 * L + 1.2};__look(${p[0]}-Math.sin(a)*d,${0.95 * H},${p[1]}-Math.cos(a)*d,${p[0]},${0.7 * H},${p[1]}); })()`);
+    await shot(`${k}_aim`);
+  }
 }
 if (only.includes('train')) {
   const T = await ev(`(()=>{ const r=[]; for (const B of __W.bld) if (B.fix && B.boxes && B.boxes.length===3 && B.boxes[0].hd>8) r.push(B.boxes.map((b)=>[b.x,b.z,b.th,b.hd])); return r; })()`);
