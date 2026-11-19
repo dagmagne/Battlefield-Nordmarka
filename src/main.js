@@ -575,6 +575,7 @@ async function main() {
     if (m === 3 && cam.mode !== 3) { cam.prevMode = cam.mode; cam.yaw = Math.atan2(view[2], view[10]); cam.pitch = Math.asin(clamp(-view[6], -1, 1)); }
     cam.mode = m; R.snap = true; ui.toast(CAMT[m] + (m === 3 && !isTouch ? ' — click to look' : ''));
   }
+  const peacePref = () => { try { return localStorage.gpeace === '1'; } catch (e) { return false; } };
   const api = {
     cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
     drone() { if (R.game) R.game.droneKey(); },
@@ -593,15 +594,20 @@ async function main() {
     trees(v) { R.treeSel = v; R.trees = v !== 'off'; if (R.trees) setTreeQ(TREEQ.indexOf(v)); try { localStorage.gtrees = v; } catch (e) { /* ignore */ } ui.toast('Trees: ' + v); },
     sound(v) { const on = v === undefined ? !audio.on : !!v; audio.setOn(on); music.sound(on); try { localStorage.gsnd = on ? '1' : '0'; } catch (e) { /* ignore */ } ui.toast(on ? 'Sound on' : 'Sound off'); },
     music(v) { const on = v === undefined ? music.toggle() : (music.set(v), music.on); ui.toast(on ? 'Music on' : 'Music off'); },
+    peace(v) { // menu: free roam without enemies; stored, and applied with a restart so no wave is left half-way
+      if (W.name === 'fantasy') { ui.toast('This world is free roam only'); return; }
+      const on = !!v; if (on === game.peace) return; game.peace = on; try { localStorage.gpeace = on ? '1' : '0'; } catch (e) { /* ignore */ }
+      api.restart(); ui.toast(on ? 'Peace mode: free roam, no enemies' : 'Peace mode off: waves restart');
+    },
     vib(v) { R.hap.setLevel(v); try { localStorage.gvib = String(v); } catch (e) { /* ignore */ } ui.toast(['Vibration off', 'Vibration light', 'Vibration full'][v]); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
+    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, peace: game.peace, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); if (R.hap) R.hap.ev(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' || peacePref() });
   R.game = game; R.aimHit = game.aimHit;
   const SOL = initSoldiers(MAXI, W.groundAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
