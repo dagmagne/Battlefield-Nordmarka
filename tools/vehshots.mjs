@@ -34,11 +34,20 @@ await ev(`(()=>{ const P=__W.PLAY-150, L=__W.lakes.filter((l)=>Math.abs(l.x)<P&&
 if (only.includes('leo')) {
   const p = await ev('[__veh.x,__veh.z,__veh.yaw]');
   await ring('leo', p[0], p[1], p[2], 7.6, 2.9);
+  // closer looks: [name, bearing, distance (m), eye height (m), target height (m), target shift along the hull (m, + = forward)]
+  const NEAR = [['n_fq', 0.6, 7.5, 2.6, 1.3, 0.5], ['n_side', Math.PI / 2, 7.5, 1.5, 1.2, 0], ['n_rq', Math.PI - 0.6, 7.5, 2.8, 1.3, -0.5], ['n_front', 0.12, 7.5, 1.7, 1.3, 2], ['n_rear', Math.PI - 0.1, 7, 1.9, 1.2, -2],
+    ['n_gear', 1.25, 4.6, 0.7, 0.6, 1.5], ['n_sprk', Math.PI - 1.0, 4.4, 0.8, 0.7, -2.6], ['n_roof', -0.5, 5.2, 5.2, 2.0, -0.3], ['n_tfront', -0.45, 4.6, 2.5, 2.1, 1.6], ['n_bustle', Math.PI + 0.75, 5.0, 3.0, 2.0, -2.2], ['n_gun', 0.9, 4.5, 2.4, 1.95, 4.2]];
+  for (const [vn, br, d, eh, th, sh] of NEAR) {
+    await ev(`(()=>{const a=${p[2]}+${br},fx=-Math.sin(${p[2]}),fz=-Math.cos(${p[2]}),tx=${p[0]}+fx*${sh},tz=${p[1]}+fz*${sh};__look(tx-Math.sin(a)*${d},${eh},tz-Math.cos(a)*${d},tx,${th},tz);})()`);
+    await shot(`leo_${vn}`);
+  }
   await ev('__aim(__veh.yaw+0.9,0.12,0);__sim(1/60,240)'); // turret traversed and the gun up, for the turret sides
   for (const [vn, br, dk, hk, tk] of [['turret', 0.5, 0.95, 1.1, 0.75], ['deck', Math.PI - 0.5, 1.0, 1.35, 0.6]]) {
     await ev(`(()=>{const a=${p[2]}+${br},d=${dk * 7.6 + 1.2};__look(${p[0]}-Math.sin(a)*d,${hk * 2.9},${p[1]}-Math.cos(a)*d,${p[0]},${tk * 2.9},${p[1]});})()`);
     await shot(`leo_${vn}`);
   }
+  // what the player sees: commander's view and the gunner sight
+  await ev(`__aim(${p[2]}+0.25,-0.06,0)`); await shot('leo_cmd'); await ev(`__aim(${p[2]}+0.25,-0.02,1)`); await shot('leo_sight'); await ev(`__aim(${p[2]},0,0)`);
 }
 const EN = { t72: [0, 7.4, 2.4], bmp: [1, 6.8, 2.2], tigr: [2, 5.8, 2.7], btr: [3, 7.7, 2.6], buggy: [4, 3.5, 1.9], moto: [5, 2.2, 1.5] };
 for (const k of Object.keys(EN)) {
