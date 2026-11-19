@@ -66,16 +66,21 @@ for (const k of Object.keys(EN)) {
   }
 }
 if (only.includes('train')) {
-  const T = await ev(`(()=>{ const r=[]; for (const B of __W.bld) if (B.fix && B.boxes && B.boxes.length===3 && B.boxes[0].hd>8) r.push(B.boxes.map((b)=>[b.x,b.z,b.th,b.hd])); return r; })()`);
-  console.log('trains', JSON.stringify(T).slice(0, 300));
+  const T = await ev(`(()=>{ const r=[]; for (const B of __W.bld) if (B.fix && B.boxes && B.boxes.length===3 && B.boxes[0].hd>8) r.push(B.boxes.map((b)=>[b.x,b.z,b.th,b.hd,b.y+0.2])); return r; })()`);
+  console.log('trains', JSON.stringify(T).slice(0, 300)); console.log('railStat', JSON.stringify(await ev('__W.railStat')));
   let n = 0;
   for (const tr of T.slice(0, 2)) {
-    const [x, z, yaw] = tr[0], [mx, mz] = tr[1]; n++;
-    const cab = [x - Math.sign((mx - x) * Math.sin(yaw) + (mz - z) * Math.cos(yaw)) * Math.sin(yaw) * 9.1, z - Math.sign((mx - x) * Math.sin(yaw) + (mz - z) * Math.cos(yaw)) * Math.cos(yaw) * 9.1]; // the cab end of car 0
-    const ax = (x - mx) / Math.hypot(x - mx, z - mz), az = (z - mz) / Math.hypot(x - mx, z - mz), nx = -az, nz = ax; // along the train towards the cab, and sideways
-    const V = [['fq', 9, 7, 2.6, 2.0, -3], ['fq2', 9, -7, 2.2, 2.0, -3], ['front', 11, 0.6, 2.3, 2.0, 0], ['side', -6, 13, 2.4, 1.9, -6], ['close', 4, 4.5, 2.0, 2.0, -1.5], ['long', 22, 9, 4.5, 1.8, -20], ['roof', 6, 8, 7.5, 2.5, -8], ['bogie', -1, 5.5, 0.9, 0.6, -2.6]];
+    const [x, z, , , ry] = tr[0], [mx, mz] = tr[1]; n++;
+    const ax = (x - mx) / Math.hypot(x - mx, z - mz), az = (z - mz) / Math.hypot(x - mx, z - mz), cab = [x + ax * 9.1, z + az * 9.1]; // along the train towards the cab of car 0, and that cab's nose
+    // the nearest platform (to report its height against the car floor, 1.1 m)
+    const pl = await ev(`(()=>{ let bd=1e9, r=[0,0,0]; for (const S of __W.rail.st) for (const Q of S.p) { const d=Math.hypot(Q.x-(${mx}),Q.z-(${mz})); if (d<bd) { bd=d; r=[Q.x,Q.z,Q.top]; } } return r; })()`);
+    const sg = n === 1 ? 1 : -1, nx = -az * sg, nz = ax * sg; // the open side to look from: the snow bank at Frognerseteren, across the other track at Holmenkollen
+    console.log(`train${n}: platform top ${(pl[2] - ry).toFixed(2)} m above the rail head`);
+    // [name, eye: along from the nose (+ = ahead of it), sideways (+ = the open side), height above the rail; target: height, along]
+    const V = [['fq', 9, 7, 2.6, 2.0, -3], ['fq2', 9, -7, 2.6, 2.0, -3], ['front', 11, 0.6, 2.3, 2.0, 0], ['side', -6, 14, 2.4, 1.9, -6], ['close', 4, 4.5, 2.0, 2.0, -1.5], ['long', 22, 9, 4.5, 1.8, -20], ['roof', 6, 8, 7.5, 2.5, -8], ['bogie', -1, 5, 1.0, 0.6, -2.8],
+      ['door', -9.1, 6, 2.3, 2.0, -9.1], ['win', -4, 3.6, 2.5, 2.3, -6.5], ['gang', -15, 6, 2.6, 2.0, -18.4], ['face', 5.5, 2.2, 2.0, 2.0, 0], ['under', -7, 6, 0.9, 0.6, -9.1], ['rear', -68, 7, 2.6, 2.0, -55.5], ['plat', -4, -4.5, 2.9, 1.6, -9.5], ['top', -9, 3, 12, 3, -9.1]];
     for (const [vn, da, ds, eh, th, ta] of V) {
-      await ev(`__look(${cab[0] + ax * da + nx * ds},${eh},${cab[1] + az * da + nz * ds},${cab[0] + ax * ta},${th},${cab[1] + az * ta})`);
+      await ev(`(()=>{ const ex=${cab[0] + ax * da + nx * ds}, ey=${ry + eh}, ez=${cab[1] + az * da + nz * ds}, dx=${cab[0] + ax * ta}-ex, dy=${ry + th}-ey, dz=${cab[1] + az * ta}-ez; __R.chase=null; __R.pose=[ex,ey,ez,Math.atan2(-dx,-dz),Math.atan2(dy,Math.hypot(dx,dz))]; })()`);
       await shot(`train${n}_${vn}`);
     }
   }
