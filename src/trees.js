@@ -56,28 +56,38 @@ class TB {
 }
 const R = (n) => hash1(n * 2654435761 | 0);
 
+// Norway spruce crown radius at unit height y: a near-straight cone that ends in a slender spire (shared by every LOD and treedeform.wgsl)
+const SPR = (y, m) => 0.178 * Math.pow(Math.max(1 - y, 0), 0.92) + m;
+// the top of the crown: small, close, steep whorls round the leader, so the tip is a narrow spire joined to the crown below
+function spire(b, lod) {
+  if (!lod) b.tier(0, 0.875, 0, 0.034, 0.8, 6, 0.3, 0.95, 1.5, 4, 0.7, 700);
+  b.tier(0, 0.915, 0, 0.026, 0.9, lod ? 4 : 5, 1.6, 1, 1.9, 4, 0.7, 710);
+  b.tier(0, 0.95, 0, 0.017, 1, 4, 2.7, 1, 2.6, 4, 0.5, 720);
+  if (!lod) b.tier(0, 0.972, 0, 0.009, 1.1, 4, 0.9, 1, 3.2, 4, 0.4, 730);
+}
 function spruce(lod) {
   const b = new TB();
   if (lod === 0) {
-    b.tube([[0, 0, 0, 0.017], [0, 0.5, 0, 0.011], [0, 0.97, 0, 0.002]], 6, 0, 0.55, 0.8);
-    const K = 19;
+    b.tube([[0, 0, 0, 0.017], [0, 0.5, 0, 0.011], [0, 0.88, 0, 0.0045], [0, 1, 0, 0.0012]], 6, 0, 0.55, 0.8); // the leader runs right up to the tip
+    const K = 24; // many whorls with few branches each: dense from top to bottom for the same triangle count
     for (let k = 0; k < K; k++) {
-      const t = k / (K - 1), y = 0.09 + 0.87 * Math.pow(t, 0.8) + (k && k < K - 1 ? (R(k + 500) - 0.5) * 0.018 : 0), len = 0.165 * Math.pow(1 - y, 0.72) + 0.012, nb = Math.round(8.6 - 4.2 * t);
+      const t = k / (K - 1), y = 0.09 + 0.84 * Math.pow(t, 0.75) + (k && k < K - 1 ? (R(k + 500) - 0.5) * 0.018 : 0), len = SPR(y, 0.006), nb = Math.max(3, Math.round((8.6 - 4.2 * t) * 0.79));
       for (let j = 0; j < nb; j++) {
         const r = R(k * 17 + j), ph = (j + 0.6 * r) / nb * Math.PI * 2 + k * 2.4;
         const fl = len * (0.78 + 0.44 * R(k * 31 + j + 5)), fd = (0.8 - 0.5 * t) * (0.75 + 0.5 * R(k * 7 + j * 3)), fy = y + (r - 0.5) * 0.025;
-        b.frond(fy, ph, fl, fd, len * 0.36, 0.62 + 0.38 * y);
+        b.frond(fy, ph, fl, fd + 0.25 * t * t, len * (0.36 + 0.22 * t * t), 0.62 + 0.38 * y); // upper whorls: wider, steeper fronds, so the narrow top stays dense
         b.frond(fy - len * 0.045, ph + 0.05, fl * 1.04, fd * 1.3, len * 0.4, 0.5 + 0.3 * y, 2, 3); // lower skirt: 3 segments (mostly seen edge-on or from below; saves 12 % of the near-model triangles, most of them in the shadow passes)
       }
     }
-    b.tier(0, 0.955, 0, 0.022, 1.2, 5, 0.3, 1, 2.0);
+    spire(b, 0);
   } else if (lod === 1) {
-    b.tube([[0, 0, 0, 0.017], [0, 0.9, 0, 0.003]], 4, 0, 0.55, 0.8);
-    const K = 11; // whorls closer together near the top (where they are short), so the crown has no see-through gaps
-    for (let k = 0; k < K; k++) { const t = k / (K - 1), y = 0.11 + 0.83 * Math.pow(t, 0.8) + (k && k < K - 1 ? (R(k + 300) - 0.5) * 0.03 : 0), len = 0.17 * Math.pow(1 - y, 0.72) + 0.02; b.tier(0, y, 0, len, 0.72 - 0.4 * t, k & 1 ? 5 : 6, k * 2.4, 0.62 + 0.38 * y, 0.62 + 0.25 * t, 4, 1, k + 50); }
+    b.tube([[0, 0, 0, 0.017], [0, 0.88, 0, 0.0045], [0, 1, 0, 0.0012]], 4, 0, 0.55, 0.8);
+    const K = 12; // whorls closer together near the top (where they are short), so the crown has no see-through gaps
+    for (let k = 0; k < K; k++) { const t = k / (K - 1), y = 0.11 + 0.8 * Math.pow(t, 0.8) + (k && k < K - 1 ? (R(k + 300) - 0.5) * 0.03 : 0), len = SPR(y, 0.014); b.tier(0, y, 0, len, 0.72 - 0.25 * t, k & 1 ? 4 : 5, k * 2.4, 0.62 + 0.38 * y, 0.62 + 0.9 * t, 4, 1, k + 50); } // 5/4 branches
+    spire(b, 1);
   } else if (lod === 2) {
-    b.tube([[0, 0, 0, 0.016], [0, 0.5, 0, 0.008]], 3, 0, 0.55, 0.7);
-    for (let k = 0; k < 5; k++) { const y = 0.12 + 0.81 * Math.pow(k / 4, 0.85), len = 0.17 * Math.pow(1 - y, 0.72) + 0.02; b.tier(0, y, 0, len, 0.7, 4, k * 2.4, 0.7 + 0.3 * y, k === 4 ? 2.6 : 1.5, 4, 0.8, k + 90); }
+    b.tube([[0, 0, 0, 0.016], [0, 0.9, 0, 0.004]], 3, 0, 0.55, 0.7);
+    for (let k = 0; k < 5; k++) { const y = 0.12 + 0.81 * Math.pow(k / 4, 0.85), len = SPR(y, 0.016); b.tier(0, y, 0, len, 0.7, 4, k * 2.4, 0.7 + 0.3 * y, k === 4 ? 2.6 : 1.5, 4, 0.8, k + 90); }
   } else {
     b.tier(0, 0.1, 0, 0.15, 0.5, 4, 0.4, 0.8, 3.2); b.tier(0, 0.5, 0, 0.085, 0.6, 4, 1.3, 0.95, 5.6);
   }

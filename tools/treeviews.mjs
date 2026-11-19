@@ -13,6 +13,7 @@ const jobs = [
   { out: 'd-distant-forest', eval: `__tod(1);${T}__look(T.x+120,70,T.z+200,T.x-400,0,T.z-900)` },
   { out: 'e-golden', eval: `__tod(2);${trail}__look(x+3,6,z+16,x-14,6,z-30)` },
   { out: 'f-night', eval: `__tod(4);${trail}__look(x+3,1.8,z+16,x-14,4,z-30)` },
+  { out: 'h-sky-mid', eval: `__tod(1);${T}__look(T.x+175,1.8,T.z+265,T.x+60,30,T.z+60)` },
   { out: 'g-tops-close', eval: `__tod(1);${T}__look(T.x+170,12,T.z+260,T.x+120,10,T.z+200)` },
 ].map((j) => ({ ...j, out: `${out}/${j.out}.png`, steps: 24 }));
 execFileSync('node', ['tools/multi.mjs', 'nohint&nohud&drs=0' + q, JSON.stringify(jobs), ...pass], { stdio: 'inherit' });

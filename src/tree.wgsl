@@ -43,12 +43,14 @@ fn tri(x: f32) -> f32 { return abs(fract(x) - 0.5) * 2.0; }
       let nd = tri(ux * 26.0 + e * 5.0 + seed * 3.0);
       g *= (0.65 + 0.55 * vn(vec2f(ux * 14.0 + seed * 40.0, uv.y * 5.0))) * (0.86 + 0.24 * nd * (1.0 - saturate(duv.x * 110.0)));
       // snow load on the top side, heavier along the branch axis
-      let sw = 0.78 - 0.3 * ux + (vn(vec2f(ux * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
+      let sw = 0.88 - 0.3 * ux + (vn(vec2f(ux * 4.0 + seed * 31.0, floor(in.hy * 1.5) + seed * 9.0)) - 0.5) * 0.6;
       snow = (1.0 - smoothstep(sw - 0.1, sw + 0.03, e)) * smoothstep(0.02, 0.12, ux);
       if (tier) { // cone-skirt LODs: snow cap on the inner part, green needle rim like the near model's skirts
         let m = max(e * 0.9, ux) + (vn(vec2f(ux * 5.0 + seed * 31.0, e * 3.0 + floor(in.hy * 0.7))) - 0.5) * 0.22;
         snow = (1.0 - smoothstep(TR.s.x - 0.05, TR.s.x + 0.05, m)) * smoothstep(0.03, 0.14, ux);
       }
+      // snow in clumps along each branch, with green gaps and bare drooping tips (not one cap per branch); the same pattern on every LOD
+      snow *= smoothstep(0.06, 0.3, tri(ux * 2.7 + seed * 11.0 + e * 0.35 + floor(in.hy * 0.9) * 0.37)) * (1.0 - smoothstep(0.78, 1.0, ux) * 0.8);
       snow *= 1.0 - in.sv.y;
       alpha *= 1.0 - smoothstep(0.3, 0.6, in.sv.y); // below the crown base of a big spruce the trunk is bare (dead twigs read as dangling wires at this size)
       if (under) { snow = 0.0; g *= 1.5; }
