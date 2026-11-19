@@ -30,7 +30,7 @@ export function initMinimap(W, B, HALF, kOpt) {
       const f = sm(0.05, 0.6, cr), w = Math.max(sm(0.35, 0.6, wa), 0.85 * sm(120, 220, ck)), b = sm(0.2, 0.7, bg) * 0.5, s = Math.max(0.6, Math.min(1.5, 1 + 1.9 * sh));
       let r = (50 + (27 - 50) * f + (48 - 50) * b) * s, g = (61 + (60 - 61) * f + (68 - 61) * b) * s, bl = (76 + (48 - 76) * f + (72 - 76) * b) * s;
       r += (44 - r) * w; g += (92 - g) * w; bl += (138 - bl) * w;
-      const out = Math.abs(x) > PLAY || Math.abs(z) > PLAY ? 0.45 : 1, o = (py * N + px) * 4;
+      const out = W.inP(x, z) ? 1 : 0.45, o = (py * N + px) * 4;
       d[o] = r * out; d[o + 1] = g * out; d[o + 2] = bl * out; d[o + 3] = 228;
     }
   }
@@ -87,7 +87,7 @@ export function initMinimap(W, B, HALF, kOpt) {
   };
   if (B && B.n) { for (let i = 0; i < B.n; i++) paint(i, 0); const prev = B.onState; B.onState = prev ? (i, s) => { prev(i, s); paint(i, s); } : paint; } // a second map copy chains onto the first
   // ---- playable border ----
-  c.strokeStyle = '#ffcf5ac0'; c.lineWidth = 2 * ls; c.setLineDash([7 * ls, 4 * ls]); c.strokeRect(X(-PLAY), X(-PLAY), 2 * PLAY * k, 2 * PLAY * k); c.setLineDash([]);
+  c.strokeStyle = '#ffcf5ac0'; c.lineWidth = 2 * ls; c.setLineDash([7 * ls, 4 * ls]); c.strokeRect(X(W.PB[0]), X(W.PB[1]), (W.PB[2] - W.PB[0]) * k, (W.PB[3] - W.PB[1]) * k); c.setLineDash([]);
 
   // blit the MAP_PX window centred as close as possible to (x, z) at an integer offset; returns nothing, sets M.cx/M.cz to the true centre
   const M = { k, cx: 0, cz: 0 };

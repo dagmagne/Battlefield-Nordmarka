@@ -18,7 +18,7 @@ fn baseH(xz: vec2f) -> f32 {
   let c = textureLoad(heightTex, i + vec2i(0, 1), 0).r; let d = textureLoad(heightTex, i + vec2i(1, 1), 0).r;
   var h = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
   let o = max(abs(xz.x), abs(xz.y)) - half;
-  if (o > 0.0) { h = mix(h, 262.0, smoothstep(0.0, 1200.0, o)); }
+  if (o > 0.0) { h = mix(h, 262.0 + ROADS * (170.0 * (fbm3(xz * 0.0011) - 0.5) + 40.0 * (vn(xz * 0.004) - 0.5)), smoothstep(0.0, 1200.0, o)); } // beyond the map: flat in the fantasy world, rolling hills in the real one
   return h;
 }
 fn pressOf(m: vec4f) -> f32 { return max(smoothstep(0.1, 0.34, m.r), m.b * 0.85); }
@@ -222,6 +222,9 @@ fn sparkle(wp: vec3f, v: vec3f, dist: f32) -> f32 {
   let rsnow = smoothstep(0.34, 0.7, fbm3(p * 0.1 + 3.0) * 0.62 + vn(vec2f((p.x - p.y) * 0.045, wp.y * 0.22)) * 0.2 + mix(0.5, vn(p * 1.7), rf) * 0.18 + (n.y - 0.75) * 0.6);
   alb = mix(alb, mix(rcol, alb, rsnow * 0.75), rock);
   var snowy = 1.0 - rock * (1.0 - rsnow * 0.75);
+  { let oo = max(abs(p.x), abs(p.y)) - G.world.x; // beyond the map in the real world: snow-laden forest on the hills instead of a bare white plain (the playable box comes within 200 m of the edge in the west)
+    if (ROADS > 0.5 && oo > 0.0) { let ff = smoothstep(0.0, 70.0, oo) * smoothstep(0.22, 0.42, fbm3(p * 0.0028) * 0.75 + vn(p * 0.02) * 0.25 + 0.16);
+      alb = mix(alb, vec3f(0.105, 0.135, 0.14) * (0.55 + 0.9 * vn(p * 0.21)) + vec3f(0.5) * smoothstep(0.72, 0.9, vn(p * 0.55)), ff * 0.86); snowy *= 1.0 - ff * 0.8; } }
 
   let wrap = 0.12;
   var dif = saturate((ndl + wrap) / (1.0 + wrap));

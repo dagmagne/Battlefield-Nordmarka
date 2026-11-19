@@ -48,3 +48,5 @@ export function trs(o, x, y, z, yaw, pitch, roll) {
   o[12] = x; o[13] = y; o[14] = z; o[15] = 1;
 }
 export function identity(o) { o.fill(0); o[0] = o[5] = o[10] = o[15] = 1; }
+// the playable area as a box [x0, z0, x1, z1] (not square in the real world): inside test with a margin, and clamps
+export const playBox = (b) => ({ PB: b, inP: (x, z, m = 0) => x > b[0] + m && x < b[2] - m && z > b[1] + m && z < b[3] - m, cpx: (x, m = 0) => Math.min(Math.max(x, b[0] + m), b[2] - m), cpz: (z, m = 0) => Math.min(Math.max(z, b[1] + m), b[3] - m) });

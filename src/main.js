@@ -724,7 +724,7 @@ async function main() {
     veh.yaw += veh.yawRate * dt;
     veh.dist += veh.v * dt; veh.trL += (veh.v + veh.yawRate * TRK.x) * dt; veh.trR += (veh.v - veh.yawRate * TRK.x) * dt;
     fwdX = -Math.sin(veh.yaw); fwdZ = -Math.cos(veh.yaw);
-    veh.x = clamp(veh.x + fwdX * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + fwdZ * veh.v * dt, -PLAY, PLAY);
+    veh.x = W.cpx(veh.x + fwdX * veh.v * dt); veh.z = W.cpz(veh.z + fwdZ * veh.v * dt);
     const vc = Math.abs(veh.v); collide(dt);
     if (vc > 5 && Math.abs(veh.v) < vc * 0.9 && !wallC) { veh.shake = Math.max(veh.shake, Math.min(1, vc / 18)); veh.v *= 0.5; }
     const rx = -fwdZ, rz = fwdX, hl = LEO.hl, hw = LEO.hw, h = gq, fx = fwdX, fz = fwdZ; // ground at the hull's own level: a bridge deck counts only from STEP below its top

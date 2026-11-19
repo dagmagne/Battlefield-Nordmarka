@@ -59,7 +59,7 @@ export function initInfantry(C, G, h) {
     REL[i] = 1 + rnd() * 2; SPT[i] = 0; LOST[i] = 0; LX[i] = x; LZ[i] = z; SUP[i] = 0; TX[i] = x; TZ[i] = z; EX[i] = NaN; BN[i] = 0; BT[i] = 0; AT[i] = 0; MT[i] = 0; FT[i] = 0;
     if (i >= I.n) I.n = i + 1; return i;
   }
-  const footOk = (x, z) => Math.abs(x) < PLAY - 40 && Math.abs(z) < PLAY - 40 && !C.collAt(x, z) && B.at(x, hAt(x, z) + 1, z, 0.8) < 0 && W.br.id(x, z, 3) < 0; // (not on or under a bridge)
+  const footOk = (x, z) => W.inP(x, z, 40) && !C.collAt(x, z) && B.at(x, hAt(x, z) + 1, z, 0.8) < 0 && W.br.id(x, z, 3) < 0; // (not on or under a bridge)
   const gAt = (x, z, y) => W.groundAt(x, z, y); // ground for a soldier at height y: on a deck when walking on it, the road under it otherwise
   const leave = (i) => { const o = i * 8; if (HB[i] < 0 || B.push(d[o], d[o + 2], 0.5, SO) === 0) return; d[o] = SO[0]; d[o + 2] = SO[1]; d[o + 1] = hAt(d[o], d[o + 2]); }; // out through the nearest wall before the house binding is dropped (rare event)
   const yawTo = (x, z, tx, tz) => Math.atan2(-(tx - x), -(tz - z));
@@ -126,7 +126,7 @@ export function initInfantry(C, G, h) {
     let best = -1e9, bx = x, bz = z;
     for (let k = 0; k < 6; k++) { const px = x + (k ? (rnd() - 0.5) * 12 : 0), pz = z + (k ? (rnd() - 0.5) * 12 : 0); if (!footOk(px, pz) || G.mines && inFld(px, pz, 6)) continue; const y = hAt(px, pz) + 1;
       const sc = (R.trees ? h.canAt(px, pz) / 255 : 0) + (B.at(px, y, pz, 3) >= 0 ? 0.8 : 0) + rnd() * 0.3; if (sc > best) { best = sc; bx = px; bz = pz; } }
-    TX[i] = clamp(bx, -PLAY + 40, PLAY - 40); TZ[i] = clamp(bz, -PLAY + 40, PLAY - 40);
+    TX[i] = W.cpx(bx, 40); TZ[i] = W.cpz(bz, 40);
   }
   function inFld(x, z, pad) { const F = G.mines.fld; for (let f = 0; f < F.length; f += 4) if (F[f + 3] && Math.hypot(x - F[f], z - F[f + 1]) < F[f + 2] + pad) return true; return false; }
 
@@ -220,7 +220,7 @@ export function initInfantry(C, G, h) {
     const F = G.mines ? G.mines.fld : null; // own minefields: swing round them
     if (F) for (let f = 0; f < F.length; f += 4) { if (!F[f + 3]) continue; const fx = x - F[f], fz = z - F[f + 1], fd = Math.hypot(fx, fz) || 1, rr = F[f + 2] + 6; if (fd < rr) { const w = (rr - fd) / 6 * 1.8; ux += fx / fd * w; uz += fz / fd * w; } }
     const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
-    let nx = clamp(x + ux * sp * dt, -PLAY, PLAY), nz = clamp(z + uz * sp * dt, -PLAY, PLAY);
+    let nx = W.cpx(x + ux * sp * dt), nz = W.cpz(z + uz * sp * dt);
     if (C.solid(nx, nz, 0.4, SO, d[o + 1])) { nx = SO[0]; nz = SO[1]; }
     d[o] = nx; d[o + 2] = nz; d[o + 1] = gAt(nx, nz, d[o + 1]); d[o + 3] += wrap(Math.atan2(-ux, -uz) - d[o + 3]) * Math.min(1, dt * 8);
     d[o + 5] += dt * sp / (sp > 2.6 ? RUN_V : WALK_V); // the gait clock follows ground speed so planted feet don't slide (soldier.js)
