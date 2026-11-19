@@ -63,6 +63,14 @@ export function initMinimap(W, B, HALF, kOpt) {
     if (ls > 1.4) { c.font = `600 ${Math.round(8.5 * ls)}px system-ui, sans-serif`; c.textBaseline = 'middle'; c.lineWidth = 2.5 * ls; c.strokeStyle = '#101418d0'; c.fillStyle = '#dfe8ff';
       for (const S of R.st) { c.strokeText(S.name, X(S.x) + 5 * ls, X(S.z) - 4 * ls); c.fillText(S.name, X(S.x) + 5 * ls, X(S.z) - 4 * ls); } }
   }
+  // ---- functional bridges (src/bridges.js): the deck covers the road under it; the over-route redrawn across it, the parapets as a dark casing with short ticks at the ends ----
+  if (W.br && W.br.n) for (const Bq of W.br.list) {
+    const ux = Bq.u[0], uz = Bq.u[1], P = (lu, lv) => [X(Bq.c[0] + ux * lu - uz * lv), X(Bq.c[1] + uz * lu + ux * lv)], hl = Bq.hl, hw = Bq.hw - 0.3, t = 3.5;
+    c.beginPath(); for (const [a, e] of [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]]) c.lineTo(...P(a, e)); c.closePath(); c.fillStyle = '#c9d2dc'; c.fill();
+    c.save(); c.clip(); c.setLineDash([3.5 * ls, 2.5 * ls]); c.strokeStyle = '#6d93ba'; c.lineWidth = 1.4 * ls; for (const tr of W.trails) line(tr.pts, tr.pts.length >> 1); c.restore(); c.setLineDash([]);
+    c.strokeStyle = '#0c1218f0'; c.lineWidth = 1.5 * ls;
+    for (const sv of [-1, 1]) { c.beginPath(); c.moveTo(...P(-hl - t, sv * (hw + t))); c.lineTo(...P(-hl, sv * hw)); c.lineTo(...P(hl, sv * hw)); c.lineTo(...P(hl + t, sv * (hw + t))); c.stroke(); }
+  }
   // ---- fantasy set pieces: dam, bridge, cabin ----
   if (!real) {
     c.fillStyle = '#c9c2b2';

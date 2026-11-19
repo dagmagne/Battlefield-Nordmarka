@@ -542,6 +542,30 @@ function portal(b, W, p) { // concrete headwall where a road dives under a ski b
   for (let x = -wd; x <= wd; x += 3) W.colliders.push(p.x + cs * x + sn * 4.6, p.z - sn * x + cs * 4.6, 2.6); // stops the groomer in the mouth and short of the edge on top
 }
 
+// ---------- functional bridges (src/bridges.js): the deck slab, parapets, abutments, portal faces and wing walls, drawn from the same boxes the game collides with ----------
+// obox: a box |l| in [l0, l1], m in [m0, m1] round (cx, cz) with axis (ax, az), bottom yb / top yt sheared by gl along l and gm along m (faces as in MB.box)
+function obox(b, cx, cz, ax, az, l0, l1, m0, m1, yb, yt, gl, gm) {
+  const P = (l, m, y) => [cx + ax * l - az * m, y + gl * l + gm * m, cz + az * l + ax * m];
+  const a = P(l0, m0, yb), c1 = P(l1, m0, yb), c = P(l1, m1, yb), d = P(l0, m1, yb), e = P(l0, m0, yt), f = P(l1, m0, yt), g = P(l1, m1, yt), h = P(l0, m1, yt), sx = l1 - l0, sy = yt - yb, sz = m1 - m0;
+  b.quad(e, h, g, f, [0, 0, 0, sz, sx, sz, sx, 0]); b.quad(a, c1, c, d, [0, 0, sx, 0, sx, sz, 0, sz]);
+  b.quad(d, c, g, h, [0, 0, sx, 0, sx, sy, 0, sy]); b.quad(c1, a, e, f, [0, 0, sx, 0, sx, sy, 0, sy]);
+  b.quad(a, d, h, e, [0, 0, sz, 0, sz, sy, 0, sy]); b.quad(c, c1, f, g, [0, 0, sz, 0, sz, sy, 0, sy]);
+}
+const BCON = [0.28, 0.28, 0.272], BDARK = [0.16, 0.16, 0.16], BFAS = [0.34, 0.34, 0.33]; // MAT.concrete: no sight fade (the soffit and walls sit right over a commander camera under the deck)
+function overpass(b, W, i) {
+  const BR = W.br, B = BR.list[i], D = BR.DK, o = i * 10, cx = D[o], cz = D[o + 1], ux = D[o + 2], uz = D[o + 3], hl = D[o + 4], hw = D[o + 5], y0 = D[o + 6], gu = D[o + 7], gv = D[o + 8], th = D[o + 9], [ta, tb] = B.tr;
+  b.at(0, 0, 0);
+  b.set(BDARK, MAT.concrete); obox(b, cx, cz, ux, uz, -hl, hl, -hw + 0.2, hw - 0.2, y0 - th, y0 - 0.02, gu, gv); // the slab: a dark soffit seen from the road
+  for (const s of [-1, 1]) { b.set(BFAS, MAT.concrete); obox(b, cx, cz, ux, uz, -hl, hl, s < 0 ? -hw : hw - 0.2, s < 0 ? -hw + 0.2 : hw, y0 - th - 0.12, y0 + 0.06, gu, gv); } // fascia beams along both faces, a little deeper than the slab
+  for (let v = -hw + 2.2; v < hw - 1.5; v += 2.6) { b.set(BDARK, MAT.concrete); obox(b, cx, cz, ux, uz, ta - 0.9, tb + 0.9, v - 0.22, v + 0.22, y0 - th - 0.32, y0 - th + 0.01, gu, gv); } // ribs under the soffit across the span
+  b.set(SNOWC, MAT.snow); obox(b, cx, cz, ux, uz, -hl - 1.2, hl + 1.2, -hw + 0.35, hw - 0.35, y0 - 0.3, y0 + 0.13, gu, gv); // snow on the deck, running out onto the earth at both ends
+  for (let k = 0; k < BR.nw; k++) { if (BR.WB[k] !== i) continue; const q = k * 9, W_ = BR.WL, K = BR.WK[k], ax = W_[q + 2], az = W_[q + 3], l = W_[q + 4], m = W_[q + 5], yb = W_[q + 6], yt = W_[q + 7], g = W_[q + 8];
+    b.set(K === 0 ? [0.25, 0.25, 0.245] : BCON, MAT.concrete); obox(b, W_[q], W_[q + 1], ax, az, -l, l, -m, m, yb, yt - (K === 1 ? 0.05 : 0), g, 0);
+    if (K === 2 || K === 3) { b.set(SNOWC, MAT.snow); obox(b, W_[q], W_[q + 1], ax, az, -l, l, -m - 0.04, m + 0.04, yt, yt + 0.12, g, 0); } // snow caps
+    if (K === 0) for (let v = -l + 4; v < l - 2; v += 9) { b.set([1, 0.86, 0.62], MAT.lamp); const s = Math.sign((W_[q] - cx) * ux + (W_[q + 1] - cz) * uz - (ta + tb) / 2) || 1, lu0 = s * (m + 0.03);
+      obox(b, W_[q], W_[q + 1], ax, az, v - 0.5, v + 0.5, lu0 - 0.05, lu0 + 0.05, yt - 1.05, yt - 0.85, g, 0); } } // tunnel lights on the abutment faces
+}
+
 // ---------- Holmenkollen arena (LM.arena in world.js): stands stepped on the measured ground, stand buildings, biathlon range, floodlights ----------
 const CONC = [0.46, 0.46, 0.45], SEAT = [0.07, 0.12, 0.26], AISLE = [0.6, 0.6, 0.58], STEEL = [0.5, 0.52, 0.55];
 const bx = (b, x0, y0, z0, x1, y1, z1) => b.box(Math.min(x0, x1), y0, Math.min(z0, z1), Math.max(x0, x1), y1, Math.max(z0, z1)); // box with its corners in any order
@@ -885,7 +909,7 @@ export function buildProps(W) {
   W.colliders = []; W.bld = []; // circle colliders (x, z, r); building records with their solid boxes (see buildings.js)
   const PLAY = W.PLAY;
   if (W.name === 'fantasy') { cabin(b, W.cabin, W); bridge(b, W.bridge); dam(b, W.dam); }
-  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => B.gone || house(b, B, i, W)); skiJump(b, W, W.lm.jump); skiJump(b, W, W.lm.mid); arena(b, W, W.lm.arena); tvTower(b, W, W.lm.tower); skiLift(b, W, W.lm.lift); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
+  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => B.gone || house(b, B, i, W)); skiJump(b, W, W.lm.jump); skiJump(b, W, W.lm.mid); arena(b, W, W.lm.arena); tvTower(b, W, W.lm.tower); skiLift(b, W, W.lm.lift); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); if (W.br) { const i0 = b.i.length; for (let i = 0; i < W.br.n; i++) overpass(b, W, i); W.br.tris = (b.i.length - i0) / 3; } }
   if (W.rail) railway(b, W, W.rail); // Holmenkollbanen
   for (let i = 0; i < W.pylons.length; i++) { pylon(b, W.pylons[i]); if (i) wires(b, W.pylons[i - 1], W.pylons[i]); W.colliders.push(W.pylons[i].x + Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z - Math.sin(W.pylons[i].yaw) * 2.6, 0.5, W.pylons[i].x - Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z + Math.sin(W.pylons[i].yaw) * 2.6, 0.5); }
   for (const L of W.lamps) { lamp(b, L); W.colliders.push(L.x, L.z, 0.35); }
@@ -899,6 +923,7 @@ export function buildProps(W) {
     const k = (clamp(Math.round((z + 2048) / 2 - 0.5), 0, HN - 1) * HN + clamp(Math.round((x + 2048) / 2 - 0.5), 0, HN - 1)) * 4;
     if ((W.buildings || []).some((B) => Math.abs(B.x - x) < 14 && Math.abs(B.z - z) < 14)) continue;
     if (W.rail && W.rail.mask[k >> 2]) continue; // not on the track bed or a platform
+    if (W.br && W.br.id(x, z, 10) >= 0) continue; // nor on a bridge or its ramps
     const alp = W.mat[k + 3] / 255; if (W.mat[k] > 0 || W.mat[k + 1] > 0 || W.mat[k + 2] > 20) continue;
     if (r > alp * 0.5 + 0.012) continue;
     let near = false; for (const t of W.trails) { for (let q = 0; q < t.n; q += 3) if (Math.abs(t.pts[q * 2] - x) < 6 && Math.abs(t.pts[q * 2 + 1] - z) < 6) { near = true; break; } if (near) break; }

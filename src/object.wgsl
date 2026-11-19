@@ -24,6 +24,12 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   }
   else if (m == 2u) { alb = vec3f(0.93, 0.95, 0.98); }
   else if (m == 3u) { alb *= 0.7 + 0.5 * fbm3(wp.xz * 1.3 + wp.y * 2.1); snowy = 1.0; }
+  else if (m == 30u) { // bridge concrete (uv in metres): mottled, formwork panel joints, rain streaks down the faces
+    alb *= 0.74 + 0.4 * fbm3(wp.xz * 0.7 + wp.y * 1.3);
+    let pj = min(abs(fract(uv.x / 2.4) - 0.5), abs(fract(uv.y / 1.2) - 0.5)); alb *= 1.0 - 0.18 * (1.0 - smoothstep(0.47, 0.49, 0.5 - pj));
+    alb *= 0.86 + 0.14 * smoothstep(0.25, 0.7, vn(vec2f(uv.x * 2.7, wp.y * 0.25)));
+    spec = 0.03; gloss = 14.0; snowy = 1.0;
+  }
   else if (m == 4u) { spec = 0.05; gloss = 300.0; refl = 1.0; emis = vec3f(1.0, 0.7, 0.4) * 0.003 * night * isG; }
   else if (m == 5u) { spec = 0.2; gloss = 40.0; snowy = 1.0 - isG; }
   else if (m == 6u) { emis = in.col * (0.03 + night) * 16.0; alb = vec3f(0.8); }
@@ -118,7 +124,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let hAbove = max(wp.y - hgt, 0.0);
   let L = G.sunDir.xyz;
   let ndl = saturate(dot(n, L));
-  if (isG < 0.5) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }
+  if (isG < 0.5 && m != 30u) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }
   if (G.groom.w > 0.5) { // thermal sight: heated houses, hot engine deck and running gear, burning wrecks
     var th = 0.24;
     if (m == 2u) { th = 0.1; } else if (m == 24u || m == 26u) { th = mix(0.15, select(0.78, 0.66, m == 26u) - 0.2 * (1.0 - smoothstep(0.3, 1.1, hAbove)), in.aux); } else if (m == 27u) { th = mix(0.13, 0.4, in.aux); } else if (m == 28u) { th = mix(0.15, 0.95, in.aux); } else if (m == 25u) { th = mix(0.17, 1.05, in.aux); } else if (m == 7u) { th = 0.42; } else if (m == 6u || m == 10u) { th = 0.9; } else if (m == 12u || m == 22u) { th = 0.15; } else if (m == 23u) { th = 0.32; }
