@@ -24,7 +24,7 @@ fn treeDeform(pos: vec3f, nrm: vec3f, kind: f32, i0: vec4f, i1: vec4f, cam: vec3
   let rr = thash(i0.xz); let r1 = rr.x; let r2 = rr.y; let r3 = rr.z; let r4 = rr.w;
   let th = atan2(p.z, p.x); let y = p.y; let rad = length(p.xz);
   let amp = select(select(0.24, 0.3, sp > 1.5), 0.36, sp > 0.5 && sp < 1.5);
-  var f = 1.0 + amp * (0.5 * cos(th - 6.283 * r1) * (0.35 + y) + 0.3 * cos(2.0 * th + 6.283 * r2 + 3.0 * y) + 0.2 * cos(3.0 * th - 6.283 * r3 + 5.0 * y + 1.5 * sin(4.0 * y + r1 * 9.0)));
+  var f = 1.0 + amp * (0.5 * cos(th - 6.283 * r1) * (0.35 + y) + (0.3 * cos(2.0 * th + 6.283 * r2 + 3.0 * y) + 0.2 * cos(3.0 * th - 6.283 * r3 + 5.0 * y + 1.5 * sin(4.0 * y + r1 * 9.0))) * (0.55 + 0.45 * smoothstep(0.05, 0.3, y)));
   f *= 1.0 + 0.1 * sin(y * 31.0 + r2 * 40.0) * cos(th * 2.0 + r3 * 20.0);
   var wv = 1.0; var dead = 0.0;
   if (sp < 0.5) {
