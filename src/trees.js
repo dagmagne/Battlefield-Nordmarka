@@ -33,13 +33,15 @@ class TB {
     for (let i = 0; i < seg; i++) { const q = base + i * 3; this.i.push(q, q + 1, q + 3, q + 1, q + 4, q + 3, q + 1, q + 2, q + 4, q + 2, q + 5, q + 4); }
   }
   // star-shaped cone skirt (one whorl of branches)
-  tier(cx, y, cz, len, droop, lobes, rot, aoB, rise = 0.5, uo = 4) {
+  // jit > 0: irregular whorl (each branch its own length, angle and droop; seeded by js)
+  tier(cx, y, cz, len, droop, lobes, rot, aoB, rise = 0.5, uo = 4, jit = 0, js = 0) {
     const A = (u, v, ny = 1) => this.vert(cx, y + len * rise, cz, 0, ny, 0, u + uo, v, 1, aoB * 0.45);
     for (let j = 0; j < lobes; j++) {
-      const a0 = rot + (j - 0.5) / lobes * Math.PI * 2, a1 = rot + j / lobes * Math.PI * 2, a2 = rot + (j + 0.5) / lobes * Math.PI * 2;
-      const rn = len * 0.5, yt = y - len * droop, yn = y - len * droop * 0.25;
+      const ja = jit * (R(js * 13 + j) - 0.5) * 0.7, jl = 1 + jit * (R(js * 29 + j + 3) - 0.45) * 0.75, jd = 1 + jit * (R(js * 7 + j + 11) - 0.5) * 0.8;
+      const a0 = rot + (j - 0.5) / lobes * Math.PI * 2, a1 = rot + (j + ja) / lobes * Math.PI * 2, a2 = rot + (j + 0.5) / lobes * Math.PI * 2;
+      const L = len * jl, rn = len * 0.5, yt = y - L * droop * jd, yn = y - len * droop * 0.25;
       const ap = A(0, 0), n0 = this.vert(cx + Math.cos(a0) * rn, yn, cz + Math.sin(a0) * rn, Math.cos(a0) * 0.6, 0.7, Math.sin(a0) * 0.6, 0.6 + uo, -1, 1, aoB * 0.7);
-      const tp = this.vert(cx + Math.cos(a1) * len, yt, cz + Math.sin(a1) * len, Math.cos(a1) * 0.75, 0.6, Math.sin(a1) * 0.75, 1 + uo, 0, 1, aoB);
+      const tp = this.vert(cx + Math.cos(a1) * L, yt, cz + Math.sin(a1) * L, Math.cos(a1) * 0.75, 0.6, Math.sin(a1) * 0.75, 1 + uo, 0, 1, aoB);
       const n1 = this.vert(cx + Math.cos(a2) * rn, yn, cz + Math.sin(a2) * rn, Math.cos(a2) * 0.6, 0.7, Math.sin(a2) * 0.6, 0.6 + uo, 1, 1, aoB * 0.7);
       this.i.push(ap, n0, tp, ap, tp, n1);
     }
@@ -54,28 +56,38 @@ class TB {
 }
 const R = (n) => hash1(n * 2654435761 | 0);
 
+// Norway spruce crown radius at unit height y: a near-straight cone that ends in a slender spire (shared by every LOD and treedeform.wgsl)
+const SPR = (y, m) => 0.178 * Math.pow(Math.max(1 - y, 0), 0.92) + m;
+// the top of the crown: small, close, steep whorls round the leader, so the tip is a narrow spire joined to the crown below
+function spire(b, lod) {
+  if (!lod) b.tier(0, 0.875, 0, 0.034, 0.8, 6, 0.3, 0.95, 1.5, 4, 0.7, 700);
+  b.tier(0, 0.915, 0, 0.026, 0.9, lod ? 4 : 5, 1.6, 1, 1.9, 4, 0.7, 710);
+  b.tier(0, 0.95, 0, 0.017, 1, 4, 2.7, 1, 2.6, 4, 0.5, 720);
+  if (!lod) b.tier(0, 0.972, 0, 0.009, 1.1, 4, 0.9, 1, 3.2, 4, 0.4, 730);
+}
 function spruce(lod) {
   const b = new TB();
   if (lod === 0) {
-    b.tube([[0, 0, 0, 0.017], [0, 0.5, 0, 0.011], [0, 0.97, 0, 0.002]], 6, 0, 0.55, 0.8);
-    const K = 19;
+    b.tube([[0, 0, 0, 0.017], [0, 0.5, 0, 0.011], [0, 0.88, 0, 0.0045], [0, 1, 0, 0.0012]], 6, 0, 0.55, 0.8); // the leader runs right up to the tip
+    const K = 24; // many whorls with few branches each: dense from top to bottom for the same triangle count
     for (let k = 0; k < K; k++) {
-      const t = k / (K - 1), y = 0.09 + 0.87 * Math.pow(t, 0.95), len = 0.165 * Math.pow(1 - y, 0.72) + 0.012, nb = Math.round(8.6 - 4.2 * t);
+      const t = k / (K - 1), y = 0.09 + 0.84 * Math.pow(t, 0.75) + (k && k < K - 1 ? (R(k + 500) - 0.5) * 0.018 : 0), len = SPR(y, 0.006), nb = Math.max(3, Math.round((8.6 - 4.2 * t) * 0.79));
       for (let j = 0; j < nb; j++) {
         const r = R(k * 17 + j), ph = (j + 0.6 * r) / nb * Math.PI * 2 + k * 2.4;
         const fl = len * (0.78 + 0.44 * R(k * 31 + j + 5)), fd = (0.8 - 0.5 * t) * (0.75 + 0.5 * R(k * 7 + j * 3)), fy = y + (r - 0.5) * 0.025;
-        b.frond(fy, ph, fl, fd, len * 0.36, 0.62 + 0.38 * y);
-        b.frond(fy - len * 0.045, ph + 0.05, fl * 1.04, fd * 1.3, len * 0.4, 0.5 + 0.3 * y, 2);
+        b.frond(fy, ph, fl, fd + 0.25 * t * t, len * (0.36 + 0.22 * t * t), 0.62 + 0.38 * y); // upper whorls: wider, steeper fronds, so the narrow top stays dense
+        b.frond(fy - len * 0.045, ph + 0.05, fl * 1.04, fd * 1.3, len * 0.4, 0.5 + 0.3 * y, 2, 3); // lower skirt: 3 segments (mostly seen edge-on or from below; saves 12 % of the near-model triangles, most of them in the shadow passes)
       }
     }
-    b.tier(0, 0.955, 0, 0.022, 1.2, 5, 0.3, 1, 2.0);
+    spire(b, 0);
   } else if (lod === 1) {
-    b.tube([[0, 0, 0, 0.017], [0, 0.9, 0, 0.003]], 4, 0, 0.55, 0.8);
-    const K = 8;
-    for (let k = 0; k < K; k++) { const t = k / (K - 1), y = 0.12 + 0.8 * Math.pow(t, 0.92), len = 0.17 * Math.pow(1 - y, 0.72) + 0.02; b.tier(0, y, 0, len, 0.72 - 0.4 * t, 7, k * 1.3, 0.62 + 0.38 * y, 0.62); }
+    b.tube([[0, 0, 0, 0.017], [0, 0.88, 0, 0.0045], [0, 1, 0, 0.0012]], 4, 0, 0.55, 0.8);
+    const K = 12; // whorls closer together near the top (where they are short), so the crown has no see-through gaps
+    for (let k = 0; k < K; k++) { const t = k / (K - 1), y = 0.11 + 0.8 * Math.pow(t, 0.8) + (k && k < K - 1 ? (R(k + 300) - 0.5) * 0.03 : 0), len = SPR(y, 0.014); b.tier(0, y, 0, len, 0.72 - 0.25 * t, k & 1 ? 4 : 5, k * 2.4, 0.62 + 0.38 * y, 0.62 + 0.9 * t, 4, 1, k + 50); } // 5/4 branches
+    spire(b, 1);
   } else if (lod === 2) {
-    b.tube([[0, 0, 0, 0.016], [0, 0.5, 0, 0.008]], 3, 0, 0.55, 0.7);
-    for (let k = 0; k < 4; k++) { const y = 0.12 + 0.215 * k, len = 0.17 * Math.pow(1 - y, 0.72) + 0.02; b.tier(0, y, 0, len, 0.7, 5, k * 1.1, 0.7 + 0.3 * y, k === 3 ? 2.6 : 1.5); }
+    b.tube([[0, 0, 0, 0.016], [0, 0.9, 0, 0.004]], 3, 0, 0.55, 0.7);
+    for (let k = 0; k < 5; k++) { const y = 0.12 + 0.81 * Math.pow(k / 4, 0.85), len = SPR(y, 0.016); b.tier(0, y, 0, len, 0.7, 4, k * 2.4, 0.7 + 0.3 * y, k === 4 ? 2.6 : 1.5, 4, 0.8, k + 90); }
   } else {
     b.tier(0, 0.1, 0, 0.15, 0.5, 4, 0.4, 0.8, 3.2); b.tier(0, 0.5, 0, 0.085, 0.6, 4, 1.3, 0.95, 5.6);
   }
@@ -90,13 +102,13 @@ function pine(lod) {
       const f = i / (n - 1), y = 0.54 + 0.4 * f + (R(i + 40) - 0.5) * 0.03, ph = i * 2.4 + R(i) * 0.8, ro = (0.035 + 0.1 * (1 - f * f * 0.8)) * (0.8 + 0.4 * R(i + 9));
       const cx = Math.cos(ph) * ro, cz = Math.sin(ph) * ro, rad = 0.105 * (1.15 - 0.45 * f) * (0.85 + 0.3 * R(i + 77));
       b.tube([[0, y - 0.07, 0, 0.007], [cx * 0.6, y - 0.03, cz * 0.6, 0.005], [cx, y, cz, 0.002]], 4, 0, 0.7, 0.9);
-      b.tier(cx, y - 0.005, cz, rad, 0.28, 6, i * 0.9, 0.75 + 0.25 * f, 0.5);
-      b.tier(cx * 0.9, y + 0.022, cz * 0.9, rad * 0.62, 0.3, 5, i * 1.7 + 0.5, 0.9, 0.6);
+      b.tier(cx, y - 0.005, cz, rad, 0.34, 6, i * 0.9, 0.75 + 0.25 * f, 0.5, 4, 0.6, i + 200);
+      b.tier(cx * 0.9, y + 0.022, cz * 0.9, rad * 0.62, 0.36, 5, i * 1.7 + 0.5, 0.9, 0.6, 4, 0.6, i + 230);
     }
     b.tier(0, 0.95, 0, 0.055, 0.3, 6, 0.2, 1, 0.9);
   } else {
     b.tube([[0, 0, 0, 0.021], [0, 0.9, 0, 0.005]], 4, 0, 0.7, 1);
-    for (let i = 0; i < 6; i++) { const f = i / 5, y = 0.44 + 0.48 * f, ph = i * 2.4, ro = 0.085 * (1 - f * 0.85); b.tier(Math.cos(ph) * ro, y, Math.sin(ph) * ro, 0.125 * (1.1 - 0.4 * f), 0.3, 5, i, 0.75 + 0.25 * f, 0.6); }
+    for (let i = 0; i < 9; i++) { const f = i / 8, y = 0.47 + 0.46 * f + (R(i + 260) - 0.5) * 0.04, ph = i * 2.4 + R(i + 270), ro = (0.03 + 0.075 * (1 - f * 0.8)) * (0.8 + 0.4 * R(i + 280)); b.tier(Math.cos(ph) * ro, y, Math.sin(ph) * ro, 0.105 * (1.12 - 0.45 * f) * (0.85 + 0.3 * R(i + 290)), 0.36, 4, i * 1.3, 0.75 + 0.25 * f, 0.6, 4, 1.1, i + 300); }
   }
   return b;
 }
