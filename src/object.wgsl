@@ -54,12 +54,26 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   else if (m == 16u) { alb = vec3f(0.04); }
   else if (m == 19u) { alb = vec3f(0.004); spec = 0.0; }
   else if (m == 20u) { // vehicle paint with whitewash winter camouflage (pattern fixed to the part)
-    let q = in.lp * 0.55;
-    let w = fbm3(q.xz * 1.7 + q.y * 2.3 + in.col.g * 40.0) + 0.25 * (vn(in.lp.xz * 9.0 + in.lp.y * 7.0) - 0.5);
-    alb = mix(alb, vec3f(0.74, 0.76, 0.76), smoothstep(0.55, 0.6, w) * 0.9);
-    alb *= 0.82 + 0.3 * vn(in.lp.xz * 3.1 + in.lp.y * 5.3);
-    alb = mix(alb, vec3f(0.6, 0.62, 0.64), 0.22 * smoothstep(0.9, 0.2, in.lp.y) * vn(in.lp.xz * 5.0 + 2.0)); // snow dust low on the hull
-    spec = 0.07; gloss = 18.0;
+    let lp = in.lp; let up = saturate(n.y); let side = 1.0 - abs(n.y);
+    let q = vec3f(lp.x * 0.8 - lp.z * 0.6, lp.y, lp.x * 0.6 + lp.z * 0.8) * 0.55; // turned off the lattice axes, or the patch edges run in steps along the hull
+    let fine = vn(vec2f(lp.x * 5.4 + lp.z * 7.2, lp.z * 5.4 - lp.x * 7.2) + lp.y * 7.0);
+    let drip = vn(vec2f((lp.x + lp.z) * 17.0, lp.y * 1.3)) * 0.6 + vn(vec2f((lp.x + lp.z) * 5.3 + 3.0, lp.y * 0.7)) * 0.4; // vertical runs on the standing plates
+    alb *= 0.8 + 0.34 * vn(lp.xz * 3.1 + lp.y * 5.3);
+    alb *= 1.0 - 0.13 * side * smoothstep(0.45, 0.8, drip); // rain and exhaust streaks
+    // whitewash brushed on in broad patches: opaque in the middle, thin and streaky towards the edges, worn where it is walked on
+    let w = fbm3(q.xz * 1.7 + q.y * 2.3 + in.col.g * 40.0) + 0.07 * (fine - 0.5) + 0.08 * side * (drip - 0.5);
+    let cov = smoothstep(0.49, 0.58, w); let core = smoothstep(0.54, 0.7, w);
+    let brush = 0.6 + 0.4 * smoothstep(0.25, 0.75, vn(vec2f((lp.x - lp.z) * 14.0 + lp.y * 3.0, lp.y * 6.0 + (lp.x + lp.z) * 5.0)));
+    let wash = cov * mix(0.5 * brush, 0.92, core) * (1.0 - 0.35 * up * smoothstep(0.45, 0.75, vn(lp.xz * 4.3)));
+    alb = mix(alb, vec3f(0.6, 0.62, 0.6) * (0.9 + 0.12 * fine), wash);
+    // road grime and packed snow thrown up low on the hull, a dusting of fresh snow on the level plates (not on the warm engine deck)
+    let low = smoothstep(1.05, 0.25, lp.y);
+    alb = mix(alb, vec3f(0.2, 0.19, 0.17), 0.3 * low * smoothstep(0.35, 0.7, vn(lp.xz * 2.3 + lp.y * 3.0)));
+    alb = mix(alb, vec3f(0.66, 0.68, 0.7), 0.4 * low * smoothstep(0.4, 0.75, vn(lp.xz * 5.0 + lp.y * 6.0 + 2.0)));
+    let cold = 1.0 - smoothstep(1.3, 1.9, lp.z) * smoothstep(1.75, 1.6, lp.y);
+    let dust = smoothstep(0.82, 0.97, n.y) * smoothstep(0.42, 0.72, fbm3(q.xz * 2.3 + 7.0) + 0.08 * (fine - 0.5)) * cold;
+    alb = mix(alb, vec3f(0.9, 0.92, 0.95), 0.7 * dust);
+    spec = mix(0.08, 0.03, max(wash, dust)); gloss = 18.0;
   }
   else if (m == 22u) { // building rubble: broken, sooty, a dusting of snow on the tops
     alb *= 0.55 + 0.9 * fbm3(wp.xz * 1.7 + wp.y * 2.3);
