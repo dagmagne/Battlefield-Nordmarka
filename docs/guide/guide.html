@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<title>Battlefield Nordmarka – Spillerguide</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm 14mm 13mm; }
+  :root { --ink: #1c2328; --mute: #5b6770; --acc: #2f7d4f; --red: #a3322b; --line: #d9dee2; --bg: #f3f5f6; }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.42; margin: 0; }
+  h1, h2, h3 { margin: 0; line-height: 1.15; }
+  .cover { height: 268mm; display: flex; flex-direction: column; page-break-after: always; }
+  .cover .hero { flex: 1; background: url(img/leopard.jpg) center/cover; border-radius: 6px; position: relative; overflow: hidden; }
+  .cover .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,18,24,.0) 45%, rgba(10,18,24,.82) 100%); }
+  .cover .title { position: absolute; left: 10mm; bottom: 10mm; right: 10mm; color: #fff; z-index: 1; }
+  .cover .title h1 { font-size: 34pt; letter-spacing: .5px; }
+  .cover .title p { font-size: 13pt; margin: 3mm 0 0; opacity: .9; }
+  .cover .intro { padding: 7mm 2mm 0; font-size: 10.5pt; color: var(--ink); }
+  .cover .intro p { margin: 0 0 2.5mm; }
+  section { page-break-before: always; }
+  h2 { font-size: 17pt; padding-bottom: 2mm; border-bottom: 2.5px solid var(--acc); margin-bottom: 4mm; }
+  h2.red { border-color: var(--red); }
+  h3 { font-size: 11.5pt; margin-bottom: 1.2mm; }
+  .lead { color: var(--mute); margin: -1mm 0 4mm; }
+  .card { display: grid; grid-template-columns: 74mm 1fr; gap: 5mm; padding: 3.2mm 0; border-bottom: 1px solid var(--line); break-inside: avoid; }
+  .card:last-child { border-bottom: 0; }
+  .card img { width: 74mm; height: 41.6mm; object-fit: cover; border-radius: 4px; display: block; }
+  .card p { margin: 0 0 1.4mm; }
+  .card ul { margin: 0; padding-left: 4.2mm; }
+  .card li { margin-bottom: .6mm; }
+  .key { display: inline-block; font-size: 8.2pt; font-weight: 600; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 0 1.4mm; margin-right: .6mm; white-space: nowrap; }
+  .tag { font-size: 8.2pt; color: var(--mute); margin-bottom: 1.2mm; }
+  .stat { display: inline-block; font-size: 8.2pt; background: #e8f2ec; color: #1f5a37; border-radius: 3px; padding: 0 1.4mm; margin: 0 .8mm .8mm 0; }
+  .red .stat, .stat.r { background: #f6e6e4; color: #7d231d; }
+  .tip { font-size: 8.8pt; background: var(--bg); border-left: 3px solid var(--acc); padding: 1.4mm 2.4mm; margin-top: 1.6mm; }
+  .tip.r { border-color: var(--red); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .two img { width: 100%; height: 49mm; object-fit: cover; border-radius: 4px; display: block; margin-bottom: 1.5mm; }
+  .cap { font-size: 8.4pt; color: var(--mute); }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  th, td { text-align: left; padding: 1.5mm 2mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--bg); font-weight: 600; }
+  .foot { margin-top: 5mm; font-size: 8pt; color: var(--mute); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="hero"><div class="title"><h1>Battlefield Nordmarka</h1><p>Spillerguide – dine våpen og fienden du møter</p></div></div>
+  <div class="intro">
+    <p>Du kommanderer en norsk <b>Leopard 2A4NO</b> mot russiske styrker i et vinterlig Nordmarka. Hver bølge kommer fra en ny retning: stridsvogner, pansrede personellkjøretøy, lette hjulkjøretøy, infanteri, droner og artilleri.</p>
+    <p>Guiden viser hva du har å slåss med, hvordan du bruker det, og hva hver fiendeenhet gjør og hvordan du møter den. Alle bilder er tatt i spillet.</p>
+  </div>
+</div>
+
+<section>
+  <h2>Dine våpen – Leopard 2A4NO</h2>
+  <p class="lead">Kanonen og maskingeværet er alltid klare. Røyk, droner og artilleri er begrensede ressurser som fylles på mellom bølgene.</p>
+
+  <div class="card"><img src="img/leopard-fire.jpg">
+    <div><h3>120 mm glattløpet kanon</h3>
+      <div class="tag"><span class="key">LMB</span><span class="key">Enter</span> skyt · <span class="key">1</span><span class="key">2</span><span class="key">3</span> ammunisjon · pad R2 / □</div>
+      <ul>
+        <li><b>APFSDS (1)</b> – pilprosjektil, raskt og flatt. Mot T-72; treff i siden eller bak når du kan.</li>
+        <li><b>HEAT-MP (2)</b> – allround. Mot BMP, BTR, Tigr og bygninger.</li>
+        <li><b>HE (3)</b> – sprenggranat. Mot infanteri, lette kjøretøy og hus. Rydder også miner innen ca. 4,5 m.</li>
+      </ul>
+      <div class="tip">Tårnet legger kanonen automatisk etter avstand og valgt ammunisjon. Vent til ringen på kanonmarkøren er full (ladet) og markøren ligger på målet.</div>
+    </div></div>
+
+  <div class="card"><img src="img/sight.jpg">
+    <div><h3>Skyttersikte</h3>
+      <div class="tag"><span class="key">RMB</span> hold / <span class="key">C</span> · hjulet zoomer · pad L2</div>
+      <p>Forstørret sikte med avstandsmåling. Bruk det på alt over noen hundre meter. Kommandørsiktet (standard) gir oversikt; skyttersiktet gir presisjon.</p>
+    </div></div>
+
+  <div class="card"><img src="img/sight-thermal.jpg">
+    <div><h3>Termisk sikte</h3>
+      <div class="tag"><span class="key">V</span> av / hvitvarm / svartvarm · skyttersikte og drone</div>
+      <p>Varme motorer, belter og soldater lyser mot den kalde snøen. Ser gjennom mørke, dis og eksos, og øker hvor langt du ser infanteri.</p>
+      <div class="tip">Røykgranatskyer er varme og ugjennomsiktige også i termisk – både for deg og fienden.</div>
+    </div></div>
+
+  <div class="card"><img src="img/commander-view.jpg">
+    <div><h3>Maskingevær (koaks og luke-MG3)</h3>
+      <div class="tag"><span class="key">Space</span> / MG-knappen / pad ✕ · <span class="key">Q</span> / R3 tvinger luke-MG</div>
+      <p>Ett MG-valg: <b>koaks</b> følger kanonen og skyter dit siktet peker. Det bytter selv til <b>luke-MG3</b> når du sikter høyt eller mot en drone.</p>
+      <ul>
+        <li>Dreper soldater, buggyer og motorsykler raskt – ikke BTR eller BMP.</li>
+        <li>Holder infanteri nede (de legger seg og slutter å skyte).</li>
+        <li>Luke-MG skyter ned FPV, Lancet og Orlan. Led foran målet.</li>
+      </ul>
+    </div></div>
+</section>
+
+<section>
+  <h2>Dine våpen – støtte og droner</h2>
+
+  <div class="card"><img src="img/smoke.jpg">
+    <div><h3>Røykgranater</h3>
+      <div class="tag"><span class="key">G</span> / pad ○</div>
+      <p>Åtte granater kastes i en vifte foran tårnet og danner en røykvegg på 25–30 m avstand i løpet av et par sekunder.</p>
+      <ul><li>Bryter fiendens sikt og <b>styringen på Kornet-missiler</b>.</li><li>Bryter dykket til Lancet (og noen ganger FPV).</li></ul>
+      <div class="tip">Røyk først, rygg eller kjør ut av siktlinjen etterpå.</div>
+    </div></div>
+
+  <div class="card"><img src="img/drone.jpg">
+    <div><h3>FPV-drone <span class="stat">5 stk.</span></h3>
+      <div class="tag"><span class="key">X</span> start · <span class="key">Z</span> velger dronetype · pad D-pad ned / L3</div>
+      <p>Rask kamikazedrone med rettet ladning. Fly med musen og WASD (Space/Shift opp/ned), 75 s batteri, 1500 m rekkevidde. LMB eller treff detonerer.</p>
+      <ul><li>Dreper en T-72 innen ca. 3 m. Cope cage reduserer effekten til 35 %.</li><li>Tanken står stille og kan bli truffet mens du flyr.</li></ul>
+    </div></div>
+
+  <div class="card"><img src="img/bomber-view.jpg">
+    <div><h3>Bomberdrone <span class="stat">2 stk.</span></h3>
+      <p>Henger over målet og slipper 3 VOG-granater (LMB). Ringen viser hvor granaten lander – grønn når en granat er klar.</p>
+      <ul><li>T-72: motordekk 85 skade + immobilisert, tårntak 50.</li><li>Dreper BMP. Land på tanken for å fylle opp.</li></ul>
+    </div></div>
+
+  <div class="card"><img src="img/recon-view.jpg">
+    <div><h3>Recon-drone <span class="stat">2 stk.</span></h3>
+      <p>Stille, ubevæpnet, 180 s og 2200 m rekkevidde. Stiger til ca. 110 m og spotter kjøretøy, soldater og miner på kartet.</p>
+      <div class="tip"><span class="key">X</span> igjen gir dronen til autopiloten: den sirkler over stedet til batteriet er tomt mens du er tilbake i tanken.</div>
+    </div></div>
+
+  <div class="card"><img src="img/arty.jpg">
+    <div><h3>155 mm artilleri <span class="stat">1 oppdrag per bølge</span></h3>
+      <div class="tag"><span class="key">B</span> / ARTY-knappen / pad L1</div>
+      <p>Seks granater lander 22–28 s etter innkalling på punktet du sikter på – eller der dronekameraet ser.</p>
+      <ul><li>Dreper lette kjøretøy og BMP. T-72 bare ved nesten direkte treff.</li><li>Skader også deg innen ca. 17 m («danger close»).</li></ul>
+    </div></div>
+</section>
+
+<section>
+  <h2>Kart og miner</h2>
+  <div class="two">
+    <div><img src="img/bigmap.jpg"><h3>Kartet</h3><p><span class="key">Tab</span> eller trykk på minikartet åpner stort kart. Bare fiender som er <b>sett</b> vises: fylt markør er fersk kontakt, hul markør er siste kjente posisjon. Sikte, munningsflammer, treff og droner spotter.</p></div>
+    <div><img src="img/mine.jpg"><h3>Miner</h3><p>Fienden minelegger veier og løyper foran deg, og kan skyte ut miner rundt deg med raketter. Et minetreff gir 15–25 skade og ødelegger beltet i 4–8 s. Merkede miner får rødt flagg og et kryss på kartet.</p><p class="cap">Motmidler: HE-granat i feltet, MG mot synlige miner, droner som merker, eller å kjøre utenom.</p></div>
+  </div>
+</section>
+
+<section class="red">
+  <h2 class="red">Fienden – kjøretøy</h2>
+  <p class="lead">Kjøretøyene har roller: angrep, overvåking fra høyden, flankering og raid langs veiene. De skyter og flytter seg, og legger røyk når de blir truffet.</p>
+
+  <div class="card"><img src="img/t72.jpg">
+    <div><h3>T-72B3 – stridsvogn</h3>
+      <span class="stat">125 mm kanon</span><span class="stat">rekkevidde 1800 m</span><span class="stat">ladetid ~8,5 s</span>
+      <p>Hovedtrusselen. Angriper, flankerer eller tar overvåkingsstilling i høyden.</p>
+      <div class="tip r">APFSDS, helst i siden eller bak. Bomberdrone på motordekket immobiliserer.</div>
+    </div></div>
+
+  <div class="card"><img src="img/t72-cage.jpg">
+    <div><h3>T-72 med cope cage</h3>
+      <p>Fra bølge 3 har 40 % av T-72-ene et bur over tårnet mot droner. FPV-ladningen gjør bare 35 % og bombegranater på taket 30 % – og immobiliserer ikke.</p>
+      <div class="tip r">Bruk kanonen. Spar dronene til vogner uten bur.</div>
+    </div></div>
+
+  <div class="card"><img src="img/bmp.jpg">
+    <div><h3>BMP-2 – stormpanservogn</h3>
+      <span class="stat">30 mm automatkanon</span><span class="stat">5-skudds salver</span><span class="stat">1200 m</span>
+      <p>Raider langs veier og løyper. Slipper av 4–6 soldater når den stopper i kontakt.</p>
+      <div class="tip r">HEAT. Ta den før den stopper, ellers får du infanteri å håndtere.</div>
+    </div></div>
+
+  <div class="card"><img src="img/btr.jpg">
+    <div><h3>BTR-82A – pansret personellkjøretøy</h3>
+      <span class="stat">30 mm automatkanon</span><span class="stat">1200 m</span><span class="stat">hjul</span>
+      <p>Følger vei og løype, og slipper av soldater som BMP-en. Tåler MG godt.</p>
+      <div class="tip r">HEAT eller HE.</div>
+    </div></div>
+</section>
+
+<section class="red">
+  <h2 class="red">Fienden – lette kjøretøy</h2>
+
+  <div class="card"><img src="img/tigr.jpg">
+    <div><h3>Tigr-M med Kornet</h3>
+      <span class="stat">styrt Kornet-missil</span><span class="stat">2000 m</span><span class="stat">38–62 skade</span>
+      <p>Står i overvåkingsstilling på avstand. Missilet styres mot deg så lenge skytteren ser deg – en varsel-toast og en rød pil på skjermen viser at det kommer.</p>
+      <div class="tip r">Røyk mot utskytningsstedet eller kjør i dekning: da mister missilet styringen. Ett HEAT- eller HE-treff tar bilen.</div>
+    </div></div>
+
+  <div class="card"><img src="img/buggy.jpg">
+    <div><h3>Angrepsbuggy</h3>
+      <span class="stat">PKM-maskingevær</span><span class="stat">750 m</span>
+      <p>Rask sverm langs veiene i «Motorised raid». Kommer tett innpå.</p>
+      <div class="tip r">Kort MG-salve.</div>
+    </div></div>
+
+  <div class="card"><img src="img/moto.jpg">
+    <div><h3>Motorsykkelteam</h3>
+      <span class="stat">maskingevær</span><span class="stat">500 m</span>
+      <p>Som buggyen, men raskere og skjørere.</p>
+      <div class="tip r">MG.</div>
+    </div></div>
+</section>
+
+<section class="red">
+  <h2 class="red">Fienden – infanteri</h2>
+  <div class="two">
+    <div><img src="img/soldiers.jpg"><p class="cap">Soldater i ulike stillinger: stående, gående, knestående, liggende og med RPG.</p></div>
+    <div><img src="img/rpg-team.jpg"><p class="cap">RPG-lag: skytter med RPG-7 og en med AK-74.</p></div>
+  </div>
+  <table style="margin-top:3mm">
+    <tr><th style="width:24%">Enhet</th><th style="width:30%">Våpen</th><th>Bruk og motmiddel</th></tr>
+    <tr><td><b>RPG-lag</b> (2–3 mann)</td><td>RPG-7, under 250 m; 20 / 28 / 35 skade front / side / bak; 4 raketter per skytter</td><td>Ligger i hus ved vinduet eller i skogkanten nær veien. HE inn i huset, eller MG.</td></tr>
+    <tr><td><b>ATGM-lag</b></td><td>Styrt missil fra en høyde 380–950 m unna</td><td>Røyk bryter styringen. HE eller MG på laget.</td></tr>
+    <tr><td><b>Avstigende soldater</b></td><td>AK-74, 3-skudds salver</td><td>Kommer ut av BMP/BTR, rykker frem i byks mot 100–160 m. MG holder dem nede; HE dreper grupper.</td></tr>
+  </table>
+  <p class="foot">Soldater kan kjøres over av beltene når tanken er i bevegelse. Termisk sikte øker hvor langt du ser dem.</p>
+</section>
+
+<section class="red">
+  <h2 class="red">Fienden – luft og artilleri</h2>
+  <div class="card"><img src="img/enemy-fpv.jpg">
+    <div><h3>FPV-drone</h3><span class="stat">25–40 skade</span>
+      <p>Flyr inn lavt, leter i en sirkel og dykker når den ser deg. Den får vanskeligere lås på deg når du kjører eller står under trær.</p>
+      <div class="tip r">Luke-MG (sikt høyt – MG bytter selv). Ett treff holder.</div></div></div>
+  <div class="card"><img src="img/lancet.jpg">
+    <div><h3>Lancet – vandrende ammunisjon</h3><span class="stat">40–55 skade</span>
+      <p>Høyere og raskere enn FPV. Varsles med toast og rød pil.</p>
+      <div class="tip r">Røyk bryter dykket. Luke-MG trenger to treff.</div></div></div>
+  <div class="card"><img src="img/orlan.jpg">
+    <div><h3>Orlan-10 – observasjonsdrone</h3>
+      <p>Sirkler ca. 280 m unna og 180 m høyt. Mens den ser deg vet alle fiender hvor du er – og etter 15 s observasjon kalles <b>artilleri</b> inn.</p>
+      <div class="tip r">Skyt den ned med luke-MG (fire treff).</div></div></div>
+  <table style="margin-top:2mm">
+    <tr><th style="width:24%">Trussel</th><th>Hva skjer og hva gjør du</th></tr>
+    <tr><td><b>152 mm artilleri</b></td><td>Kommer 20–40 s etter at Orlan eller mannskapet har sett deg i ca. 15 s. Et innskytingsskudd lander 60–120 m unna først («Artillery ranging on you – move!»). <b>Kjør vekk</b> – står du stille tar du 5–30 skade per byge.</td></tr>
+    <tr><td><b>Minefelt</b></td><td>Legges på veier og løyper mot hovedaksen fra bølge 2. Fiendene kjører rundt egne felt – se etter hvor de svinger av.</td></tr>
+    <tr><td><b>Rakettutlagte miner</b></td><td>Fra bølge 3: en fløytelyd og varsel, så faller ca. 10 synlige miner 18–80 m rundt der du sto. Kjør forsiktig ut, eller skyt dem med MG.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Kontroller – oversikt</h2>
+  <table>
+    <tr><th style="width:32%">Handling</th><th style="width:34%">Tastatur / mus</th><th>Gamepad</th></tr>
+    <tr><td>Kjør</td><td><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></td><td>venstre stikke</td></tr>
+    <tr><td>Sikt</td><td>mus (klikk fanger pekeren)</td><td>høyre stikke</td></tr>
+    <tr><td>Skyt kanon</td><td><span class="key">LMB</span> / <span class="key">Enter</span></td><td>R2</td></tr>
+    <tr><td>Skyttersikte</td><td><span class="key">RMB</span> hold / <span class="key">C</span>, hjulet zoomer</td><td>L2</td></tr>
+    <tr><td>Maskingevær</td><td><span class="key">Space</span> (<span class="key">Q</span> luke-MG)</td><td>✕ (R3 luke-MG)</td></tr>
+    <tr><td>Ammunisjon</td><td><span class="key">1</span><span class="key">2</span><span class="key">3</span></td><td>□</td></tr>
+    <tr><td>Røyk</td><td><span class="key">G</span></td><td>○</td></tr>
+    <tr><td>Termisk sikte</td><td><span class="key">V</span></td><td>–</td></tr>
+    <tr><td>Drone / dronetype</td><td><span class="key">X</span> / <span class="key">Z</span></td><td>D-pad ned / L3</td></tr>
+    <tr><td>Artilleri</td><td><span class="key">B</span></td><td>L1</td></tr>
+    <tr><td>Kart</td><td><span class="key">Tab</span> / klikk minikartet</td><td>–</td></tr>
+    <tr><td>Kamera</td><td>–</td><td>△</td></tr>
+    <tr><td>Tid på døgnet, snø, lyd, musikk</td><td><span class="key">T</span><span class="key">N</span><span class="key">M</span><span class="key">U</span></td><td>–</td></tr>
+    <tr><td>Hjelp, meny, omstart</td><td><span class="key">H</span><span class="key">Esc</span><span class="key">R</span></td><td>–</td></tr>
+  </table>
+  <p class="foot">På mobil og nettbrett (touch) har alle våpen egne knapper: MG, SMOKE, DRONE/TYPE, ARTY og et trykk på minikartet for stort kart.</p>
+</section>
+
+</body>
+</html>
