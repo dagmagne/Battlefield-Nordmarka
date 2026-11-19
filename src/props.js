@@ -1,6 +1,7 @@
 // Static set pieces merged into one mesh: cabin, bridge, dam, power line, lamp posts, signs, boulders.
 import { MB, MAT, VS } from './mesh.js';
 import { hash1, clamp, lerp } from './math.js';
+import { arenaFrame, standAt, mastAim } from './world.js';
 
 const RED = [0.4, 0.055, 0.04], WHITE = [0.85, 0.85, 0.82], WOOD = [0.2, 0.13, 0.08], DWOOD = [0.1, 0.07, 0.05], STONE = [0.36, 0.36, 0.37], DARK = [0.03, 0.03, 0.035];
 
@@ -185,43 +186,76 @@ function house(b, B, i, W) {
 }
 // a solid oriented box: centre, yaw of the builder frame (local x = (cos, -sin)), half-extents, pad height, wall height, gable rise (ridge along local x)
 const box = (x, z, th, hw, hd, y, wall, rise) => ({ x, z, th, hw, hd, y, wall, rise });
-// Frognerseteren: dark dragon-style timber lodge — long hall, steep snow roofs, cross wing, veranda.
+// Frognerseteren restaurant (1891): dark log dragon-style lodge. Measured (lidar), local +x east, +z south (front, terrace): a centre hall
+// (ridge east-west at 8.4 m) with a low glazed veranda in front and a flat-roofed rear block; west of it the cross gable facing the terrace
+// (ridge 8.2 m, spire on its apex); a low black-tarred wing at the west end; the tall east wing (ridge north-south at 10.6 m) with a
+// dragon head at each gable; white chimneys; a stone-walled terrace in front. The annex north-east is a record of its own.
 function lodge(b, c, W) {
-  const TIM = [0.115, 0.075, 0.045], TRIM = [0.2, 0.13, 0.07], cs = Math.cos(c.yaw), sn = Math.sin(c.yaw), v0 = b.v.length / VS;
+  const TIM = [0.075, 0.046, 0.027], TAR = [0.03, 0.027, 0.025], UN = [0.06, 0.04, 0.025], RED = [0.4, 0.06, 0.04], WH = [0.8, 0.78, 0.74], ST = [0.27, 0.265, 0.255];
+  const cs = Math.cos(c.yaw), sn = Math.sin(c.yaw), F = 0.7, v0 = b.v.length / VS;
   const wpos = (lx, lz) => [c.x + cs * lx + sn * lz, c.z - sn * lx + cs * lz];
-  const wing = (lx, lz, yaw, hw, hd, y0, wall, rise, wins) => {
-    const p = wpos(lx, lz); b.at(p[0], c.y, p[1], c.yaw + yaw);
-    b.set(TIM, MAT.paint); b.box(-hw, y0, -hd, hw, wall, hd);
-    for (const s of [-1, 1]) { const a = b.vert(s * hw, wall, s * hd, s, 0, 0), d = b.vert(s * hw, wall, -s * hd, s, 0, 0), e = b.vert(s * hw, wall + rise, 0, s, 0, 0); b.tri(a, d, e); }
-    b.set(TRIM, MAT.paint); b.box(-hw - 0.9, wall - 0.25, -hd - 0.9, hw + 0.9, wall, hd + 0.9);
-    b.set(SNOWC, MAT.snow); gable(b, hw + 0.5, hd + 0.3, wall + 0.25, rise, 0.9);
-    b.set(TIM, MAT.paint); for (const s of [-1, 1]) b.cyl(s * (hw + 1.2), wall + rise + 0.2, 0, s * (hw + 2.6), wall + rise + 2.0, 0, 0.2, 0.03, 4); // dragon heads
-    b.set([1, 0.74, 0.4], MAT.window);
-    for (let f = 0; f < 2; f++) for (let q = 0; q < wins; q++) for (const s of [-1, 1]) {
-      const x = ((q + 0.5) / wins - 0.5) * 2 * (hw - 1), y = 1.9 + f * 2.9, z = s * (hd + 0.04);
-      b.quad([x - s * 0.6, y, z], [x + s * 0.6, y, z], [x + s * 0.6, y + 1.5, z], [x - s * 0.6, y + 1.5, z]);
-    }
-    for (const s of [-1, 1]) b.quad([s * (hw + 0.04), 2, s * 1.2], [s * (hw + 0.04), 2, -s * 1.2], [s * (hw + 0.04), 3.6, -s * 1.2], [s * (hw + 0.04), 3.6, s * 1.2]);
+  // a gabled volume centred at lodge-local (lx, lz); rot 1 turns its ridge north-south. Builds in its own frame (ridge along x) and leaves that frame set.
+  const vol = (lx, lz, rot, hw, hd, wall, rise, col, y0, og = 0.7, o = 0.8) => {
+    const p = wpos(lx, lz); b.at(p[0], y0, p[1], c.yaw + rot * Math.PI / 2);
+    b.set(ST, MAT.stone); b.box(-hw - 0.15, -3, -hd - 0.15, hw + 0.15, F, hd + 0.15);
+    b.set(col, MAT.plank); b.box(-hw, F, -hd, hw, wall, hd);
+    for (const s of [-1, 1]) gtri(b, [s * hw, wall, -hd], [s * hw, wall, hd], [s * hw, wall + rise, 0], [s, 0, 0]);
+    const e = wall - o * rise / hd;
+    for (const s of [-1, 1]) roofQ(b, [[-hw - og, e, s * (hd + o)], [hw + og, e, s * (hd + o)], [hw + og, wall + rise, 0], [-hw - og, wall + rise, 0]], UN, 0.25);
+    b.set(RED, MAT.paint); for (const s of [-1, 1]) b.box(s * hw - 0.1, F, -hd - 0.1, s * hw + 0.1, wall, -hd + 0.1), b.box(s * hw - 0.1, F, hd - 0.1, s * hw + 0.1, wall, hd + 0.1); // red corner boards
   };
+  // dragon head at a ridge end of the current volume frame: a neck that rises out of the crossed barge boards and curls back
+  const dragon = (x, yy, s) => { b.set(TIM, MAT.wood); const P = [[0, 0], [0.7, 0.5], [1.25, 1.35], [1.3, 2.1], [0.95, 2.5], [0.6, 2.35]], R = [0.2, 0.18, 0.15, 0.13, 0.11, 0.06];
+    for (let i = 0; i < 5; i++) b.cyl(x + s * P[i][0], yy + P[i][1], 0, x + s * P[i + 1][0], yy + P[i + 1][1], 0, R[i], R[i + 1], 5); };
+  const chim = (x, yy, z, h) => { b.set(WH, MAT.paint); b.box(x - 0.55, yy - 2, z - 0.55, x + 0.55, yy + h, z + 0.55); b.set(DARK, MAT.metal); b.box(x - 0.68, yy + h, z - 0.68, x + 0.68, yy + h + 0.18, z + 0.68); b.set(SNOWC, MAT.snow); b.box(x - 0.66, yy + h + 0.18, z - 0.66, x + 0.66, yy + h + 0.3, z + 0.66); };
+  // centre hall + rear block + front veranda (lodge frame)
+  vol(1.75, 0.25, 0, 6.75, 6.75, 4.8, 3.6, TIM, c.y, 0.2);
   b.at(c.x, c.y, c.z, c.yaw);
-  b.set(STONE, MAT.stone); b.box(-17, -4, -7, 17, 0.7, 7); b.box(-6.5, -4, 6, 6.5, 0.7, 14.5);
-  wing(0, 0, 0, 16, 6, 0.7, 7.0, 5.6, 9);
-  wing(0, 9.5, Math.PI / 2, 8, 5.2, 0.7, 7.0, 5.0, 3);
-  wing(-11.5, -8, Math.PI / 2, 4.5, 3.6, 0.7, 4.6, 3.4, 2);
+  b.set(ST, MAT.stone); b.box(-5, -3, -12.2, 8.5, F, -6.5); b.set(TIM, MAT.plank); b.box(-5, F, -12, 8.5, 4.3, -6.5);
+  roofQ(b, [[-5.3, 4.3, -12.4], [8.8, 4.3, -12.4], [8.8, 4.55, -6.5], [-5.3, 4.55, -6.5]], UN, 0.3);
+  for (let q = 0; q < 5; q++) win(b, -3.5 + q * 2.6, 1.6, -12, 1.0, 1.3, 0, -1, RED);
+  b.set(TIM, MAT.plank); b.box(-4.5, F, 7, 8.5, 3.2, 10.5); b.set(RED, MAT.paint); b.box(-4.5, F, 10.4, 8.5, 1.15, 10.62); b.box(-4.5, 3.05, 10.4, 8.5, 3.3, 10.62);
+  roofQ(b, [[-4.8, 3.2, 11.0], [8.6, 3.2, 11.0], [8.6, 4.75, 7], [-4.8, 4.75, 7]], UN, 0.18);
+  for (let q = 0; q < 8; q++) win(b, -3.7 + q * 1.62, 1.25, 10.5, 1.3, 1.65, 0, 1, RED);
+  for (const s of [-1, 1]) win(b, s > 0 ? 8.5 : -4.5, 1.25, 8.75, 1.6, 1.65, s, 0, RED);
+  for (const x of [-1, 4.5]) chim(x, 8.0, -0.6, 2.4);
+  c.chimney = (() => { const p = wpos(-1, -0.6); return [p[0], c.y + 10.7, p[1]]; })();
+  // west cross gable facing the terrace (ridge north-south: frame x = north, z = east)
+  vol(-9.25, -0.5, 1, 11.5, 4.25, 4.6, 3.6, TIM, c.y);
+  for (const q of [-1.6, 0, 1.6]) win(b, -11.5, 1.5, q, 1.1, 1.6, -1, 0, RED);
+  for (const q of [-1.1, 1.1]) win(b, -11.5, 4.9, q, 0.9, 1.4, -1, 0, RED);
+  win(b, -11.5, 6.6, 0, 0.6, 0.8, -1, 0, RED);
+  for (const q of [-10, -8.2]) win(b, q, 1.6, -4.25, 1.0, 1.5, 0, -1, RED);
+  for (const q of [-1.2, 1.2]) win(b, 11.5, 1.6, q, 1.0, 1.5, 1, 0, RED);
+  b.set(RED, MAT.paint); b.box(-12.8, 3.6, -3.2, -11.5, 3.75, 3.2); b.set(TIM, MAT.wood); for (const q of [-3, -1, 1, 3]) b.box(-12.8, 3.75, q - 0.05, -12.7, 4.6, q + 0.05); b.box(-12.8, 4.55, -3.1, -12.7, 4.68, 3.1); // balcony on the front gable
+  b.set(TIM, MAT.wood); b.cyl(-12.2, 8.2, 0, -12.2, 10.8, 0, 0.16, 0.05, 6); b.set([0.7, 0.55, 0.2], MAT.metal); b.cyl(-12.2, 10.8, 0, -12.2, 12.0, 0, 0.05, 0.03, 4); b.cyl(-12.2, 11.1, 0, -12.2, 11.4, 0, 0.16, 0.16, 6); b.box(-12.24, 11.6, -0.15, -12.16, 11.95, 0.75); // spire, ball and vane
+  dragon(12.2, 8.15, 1); chim(4, 8.0, 0, 2.2);
+  // low black wing at the west end, gable to the west
+  vol(-16.75, -1.5, 0, 3.25, 7.5, 3.8, 2.6, TAR, c.y, 0.6, 0.6);
+  win(b, -3.25, 1.4, -2.5, 0.9, 1.2, -1, 0, RED); win(b, -3.25, 1.4, 2.5, 0.9, 1.2, -1, 0, RED); win(b, -3.25, 4.4, 0, 0.7, 0.9, -1, 0, RED);
+  for (const q of [-1.6, 1.6]) win(b, q, 1.4, 7.5, 1.0, 1.2, 0, 1, RED);
+  // tall east wing, gables north and south, a dragon head on each
+  vol(13.5, 0.75, 1, 11.75, 5, 7.0, 3.6, TIM, c.y);
+  for (const q of [-2.8, 0, 2.8]) for (const f of [0, 1]) win(b, -11.75, 1.4 + f * 3.1, q, 1.1, 1.6, -1, 0, RED);
+  win(b, -11.75, 7.6, 0, 1.2, 1.4, -1, 0, RED); b.set(RED, MAT.paint); b.box(-12.9, 4.15, -2.6, -11.75, 4.3, 2.6); // balcony
+  for (const q of [-1.8, 1.8]) win(b, 11.75, 1.6, q, 1.0, 1.4, 1, 0, RED);
+  for (let q = 0; q < 6; q++) for (const f of [0, 1]) win(b, -9.5 + q * 3.8, 1.4 + f * 3.1, 5, 1.1, 1.5, 0, 1, RED);
+  dragon(-12.45, 10.55, -1); dragon(12.45, 10.55, 1); chim(-4, 10.4, 0, 1.6);
+  // the stone-walled terrace in front, a railing on its parapet
   b.at(c.x, c.y, c.z, c.yaw);
-  b.set(WOOD, MAT.wood); b.box(6.5, 0.2, 6, 16.5, 0.75, 10.5); b.box(-16.5, 0.2, 6, -6.5, 0.75, 10.5);
-  for (let q = 0; q <= 5; q++) for (const s of [-1, 1]) b.box(s * (6.5 + q * 2) - 0.08, 0.75, 10.3, s * (6.5 + q * 2) + 0.08, 1.75, 10.46);
-  for (const s of [-1, 1]) b.box(s * 11.5 - 5, 1.7, 10.3, s * 11.5 + 5, 1.82, 10.46);
-  b.set(SNOWC, MAT.snow); for (const s of [-1, 1]) b.box(s * 11.5 - 5, 0.75, 6.2, s * 11.5 + 5, 0.95, 10.3);
-  b.set(STONE, MAT.stone); b.box(9.2, 9, -1.6, 10.8, 14.6, 0); b.box(-10.8, 9, 0, -9.4, 14.2, 1.4);
-  b.set(SNOWC, MAT.snow); b.box(9.1, 14.6, -1.7, 10.9, 14.8, 0.1); b.box(-10.9, 14.2, -0.1, -9.3, 14.4, 1.5);
-  const ch = wpos(10, -0.8); c.chimney = [ch[0], c.y + 14.8, ch[1]];
-  b.set(WHITE, MAT.paint); b.cyl(21, -0.5, 13, 21, 11.5, 13, 0.08, 0.04, 8);
-  b.set(WHITE, MAT.flag); b.quad([21.05, 9.6, 13], [23, 9.3, 13.5], [23, 10.7, 13.5], [21.05, 11, 13], [0, 1, 1, 1, 1, 0, 0, 0]);
-  b.quad([23, 9.3, 13.5], [21.05, 9.6, 13], [21.05, 11, 13], [23, 10.7, 13.5], [1, 1, 0, 1, 0, 0, 1, 0]);
-  const q1 = wpos(0, 9.5), q2 = wpos(-11.5, -8);
-  W.bld.push({ x: c.x, y: c.y, z: c.z, th: c.yaw, v0, v1: b.v.length / VS, area: 32 * 12 + 16 * 10.4 + 9 * 7.2, col: TIM,
-    boxes: [box(c.x, c.z, c.yaw, 16, 6, c.y, 7.25, 5.6), box(q1[0], q1[1], c.yaw + Math.PI / 2, 8, 5.2, c.y, 7.25, 5), box(q2[0], q2[1], c.yaw + Math.PI / 2, 4.5, 3.6, c.y, 4.85, 3.4)] });
+  b.set(ST, MAT.stone); b.box(-14, -3, 10.5, 19.5, F + 0.2, 20); b.box(-14, F + 0.2, 19.4, 19.5, F + 0.9, 20); b.box(-14, F + 0.2, 12.5, -13.4, F + 0.9, 20); b.box(18.9, F + 0.2, 13, 19.5, F + 0.9, 20);
+  b.set(SNOWC, MAT.snow); b.box(-13.4, F + 0.2, 13, 18.9, F + 0.32, 19.4);
+  b.set(TIM, MAT.wood); for (let q = 0; q <= 11; q++) b.box(-13.8 + q * 3, F + 0.9, 19.55, -13.6 + q * 3, F + 1.9, 19.85); b.box(-14, F + 1.8, 19.6, 19.5, F + 1.95, 19.8);
+  const q = (lx, lz, t, hw, hd, wall, rise) => { const p = wpos(lx, lz); return box(p[0], p[1], c.yaw + t, hw, hd, c.y, wall, rise); }, H = Math.PI / 2;
+  W.bld.push({ x: c.x, y: c.y, z: c.z, th: c.yaw, v0, v1: b.v.length / VS, area: 828, col: TIM,
+    boxes: [q(1.75, 0.25, 0, 6.75, 6.75, 4.8, 3.6), q(1.75, -9.35, 0, 6.75, 2.85, 4.6, 0), q(2, 8.75, 0, 6.5, 1.75, 3.2, 0), q(-9.25, -0.5, H, 11.5, 4.25, 4.6, 3.6),
+      q(-16.75, -1.5, 0, 3.25, 7.5, 3.8, 2.6), q(13.5, 0.75, H, 11.75, 5, 7, 3.6), q(2.75, 16.25, 0, 16.75, 3.75, F + 0.9, 0)] });
+  // the annex north-east of the restaurant (its own building record)
+  const ap = wpos(24, -29.1), ay = W.heightAt(ap[0], ap[1]), a0 = b.v.length / VS;
+  vol(24, -29.1, 1, 8.5, 5.25, 4.3, 3.8, TIM, ay);
+  for (const s of [-1, 1]) { for (let k = 0; k < 4; k++) win(b, -6 + k * 4, 1.5, s * 5.25, 1.1, 1.4, 0, s, RED); win(b, s * 8.5, 1.5, 0, 1.0, 1.4, s, 0, RED); win(b, s * 8.5, 5, 0, 0.8, 1.1, s, 0, RED); }
+  chim(2, 7.6, 0, 1.6);
+  W.bld.push({ x: ap[0], y: ay, z: ap[1], th: c.yaw + H, v0: a0, v1: b.v.length / VS, area: 17 * 10.5, col: TIM, boxes: [box(ap[0], ap[1], c.yaw + H, 8.5, 5.25, ay, 4.3, 3.8)] });
 }
 // Ski jumps from lidar profiles (LM.jump / LM.mid in world.js). Positions are (d, t): d metres from the top along the axis
 // top -> end, t to the side; heights are absolute. `deck` is the inrun track, flat for `plat` metres at the top.
@@ -287,27 +321,119 @@ function skiJump(b, W, J) {
   b.set(SNOWC, MAT.snow); b.box(-wd * 0.75, 3.6, -wd * 0.65, wd * 0.75, 4.0, wd * 0.65);
   b.set([1, 0.2, 0.1], MAT.beacon); b.cyl(0, 4, 0, 0, 4.6, 0, 0.25, 0.2, 6);
 }
-function tvTower(b, W, T) {
-  const y = W.heightAt(T.x, T.z) - 2; b.at(T.x, y, T.z);
-  b.set([0.62, 0.62, 0.6], MAT.stone); b.cyl(0, 0, 0, 0, 62, 0, 4.6, 3.1, 14);
-  b.set([0.5, 0.52, 0.55], MAT.metal); b.cyl(0, 56, 0, 0, 60, 0, 4.2, 8.2, 16); b.cyl(0, 64.5, 0, 0, 68, 0, 8.6, 5.5, 16);
-  b.set([0.03, 0.05, 0.075], MAT.glass); b.cyl(0, 60, 0, 0, 64.5, 0, 8.2, 8.6, 16);
-  b.set([0.62, 0.62, 0.6], MAT.stone); b.cyl(0, 68, 0, 0, 80, 0, 2.6, 2.0, 10);
-  for (let i = 0; i < 6; i++) { b.set(i & 1 ? [0.85, 0.85, 0.85] : [0.6, 0.08, 0.06], MAT.paint); b.cyl(0, 80 + i * 6.3, 0, 0, 86.3 + i * 6.3, 0, 1.1 - i * 0.14, 0.96 - i * 0.14, 8); }
-  b.set([1, 0.15, 0.08], MAT.beacon); b.cyl(0, T.h, 0, 0, T.h + 0.8, 0, 0.35, 0.25, 6); b.cyl(0, 68, 0, 0, 68.7, 0, 5.6, 5.5, 8);
-  W.colliders.push(T.x, T.z, 4.6); // the shaft is 4.6 m across at the foot
+// Chairlift (Tryvann): T-pylons on a straight line (LM.lift, read off the lidar), two cables and chairs
+function skiLift(b, W, L) {
+  const dx = L.b[0] - L.a[0], dz = L.b[1] - L.a[1], len = Math.hypot(dx, dz), rx = -dz / len, rz = dx / len, n = Math.round(len / L.sp), h = L.h, G = [0.34, 0.36, 0.38];
+  b.at(0, 0, 0); let px = 0, py = 0, pz = 0;
+  for (let i = 0; i <= n; i++) {
+    const x = L.a[0] + dx * i / n, z = L.a[1] + dz * i / n, y = W.heightAt(x, z);
+    b.set(G, MAT.metal); b.cyl(x, y - 1, z, x, y + h, z, i ? 0.28 : 0.5, i ? 0.2 : 0.4, 8); b.cyl(x - rx * 2.6, y + h, z - rz * 2.6, x + rx * 2.6, y + h, z + rz * 2.6, 0.12, 0.12, 6);
+    if (!i) b.cyl(x, y + h - 0.35, z, x, y + h - 0.1, z, 2.5, 2.5, 14);
+    if (Math.abs(x) < 1600 && Math.abs(z) < 1600) W.colliders.push(x, z, 0.7);
+    if (i) for (const s of [-2.4, 2.4]) {
+      b.set(DARK, MAT.wire); b.cyl(px + rx * s, py + h - 0.1, pz + rz * s, x + rx * s, y + h - 0.1, z + rz * s, 0.035, 0.035, 4);
+      for (const f of [0.25, 0.75]) {
+        const cx = lerp(px, x, f) + rx * s, cz = lerp(pz, z, f) + rz * s, cy = lerp(py, y, f) + h - 0.1;
+        b.set(G, MAT.metal); b.cyl(cx, cy, cz, cx, cy - 2.7, cz, 0.04, 0.04, 4); b.cyl(cx - rx * 1.1, cy - 2.7, cz - rz * 1.1, cx + rx * 1.1, cy - 2.7, cz + rz * 1.1, 0.14, 0.14, 5); b.cyl(cx - rx * 1.1, cy - 2.1, cz - rz * 1.1, cx + rx * 1.1, cy - 2.1, cz + rz * 1.1, 0.04, 0.04, 4);
+      }
+    }
+    px = x; py = y; pz = z;
+  }
 }
+// Tryvannstårnet (1962): plain concrete shaft (r 3.5) to ~22 m, a tall ribbed cream drum (r 6.3, lidar) to 55 m with a dark
+// window band under its cap, an equipment drum hung with dishes and a platform at 65 m (lidar top), then a galvanised lattice mast and whip to 118 m
+function tvTower(b, W, T) {
+  const y = W.heightAt(T.x, T.z) - 1.5, CON = [0.48, 0.47, 0.44], DRUM = [0.6, 0.55, 0.44], GAL = [0.56, 0.58, 0.6], R = 6.3; b.at(T.x, y, T.z);
+  b.set(CON, MAT.stone); b.cyl(0, -1, 0, 0, 1.6, 0, 4.6, 4.4, 20); b.cyl(0, 1.6, 0, 0, 23.5, 0, 3.55, 3.45, 20);
+  b.set(DRUM, MAT.stone); b.cyl(0, 22.5, 0, 0, 25.5, 0, 3.4, R, 28, 0); b.cyl(0, 25.5, 0, 0, 51, 0, R, R, 32, 0);
+  for (let i = 0; i < 28; i++) { b.at(T.x, y, T.z, i / 28 * Math.PI * 2); b.box(-0.14, 25.6, R - 0.05, 0.14, 50.8, R + 0.16); } // vertical ribs
+  b.at(T.x, y, T.z);
+  b.set([0.03, 0.045, 0.06], MAT.glass); b.cyl(0, 51, 0, 0, 54, 0, R + 0.02, R + 0.02, 32, 0);
+  b.set([0.9, 0.82, 0.62], MAT.window); // a few lit panes in the band (staff and equipment rooms)
+  for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2, d = Math.PI / 16 * 0.7, r = R + 0.06, P = (e, h) => [Math.cos(a + e) * r, h, Math.sin(a + e) * r]; if (hash1(i * 5 + 1) < 0.5) b.quad(P(d, 51.6), P(-d, 51.6), P(-d, 53.4), P(d, 53.4), [0.12, 0.14, 0.44, 0.14, 0.44, 0.52, 0.12, 0.52]); } // uv inside one pane: plain glass by day, lit at night
+  b.set(DRUM, MAT.stone); b.cyl(0, 54, 0, 0, 55.4, 0, R + 0.25, R + 0.25, 32); b.cyl(0, 55.4, 0, 0, 56.2, 0, R + 0.1, 4.2, 24);
+  b.set(GAL, MAT.metal); b.cyl(0, 56, 0, 0, 64.6, 0, 3.6, 3.3, 16); b.cyl(0, 64.4, 0, 0, 65.2, 0, 5.2, 5.2, 24);
+  for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; b.cyl(Math.cos(a) * 5.1, 65.2, Math.sin(a) * 5.1, Math.cos(a) * 5.1, 66.3, Math.sin(a) * 5.1, 0.04, 0.04, 3, 0); }
+  b.set(WHITE, MAT.paint); // dishes and drum antennas on the equipment level, pointing out
+  for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2 + 0.3, h = 57.5 + (i % 3) * 2.2, rr = i % 3 === 1 ? 1.25 : 0.9, c = Math.cos(a), s = Math.sin(a); b.cyl(c * 3.5, h, s * 3.5, c * 3.9, h, s * 3.9, rr * 0.75, rr, 10); b.cyl(c * 3.2, h, s * 3.2, c * 3.55, h, s * 3.55, 0.2, 0.2, 4, 0); }
+  b.set(GAL, MAT.metal); // lattice mast: four legs, X bracing per face, a dark feeder core so it still reads at range
+  const m0 = 65.2, m1 = 104, w0 = 1.15, w1 = 0.42, n = 13, hw = (t) => w0 + (w1 - w0) * t;
+  for (const [sx, sz] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) b.cyl(sx * w0, m0, sz * w0, sx * w1, m1, sz * w1, 0.09, 0.06, 4, 0);
+  for (let k = 0; k < n; k++) {
+    const t0 = k / n, t1 = (k + 1) / n, ya = m0 + (m1 - m0) * t0, yb = m0 + (m1 - m0) * t1, a = hw(t0), c = hw(t1);
+    for (let f = 0; f < 4; f++) { const C = [[1, 1], [-1, 1], [-1, -1], [1, -1]], p = C[f], q = C[(f + 1) & 3];
+      b.cyl(p[0] * a, ya, p[1] * a, q[0] * c, yb, q[1] * c, 0.035, 0.035, 3, 0); b.cyl(q[0] * a, ya, q[1] * a, p[0] * c, yb, p[1] * c, 0.035, 0.035, 3, 0); b.cyl(p[0] * a, ya, p[1] * a, q[0] * a, ya, q[1] * a, 0.04, 0.04, 3, 0); }
+  }
+  b.set([0.32, 0.33, 0.34], MAT.metal); b.cyl(0, m0, 0, 0, m1, 0, 0.45, 0.22, 6); b.set(GAL, MAT.metal); b.cyl(0, m1, 0, 0, T.h - 0.8, 0, 0.26, 0.09, 6);
+  for (const h of [78, 91]) b.cyl(0, h, 0, 0, h + 0.5, 0, hw((h - m0) / (m1 - m0)) * 1.5, hw((h - m0) / (m1 - m0)) * 1.5, 8);
+  b.set([1, 0.15, 0.08], MAT.beacon); b.cyl(0, T.h - 0.8, 0, 0, T.h, 0, 0.3, 0.2, 6); b.cyl(0, 91.5, 0, 0, 92.1, 0, 0.5, 0.5, 6);
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.78; b.cyl(Math.cos(a) * 5, 66.3, Math.sin(a) * 5, Math.cos(a) * 5, 66.8, Math.sin(a) * 5, 0.22, 0.18, 6); }
+  W.colliders.push(T.x, T.z, 4.4); // the foot ring
+}
+// shared by the chapel and the lodge: a roof face as a dark board slab with a snow skin; any winding (made ccw from above here)
+function roofQ(b, P, under, th = 0.22) {
+  const ux = P[1][0] - P[0][0], uz = P[1][2] - P[0][2], vx = P[3][0] - P[0][0], vz = P[3][2] - P[0][2]; if (uz * vx - ux * vz < 0) P = [P[3], P[2], P[1], P[0]];
+  b.set(under, MAT.wood); slab(b, P[0], P[1], P[2], P[3], th); b.set(SNOWC, MAT.snow); b.quad(...P.map((p) => [p[0], p[1] + 0.1, p[2]]));
+}
+const gtri = (b, p, q, r, n) => b.tri(b.vert(...p, ...n), b.vert(...q, ...n), b.vert(...r, ...n)); // gable-end triangle with an explicit normal
+// lit window with a frame on an axis-aligned wall: centre-bottom (x, y, z) on the face, normal (nx, 0, nz)
+function win(b, x, y, z, w, h, nx, nz, fr) {
+  const tx = -nz, tz = nx, Q = (o, a, y0, y1) => [[x - tx * a + nx * o, y0, z - tz * a + nz * o], [x + tx * a + nx * o, y0, z + tz * a + nz * o], [x + tx * a + nx * o, y1, z + tz * a + nz * o], [x - tx * a + nx * o, y1, z - tz * a + nz * o]];
+  if (fr) { b.set(fr, MAT.paint); b.quad(...Q(0.04, w / 2 + 0.12, y - 0.12, y + h + 0.12)); }
+  const nu = Math.max(1, Math.round(w / 1.1)), nv = Math.max(1, Math.round(h / 1.3)); // one uv unit = a four-pane sash in the window shader
+  b.set([1, 0.78, 0.45], MAT.window); b.quad(...Q(0.07, w / 2, y, y + h), [0, 0, nu, 0, nu, nv, 0, nv]);
+}
+// Holmenkollen kapell (1903, rebuilt 1996): dark tarred stave-church style. Measured (lidar): nave 10 m wide (local +x = west) with
+// low pent-roofed aisles to 13.6 m and its ridge at 13.3 m; a transept at the east end 15 m across; the square belfry over the crossing with
+// a flared eave and a tall octagonal shingle spire (lidar ~30 m, tip missed); a round turret with two conical roofs in the north corner.
 function chapel(b, W, C) {
-  const y = W.heightAt(C.x, C.z), v0 = b.v.length / VS, th = -C.yaw + Math.PI / 2; b.at(C.x, y, C.z, th);
-  const DW = [0.11, 0.075, 0.05];
-  b.set(DW, MAT.paint); b.box(-9, -2, -5, 9, 4.2, 5); b.box(-13, -2, -3.2, -9, 3.2, 3.2);
-  for (const s of [-1, 1]) { const a = b.vert(s * 9, 4.2, s * 5, s, 0, 0), d = b.vert(s * 9, 4.2, -s * 5, s, 0, 0), e = b.vert(s * 9, 11, 0, s, 0, 0); b.tri(a, d, e); }
-  b.set(SNOWC, MAT.snow); gable(b, 9, 5, 4.2, 6.8, 0.6);
-  b.at(C.x, y, C.z, -C.yaw + Math.PI / 2);
-  b.set(DW, MAT.paint); b.box(4.2, 9, -1.6, 7.4, 15, 1.6); b.cyl(5.8, 15, 0, 5.8, 31, 0, 2.3, 0.08, 4);
-  b.set([1, 0.78, 0.45], MAT.window); for (let q = -2; q <= 2; q++) for (const s of [-1, 1]) b.quad([q * 3.2 - s * 0.5, 1.4, s * 5.03], [q * 3.2 + s * 0.5, 1.4, s * 5.03], [q * 3.2 + s * 0.5, 3.2, s * 5.03], [q * 3.2 - s * 0.5, 3.2, s * 5.03]);
-  const ax = C.x - Math.cos(th) * 11, az = C.z + Math.sin(th) * 11;
-  W.bld.push({ x: C.x, y, z: C.z, th, v0, v1: b.v.length / VS, area: 18 * 10 + 4 * 6.4, col: DW, boxes: [box(C.x, C.z, th, 9, 5, y, 4.2, 6.8), box(ax, az, th, 2, 3.2, y, 3.2, 0)] });
+  const y = W.heightAt(C.x, C.z), v0 = b.v.length / VS, th = -C.yaw + Math.PI / 2, cs = Math.cos(th), sn = Math.sin(th);
+  const DW = [0.055, 0.037, 0.025], UN = [0.04, 0.03, 0.022], TR = [0.2, 0.135, 0.08], SH = [0.16, 0.17, 0.18], PL = [0.36, 0.32, 0.26], F = 0.6, E = 5.6, RN = 13.3, RT = 13;
+  const wp = (lx, lz) => [C.x + cs * lx + sn * lz, C.z - sn * lx + cs * lz];
+  b.at(C.x, y, C.z, th);
+  b.set(PL, MAT.stone); b.box(-13, -3.5, -2.3, -11.6, F, 2.3); b.box(-0.6, -3.5, -7, 12.7, F, 7); b.box(-11.7, -3.5, -9.4, -0.4, F, 9.4); b.box(12.6, -3.5, -2.8, 15.6, F, 2.8);
+  b.set(DW, MAT.wood); b.box(-0.5, F, -4.8, 12.5, E, 4.8); b.box(-11.5, F, -7.6, -0.5, E, 7.6); b.box(12.5, F, -2.6, 15.4, 3.4, 2.6); b.box(-12.9, F, -2.1, -11.5, 4.3, 2.1); // last: sacristy on the east wall
+  for (const s of [-1, 1]) { b.box(-0.5, F, s > 0 ? 4.8 : -6.8, 12.5, 2.7, s > 0 ? 6.8 : -4.8); b.box(-11, F, s > 0 ? 7.6 : -9.2, -1, 2.6, s > 0 ? 9.2 : -7.6); }
+  gtri(b, [12.5, E, -4.8], [12.5, E, 4.8], [12.5, RN, 0], [1, 0, 0]); gtri(b, [15.4, 3.4, -2.6], [15.4, 3.4, 2.6], [15.4, 5.6, 0], [1, 0, 0]); gtri(b, [-12.9, 4.3, -2.1], [-12.9, 4.3, 2.1], [-12.9, 6.35, 0], [-1, 0, 0]);
+  for (const s of [-1, 1]) gtri(b, [-11.5, E, s * 7.6], [-0.5, E, s * 7.6], [-6, RT, s * 7.6], [0, 0, s]);
+  const o = 0.5, eN = E - o * (RN - E) / 4.8, eT = E - o * (RT - E) / 5.5;
+  for (const s of [-1, 1]) {
+    roofQ(b, [[-6, eN, s * 5.3], [13.1, eN, s * 5.3], [13.1, RN, 0], [-6, RN, 0]], UN);
+    roofQ(b, [[-6 + s * 6, eT, -8.2], [-6 + s * 6, eT, 8.2], [-6, RT, 8.2], [-6, RT, -8.2]], UN);
+    roofQ(b, [[-0.5, 2.45, s * 7.25], [12.9, 2.45, s * 7.25], [12.9, 4.95, s * 4.8], [-0.5, 4.95, s * 4.8]], UN, 0.16);
+    roofQ(b, [[-11.3, 2.35, s * 9.65], [-0.7, 2.35, s * 9.65], [-0.7, 4.5, s * 7.6], [-11.3, 4.5, s * 7.6]], UN, 0.16);
+    roofQ(b, [[12.3, 3.15, s * 3.0], [15.8, 3.15, s * 3.0], [15.8, 5.6, 0], [12.3, 5.6, 0]], UN, 0.16);
+    roofQ(b, [[-13.3, 4.05, s * 2.45], [-11.5, 4.05, s * 2.45], [-11.5, 6.4, 0], [-13.3, 6.4, 0]], UN, 0.16);
+  }
+  b.set(TR, MAT.wood); // gable crosses
+  for (const [x, yy, z, ax] of [[13.05, RN, 0, 0], [-6, RT, 8.15, 1], [-6, RT, -8.15, 1], [15.75, 5.6, 0, 0]]) { b.box(x - 0.08, yy, z - 0.08, x + 0.08, yy + 1.7, z + 0.08); if (ax) b.box(x - 0.45, yy + 1.0, z - 0.07, x + 0.45, yy + 1.18, z + 0.07); else b.box(x - 0.07, yy + 1.0, z - 0.45, x + 0.07, yy + 1.18, z + 0.45); }
+  // belfry: square timber tower on the crossing, louvred openings, a trim band
+  const tx = -5.8, ht = 2.5;
+  b.set(DW, MAT.wood); b.box(tx - ht, 10.5, -ht, tx + ht, 21, ht);
+  b.set(TR, MAT.wood); b.box(tx - ht - 0.12, 16.9, -ht - 0.12, tx + ht + 0.12, 17.3, ht + 0.12);
+  b.set(DARK, MAT.void);
+  for (const s of [-1, 1]) for (const q of [-0.9, 0.9]) { b.quad([tx + q - 0.35, 17.7, s * (ht + 0.02)], [tx + q + 0.35, 17.7, s * (ht + 0.02)], [tx + q + 0.35, 20.2, s * (ht + 0.02)], [tx + q - 0.35, 20.2, s * (ht + 0.02)]); b.quad([tx + s * (ht + 0.02), 17.7, q - 0.35], [tx + s * (ht + 0.02), 17.7, q + 0.35], [tx + s * (ht + 0.02), 20.2, q + 0.35], [tx + s * (ht + 0.02), 20.2, q - 0.35]); }
+  // windows: rows in the aisle walls, tall gridded windows in the gables and the transept's east wall
+  for (const s of [-1, 1]) {
+    for (let q = 0; q < 8; q++) win(b, 0.9 + q * 1.5, 1.25, s * 6.8, 0.95, 0.95, 0, s, null);
+    for (let q = 0; q < 6; q++) win(b, -10.2 + q * 1.6, 1.2, s * 9.2, 1.0, 0.9, 0, s, null);
+    for (const dx of [-1.25, 0, 1.25]) { win(b, -6 + dx, 5.9, s * 7.6, 1.0, 1.6, 0, s, TR); win(b, -6 + dx, 7.8, s * 7.6, 1.0, 1.6, 0, s, TR); }
+    win(b, -6, 9.9, s * 7.6, 1.0, 1.3, 0, s, TR);
+    win(b, 12.5, 6.4, s * 0.65, 0.9, 2.0, 1, 0, TR);
+  }
+  for (const dz of [-5.4, -3.5, 3.5, 5.4]) win(b, -11.5, 1.5, dz, 1.0, 3.2, -1, 0, TR);
+  win(b, -12.9, 1.6, 0, 0.8, 1.4, -1, 0, TR);
+  win(b, 15.4, 0.6, 0, 1.4, 2.2, 1, 0, TR);
+  // round turret in the north corner between transept and nave: drum, cone, a smaller drum, a pointed cone
+  const rx = 0.9, rz = 6.3; b.set(DW, MAT.wood); b.cyl(rx, F, rz, rx, 6.3, rz, 1.6, 1.6, 12); b.cyl(rx, 7.6, rz, rx, 8.5, rz, 0.85, 0.85, 10);
+  b.set(SH, MAT.paint); b.cyl(rx, 6.3, rz, rx, 7.7, rz, 2.05, 0.8, 12); b.cyl(rx, 8.5, rz, rx, 10.9, rz, 1.1, 0.04, 10);
+  // the flared skirt and the octagonal spire, faces square to the tower (frame turned by 22.5 degrees)
+  const tp = wp(tx, 0); b.at(tp[0], y, tp[1], th + Math.PI / 8);
+  b.set(SH, MAT.paint); b.cyl(0, 20.8, 0, 0, 22.3, 0, 3.75, 2.45, 8); b.cyl(0, 22.3, 0, 0, 33, 0, 2.45, 0.05, 8);
+  b.set(TR, MAT.metal); b.box(-0.05, 32.6, -0.05, 0.05, 34.6, 0.05); b.box(-0.4, 33.8, -0.04, 0.4, 33.92, 0.04);
+  const bx = (lx, lz, t, hw, hd, wall, rise) => { const p = wp(lx, lz); return box(p[0], p[1], t, hw, hd, y, wall, rise); };
+  W.bld.push({ x: C.x, y, z: C.z, th, v0, v1: b.v.length / VS, area: 391, col: DW, boxes: [bx(6, 0, th, 6.5, 4.8, E, RN - E), bx(-6, 0, th - Math.PI / 2, 7.6, 5.5, E, RT - E), bx(tx, 0, th, ht, ht, 21, 0),
+    bx(6, 5.8, th, 6.5, 1, 2.7, 0), bx(-12.2, 0, th, 0.7, 2.1, 4.3, 2), bx(6, -5.8, th, 6.5, 1, 2.7, 0), bx(-6, 8.4, th, 5, 0.8, 2.6, 0), bx(-6, -8.4, th, 5, 0.8, 2.6, 0), bx(13.95, 0, th, 1.45, 2.6, 3.4, 2.2)] });
 }
 
 function portal(b, W, p) { // concrete headwall where a road dives under a ski bridge; local +z points into the tunnel
@@ -324,12 +450,127 @@ function portal(b, W, p) { // concrete headwall where a road dives under a ski b
   for (let x = -wd; x <= wd; x += 3) W.colliders.push(p.x + cs * x + sn * 4.6, p.z - sn * x + cs * 4.6, 2.6); // stops the groomer in the mouth and short of the edge on top
 }
 
+// ---------- Holmenkollen arena (LM.arena in world.js): stands stepped on the measured ground, stand buildings, biathlon range, floodlights ----------
+const CONC = [0.46, 0.46, 0.45], SEAT = [0.07, 0.12, 0.26], AISLE = [0.6, 0.6, 0.58], STEEL = [0.5, 0.52, 0.55];
+const bx = (b, x0, y0, z0, x1, y1, z1) => b.box(Math.min(x0, x1), y0, Math.min(z0, z1), Math.max(x0, x1), y1, Math.max(z0, z1)); // box with its corners in any order
+function nq(b, p0, p1, p2, p3, nx, ny, nz) { const a = b.vert(p0[0], p0[1], p0[2], nx, ny, nz), c = b.vert(p1[0], p1[1], p1[2], nx, ny, nz), d = b.vert(p2[0], p2[1], p2[2], nx, ny, nz), e = b.vert(p3[0], p3[1], p3[2], nx, ny, nz); b.i.push(a, c, d, a, d, e); }
+function arenaXf(W, f) { // frame helpers: P(d, t, y) -> world point, G(d, t) ground, the right vector
+  const F = arenaFrame(f), rx = -F[3], rz = F[2];
+  return { F, rx, rz, P: (d, t, y) => [F[0] + F[2] * d + rx * t, y, F[1] + F[3] * d + rz * t], G: (d, t) => W.heightAt(F[0] + F[2] * d + rx * t, F[1] + F[3] * d + rz * t) };
+}
+// one stand: rows between the front and back lines of its ribs, the treads in even steps up the rib's fitted rake, raised to clear the ground, + lift. S.n rows split
+// the depth evenly (so in the bowl they curve with its outline and close up at the narrow end); otherwise rows S.rw deep run parallel
+// to the front. Ribs every S.seg m. Treads are snow, risers seats or concrete, aisles every S.ai m, a front wall down to the ground
+// in front, a back wall and railing, solid circles along the middle.
+function stand(b, W, S) {
+  const X = arenaXf(W, S.f), { P, G } = X, r = S.r, d0 = r[0][0], d1 = r[r.length - 1][0], sg = Math.sign(r[0][2] - r[0][1]), lift = S.lift || 0.25, AI = S.ai || 30;
+  const ds = []; { const n = Math.ceil((d1 - d0) / (S.seg || 8)); for (let i = 0; i <= n; i++) ds.push(d0 + (d1 - d0) * i / n); for (let a = d0 + AI; a < d1 - 8; a += AI) ds.push(a - 0.7, a + 0.7); ds.sort((p, q) => p - q); }
+  const isA = (d) => { for (let a = d0 + AI; a < d1 - 8; a += AI) if (Math.abs(d - a) < 0.71) return true; return false; };
+  let J = S.n; if (!J) { let w = 0; for (const q of r) w = Math.max(w, Math.abs(q[2] - q[1])); J = Math.ceil(w / S.rw - 0.3); }
+  const R = ds.map((d) => { // per rib: row edges c[0..J] (signed t) and tread heights y[0..J-1] at the highest ground under each row + lift
+    const [tf, tb] = standAt(r, d), w = Math.abs(tb - tf), c = new Float32Array(J + 1), y = new Float32Array(J);
+    for (let k = 0; k <= J; k++) c[k] = tf + sg * (S.n ? w * k / J : Math.min(k * S.rw, w)); c[J] = tb;
+    let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0; for (let s = 0; s <= w + 0.01; s += 1) { const g = G(d, tf + sg * s); n++; sx += s; sy += g; sxx += s * s; sxy += s * g; }
+    const kk = n > 1 ? (n * sxy - sx * sy) / (n * sxx - sx * sx || 1) : 0, a0 = (sy - kk * sx) / n; let off = 0; // even steps on the rib's straight rake, raised to clear the ground
+    for (let s = 0; s <= w + 0.01; s += 1) off = Math.max(off, G(d, tf + sg * s) - a0 - kk * s);
+    for (let k = 0; k < J; k++) y[k] = a0 + kk * Math.abs(c[k + 1] - tf) + off + lift;
+    let jf = 0; while (jf < J - 1 && Math.abs(c[jf + 1] - c[jf]) < 0.01) jf++; let jl = J - 1; while (jl > jf && Math.abs(c[jl + 1] - c[jl]) < 0.01) jl--;
+    return { d, tf, tb, c, y, jf, jl, gf: Math.min(G(d, tf - sg * 2.5), G(d, tf)) - 0.6, gb: G(d, tb) - 0.5 };
+  });
+  b.at(0, 0, 0);
+  const fx = -sg * X.rx, fz = -sg * X.rz; // horizontal normal facing the front
+  for (let k = 0; k + 1 < R.length; k++) {
+    const A = R[k], B = R[k + 1], aisle = isA((A.d + B.d) / 2);
+    for (let j = 0; j < J; j++) {
+      const wa = Math.abs(A.c[j + 1] - A.c[j]), wb = Math.abs(B.c[j + 1] - B.c[j]); if (wa < 0.01 && wb < 0.01) continue;
+      b.set(SNOWC, MAT.snow); nq(b, P(A.d, A.c[j], A.y[j]), P(A.d, A.c[j + 1], A.y[j]), P(B.d, B.c[j + 1], B.y[j]), P(B.d, B.c[j], B.y[j]), 0, 1, 0);
+      if (j <= A.jf && j <= B.jf) continue; // the front wall covers the first riser
+      b.set(aisle ? AISLE : S.seat ? SEAT : CONC, aisle ? MAT.stone : S.seat ? MAT.paint : MAT.stone);
+      const ya = j > A.jf ? A.y[j - 1] - 0.05 : A.gf, yb = j > B.jf ? B.y[j - 1] - 0.05 : B.gf;
+      nq(b, P(A.d, A.c[j], ya), P(B.d, B.c[j], yb), P(B.d, B.c[j], B.y[j]), P(A.d, A.c[j], A.y[j]), fx, 0, fz);
+    }
+    b.set(CONC, MAT.stone); // front wall, back wall
+    nq(b, P(A.d, A.tf, A.gf), P(B.d, B.tf, B.gf), P(B.d, B.tf, B.y[B.jf]), P(A.d, A.tf, A.y[A.jf]), fx, 0, fz);
+    nq(b, P(A.d, A.tb, A.gb), P(B.d, B.tb, B.gb), P(B.d, B.tb, B.y[B.jl] + 0.15), P(A.d, A.tb, A.y[A.jl] + 0.15), -fx, 0, -fz);
+    b.set(DARK, MAT.metal); // hand rails (a thin strip each)
+    nq(b, P(A.d, A.tb, A.y[A.jl] + 0.98), P(B.d, B.tb, B.y[B.jl] + 0.98), P(B.d, B.tb, B.y[B.jl] + 1.06), P(A.d, A.tb, A.y[A.jl] + 1.06), fx, 0, fz);
+    if (S.lift > 1 || S.n) nq(b, P(A.d, A.tf, A.y[A.jf] + 0.94), P(B.d, B.tf, B.y[B.jf] + 0.94), P(B.d, B.tf, B.y[B.jf] + 1.02), P(A.d, A.tf, A.y[A.jf] + 1.02), fx, 0, fz);
+  }
+  for (const E of [R[0], R[R.length - 1]]) { // end caps: the stepped profile down to the ground
+    b.set(CONC, MAT.stone); const s = E === R[0] ? -1 : 1;
+    for (let j = E.jf; j <= E.jl; j++) { const bot = Math.min(G(E.d, E.c[j]), G(E.d, E.c[j + 1]), E.gf + 0.6) - 0.6;
+      nq(b, P(E.d, E.c[j], bot), P(E.d, E.c[j + 1], bot), P(E.d, E.c[j + 1], E.y[j]), P(E.d, E.c[j], E.y[j]), s * X.F[2], 0, s * X.F[3]); }
+  }
+  if (S.ads !== undefined) for (let i = 0; d0 + i * 6 < d1; i++) { // banner boards along the foot of the stand
+    const da = d0 + i * 6, db = Math.min(d1, da + 5.8), ga = G(da, S.ads), gb = G(db, S.ads); b.set(ADC[i % ADC.length], MAT.paint);
+    nq(b, P(da, S.ads, ga - 0.3), P(db, S.ads, gb - 0.3), P(db, S.ads, gb + 0.95), P(da, S.ads, ga + 0.95), fx, 0, fz);
+    b.set(DARK, MAT.paint); nq(b, P(da, S.ads + sg * 0.12, ga - 0.3), P(db, S.ads + sg * 0.12, gb - 0.3), P(db, S.ads + sg * 0.12, gb + 0.95), P(da, S.ads + sg * 0.12, ga + 0.95), -fx, 0, -fz);
+  }
+  for (let d = d0; d <= d1 + 0.01;) { const q = standAt(r, Math.min(d, d1)), rr = Math.abs(q[1] - q[0]) / 2, p = P(Math.min(d, d1), (q[0] + q[1]) / 2, 0); // solid: circles along the middle
+    if (rr > 0.5) W.colliders.push(p[0], p[2], rr); d += Math.max(2.5, rr * 0.55); }
+}
+const ADC = [[0.55, 0.06, 0.05], [0.85, 0.85, 0.82], [0.08, 0.15, 0.4], [0.85, 0.85, 0.82], [0.75, 0.55, 0.05]];
+function standBox(b, W, B) { // stand buildings (commentator boxes, judges' tower) and roofs on posts
+  const X = arenaXf(W, B.f), { P, G, F } = X;
+  b.at(F[0], 0, F[1], Math.atan2(-F[3], F[2])); // builder frame: local x = d, local z = t
+  for (const [d0, d1, t0, t1, top, kind] of B.b) {
+    const g = Math.min(G(d0, t0), G(d1, t0), G(d0, t1), G(d1, t1)) - 1, wf = Math.abs(t1) < Math.abs(t0) ? t1 : t0, s = wf === t1 ? 1 : -1;
+    if (kind === 0) {
+      b.set([0.36, 0.37, 0.38], MAT.paint); b.box(d0, g, t0, d1, top - 0.4, t1);
+      b.set(SNOWC, MAT.snow); b.box(d0 - 0.3, top - 0.4, t0 - 0.3, d1 + 0.3, top, t1 + 0.3);
+      b.set([1, 0.8, 0.5], MAT.window); const yw = top - 2.6; for (let d = d0 + 0.6; d < d1 - 1; d += 3.2) { const z = wf + s * 0.03, Q = [[d, yw, z], [d + 2.6, yw, z], [d + 2.6, yw + 1.5, z], [d, yw + 1.5, z]]; if (s < 0) Q.reverse(); b.quad(...Q); }
+      const c = P((d0 + d1) / 2, (t0 + t1) / 2, 0); W.colliders.push(c[0], c[2], Math.min(d1 - d0, Math.abs(t1 - t0)) / 2);
+    } else {
+      b.set(DARK, MAT.metal); b.box(d0, top - 0.9, t0, d1, top - 0.35, t1);
+      b.set(SNOWC, MAT.snow); b.box(d0 - 0.2, top - 0.35, t0 - 0.2, d1 + 0.2, top, t1 + 0.2);
+      b.set(STEEL, MAT.metal); for (let d = d0 + 0.5; d <= d1; d += (d1 - d0 - 1) / 2) { const tb = Math.abs(t0) > Math.abs(t1) ? t0 + 0.4 : t1 - 0.4; b.cyl(d, G(d, tb) - 0.5, tb, d, top - 0.9, tb, 0.2, 0.2, 6); }
+    }
+  }
+}
+function bRange(b, W, A) { // biathlon range: target wall with 30 white plates and black discs at tg, mats and lane boards on the firing line fl
+  const X = arenaXf(W, A.f), { P, G, F } = X, L = F[4], s = Math.sign(A.fl - A.tg); // s: from the targets towards the shooters
+  b.at(F[0], 0, F[1], Math.atan2(-F[3], F[2]));
+  for (let i = 0; i < 10; i++) { const da = i * L / 10, db = da + L / 10, g = G((da + db) / 2, A.tg + s * 2.5); b.set(CONC, MAT.stone); b.box(da, g - 1, A.tg - 0.6, db, g + 1.25, A.tg + 0.6); b.set(SNOWC, MAT.snow); b.box(da - 0.02, g + 1.25, A.tg - 0.7, db + 0.02, g + 1.45, A.tg + 0.7); const c = P((da + db) / 2, A.tg, 0); W.colliders.push(c[0], c[2], 1.6); }
+  for (let i = 0; i < A.n; i++) {
+    const d = (i + 0.5) * L / A.n, g = G(d, A.tg + s * 2.5), z = A.tg + s * 0.62, gf = G(d, A.fl), zb = A.fl - s * 0.15;
+    b.set(WHITE, MAT.paint); nq(b, [d - 1.05, g + 0.55, z], [d + 1.05, g + 0.55, z], [d + 1.05, g + 1.15, z], [d - 1.05, g + 1.15, z], 0, 0, s);
+    b.set(DARK, MAT.void); for (let k = 0; k < 5; k++) { const x = d - 0.8 + k * 0.4, zz = z + s * 0.02; nq(b, [x - 0.1, g + 0.75, zz], [x + 0.1, g + 0.75, zz], [x + 0.1, g + 0.95, zz], [x - 0.1, g + 0.95, zz], 0, 0, s); }
+    b.set([0.12, 0.13, 0.14], MAT.rubber); nq(b, [d - 0.75, gf + 0.12, A.fl - s * 0.2], [d + 0.75, gf + 0.12, A.fl - s * 0.2], [d + 0.75, gf + 0.12, A.fl + s * 2.2], [d - 0.75, gf + 0.12, A.fl + s * 2.2], 0, 1, 0);
+    b.set(i % 2 ? [0.75, 0.6, 0.06] : WHITE, MAT.sign); nq(b, [d - 0.3, gf - 0.2, zb], [d + 0.3, gf - 0.2, zb], [d + 0.3, gf + 0.9, zb], [d - 0.3, gf + 0.9, zb], 0, 0, s);
+  }
+  for (let i = 0; i <= 4; i++) { const d = i * L / 4, t = (A.tg + A.fl) / 2, g = G(d, t); b.set(WHITE, MAT.paint); b.cyl(d, g - 0.5, t, d, g + 4.5, t, 0.05, 0.04, 5); b.set(i % 2 ? [0.8, 0.1, 0.05] : [0.85, 0.75, 0.1], MAT.flag); b.quad([d, g + 4.4, t], [d + 1.2, g + 4.3, t + 0.3], [d + 1.2, g + 3.7, t + 0.3], [d, g + 3.8, t], [0, 0, 1, 0, 1, 1, 0, 1]); }
+}
+function finish(b, W, A) { // finish gantry across the stadium floor
+  const X = arenaXf(W, A.f), { P, G, F } = X, ga = G(A.d, A.t0), gb = G(A.d, A.t1), top = Math.max(ga, gb) + 6;
+  b.at(F[0], 0, F[1], Math.atan2(-F[3], F[2]));
+  b.set([0.8, 0.08, 0.06], MAT.paint); b.box(A.d - 0.5, ga - 0.5, A.t0 - 0.5, A.d + 0.5, top, A.t0 + 0.5); b.box(A.d - 0.5, gb - 0.5, A.t1 - 0.5, A.d + 0.5, top, A.t1 + 0.5);
+  b.box(A.d - 0.4, top - 1.4, A.t0, A.d + 0.4, top, A.t1); b.set(WHITE, MAT.paint); for (const s of [-1, 1]) b.box(A.d + s * 0.42 - 0.01, top - 1.0, (A.t0 + A.t1) / 2 - 3, A.d + s * 0.42 + 0.01, top - 0.4, (A.t0 + A.t1) / 2 + 3);
+  b.set(SNOWC, MAT.snow); b.box(A.d - 0.45, top, A.t0 - 0.5, A.d + 0.45, top + 0.18, A.t1 + 0.5);
+  for (const t of [A.t0, A.t1]) { const c = P(A.d, t, 0); W.colliders.push(c[0], c[2], 0.9); }
+}
+function mast(b, W, M, A) { // floodlight mast, the lamp head turned towards the nearest jump axis
+  const [x, z, h] = M, y = W.heightAt(x, z) - 0.5, a = mastAim(x, z), yaw = Math.atan2(a[0] - x, a[1] - z);
+  b.at(x, y, z, yaw); // local +z faces the arena
+  W.glows.push(x + Math.sin(yaw) * 0.4, y + h + 0.6, z + Math.cos(yaw) * 0.4);
+  b.set([0.55, 0.56, 0.58], MAT.metal); b.cyl(0, 0, 0, 0, h + 0.5, 0, 0.42, 0.2, 6); b.box(-1.7, h - 0.4, -0.25, 1.7, h + 1.6, 0.05);
+  b.set([1, 0.92, 0.75], MAT.lamp); for (let q = 0; q < 3; q++) for (let p = 0; p < 2; p++) { const x0 = -1.5 + q * 1.05, y0 = h - 0.2 + p * 0.9; b.quad([x0, y0, 0.07], [x0 + 0.85, y0, 0.07], [x0 + 0.85, y0 + 0.7, 0.07], [x0, y0 + 0.7, 0.07]); }
+  W.colliders.push(x, z, 0.8);
+}
+function arena(b, W, A) {
+  W.glows = []; // floodlight heads (x, y, z), drawn as night glows in main.js
+  const i0 = b.i.length, c0 = W.colliders.length;
+  for (const S of A.stands) stand(b, W, S);
+  for (const B of A.boxes) standBox(b, W, B);
+  bRange(b, W, A.range); finish(b, W, A.finish);
+  for (const M of A.mast) mast(b, W, M, A);
+  W.arenaStat = { tris: (b.i.length - i0) / 3, circles: (W.colliders.length - c0) / 3 }; // for tests (props mesh triangles, solid circles)
+}
 export function buildProps(W) {
   const b = new MB();
   W.colliders = []; W.bld = []; // circle colliders (x, z, r); building records with their solid boxes (see buildings.js)
   const PLAY = W.PLAY;
   if (W.name === 'fantasy') { cabin(b, W.cabin, W); bridge(b, W.bridge); dam(b, W.dam); }
-  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump); skiJump(b, W, W.lm.mid); tvTower(b, W, W.lm.tower); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
+  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump); skiJump(b, W, W.lm.mid); arena(b, W, W.lm.arena); tvTower(b, W, W.lm.tower); skiLift(b, W, W.lm.lift); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
   for (let i = 0; i < W.pylons.length; i++) { pylon(b, W.pylons[i]); if (i) wires(b, W.pylons[i - 1], W.pylons[i]); W.colliders.push(W.pylons[i].x + Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z - Math.sin(W.pylons[i].yaw) * 2.6, 0.5, W.pylons[i].x - Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z + Math.sin(W.pylons[i].yaw) * 2.6, 0.5); }
   for (const L of W.lamps) { lamp(b, L); W.colliders.push(L.x, L.z, 0.35); }
   for (const S of W.signs) { sign(b, S); W.colliders.push(S.x, S.z, 0.3); }

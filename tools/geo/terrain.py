@@ -11,7 +11,7 @@ from geo import SIZE
 import pack
 
 STEP = 4                                    # base grid
-INSETS = [('arena', -1064, 792, 160, 1512)]  # name, x0, z0, x1, z1 (world metres; x east, z south)
+INSETS = [('arena', -1064, 792, 160, 1512), ('tryvann', -960, -1780, -360, -1180)]  # name, x0, z0, x1, z1 (world metres; x east, z south)
 HALF = SIZE / 2
 dtm = np.load('raw/dtm1.npy').astype(np.float64)           # 1 m, sample i at -HALF + i
 meta, blobs = pack.load()

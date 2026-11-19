@@ -470,6 +470,7 @@ async function main() {
   let glowN = 0, glowBuf;
   { const g = [];
     for (const L of W.lamps) g.push(L.x + Math.sin(L.yaw) * 1.55, L.y + 6.0, L.z + Math.cos(L.yaw) * 1.55, 0.95, 0.9, 0.65, 0.34, 0, 2, 0, 0, 0);
+    const AG = W.glows || []; for (let i = 0; i < AG.length; i += 3) g.push(AG[i], AG[i + 1], AG[i + 2], 1, 0.95, 0.85, 1.6, 0, 2, 0, 0, 0); // arena floodlights (props.js)
     glowN = g.length / 12; glowBuf = mkBuf(new Float32Array(g), U.VERTEX); }
   const em = { spray: 0, exh: 0, smoke: 0, kick: 0, roost: 0 };
   const tmp3 = new Float32Array(3); let fwdX = 0, fwdZ = -1, eBM = null;

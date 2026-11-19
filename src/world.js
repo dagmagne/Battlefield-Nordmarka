@@ -11,16 +11,43 @@ const PLAY = 1560, MW = 3200, TREELINE = 900;
 export const NEAR = 32, NCN = WS / NEAR, FAR = 128, FCN = WS / FAR;
 // landmark geometry (from tools/geo/raw/landmarks.json)
 export const LM = {
-  frogner: { x: -139.3, z: -266.1, yaw: 3.075 },
+  frogner: { x: -139.5, z: -259.0, yaw: 0 }, // restaurant footprint centre from the lidar; local +z (front, terrace) faces south over the city
   // jump profiles measured from the lidar surface model (tools/geo/jumps.py): deck [d, y], wing [d, t, top y], block [from d, half width]
   jump: { top: [-865.1, 1152.8], lip: [-774.2, 1207.0], end: [-542.2, 1340.4], w: 6.5, plat: 18,
     deck: [[20, 420.8], [32, 411.6], [44, 404.2], [56, 396.2], [68, 390.6], [80, 386.2], [92, 382.3], [106, 380.2]],
     wing: [[56, 3.3, 399], [80, 9.2, 388], [104, 14, 379], [128, 22, 374.5], [146, 29, 367.4], [158, 33, 363.5], [176, 37, 358], [190, 40, 351], [198, 42, 343]], block: [60, 10] },
   mid: { top: [-338.1, 932.8], lip: [-247.9, 957.4], end: [-28.3, 1018.6], w: 4.5, plat: 8, skirt: 1,
     deck: [[0, 372.4], [8, 367.4], [16, 361.8], [24, 356.2], [32, 350.6], [40, 345.0], [48, 339.4], [56, 334.4], [64, 330.3], [72, 327.2], [80, 325.0], [94, 323.2]] },
-  tower: { x: -662.7, z: -1485.7, h: 118 },
-  chapel: { x: -427.3, z: 1074.0, yaw: -1.425 },
+  tower: { x: -663.5, z: -1486.2, h: 118 }, // centre of the drum in the lidar surface model
+  lift: { a: [-693, -1558], b: [-1130, -1875], sp: 46, h: 9 }, // chairlift west of the tower: top station a, running out of the map to the north-west
+  chapel: { x: -425.3, z: 1074.7, yaw: -1.431 }, // lidar: nave runs west (local +x), crossing tower and transept at the east end
+  // Holmenkollen arena, measured from the lidar (tools/geo/stands.py; outlines guided by the OSM spectator_stand ways). Frame f: [ax, az, bx, bz]
+  // (d along a -> b, t to its right) or 'jump' / 'mid' (that jump's top -> end axis). Stands: ribs r [d, t front, t back], rows run front -> back;
+  // n = rows splitting the depth evenly (the bowl), else rows rw deep; treads at the ground + lift; ribs every seg m; seat = seat rows; ads = banner line at t.
+  // box [d0, d1, t0, t1, top y, kind 0 building / 1 roof on posts]; range: 30 lanes, targets at t tg, firing line at t fl; mast [x, z, height].
+  arena: {
+    stands: [
+      { f: 'jump', n: 16, seg: 9, r: [[225, -17.5, -50], [235, -16.5, -54], [245, -18, -56.5], [255, -20, -57.5], [265, -20, -58], [275, -19, -57], [285, -17.5, -55.5], [295, -15.5, -53], [305, -14.5, -49.5], [315, -14, -44.5], [325, -13, -37.5], [335, -12.5, -28.5], [345, -11.5, -19.5], [355, -10.5, -11]] },
+      { f: 'jump', n: 16, seg: 9, r: [[225, 18, 54], [235, 18.5, 58], [245, 19, 59.5], [255, 19.5, 60], [265, 19, 59.5], [275, 19, 58.5], [285, 18, 57], [295, 17.5, 54.5], [305, 16.5, 50.5], [315, 16.5, 45], [325, 15.5, 38], [335, 13.5, 29], [345, 13, 20.5], [355, 11.5, 12]] },
+      { f: 'jump', rw: 1.8, lift: 1.7, seg: 6, seat: 1, r: [[160, -18.5, -21], [170, -18, -30.5], [180, -19, -37], [190, -19, -39.5], [200, -17.5, -44.5], [210, -16, -46], [222, -16.5, -49]] },
+      { f: 'jump', rw: 1.8, lift: 1.7, seg: 6, seat: 1, r: [[160, 19.5, 23], [170, 20, 33], [180, 20, 37], [190, 20, 39.5], [200, 19.5, 46.5], [210, 18.5, 48], [222, 18, 48.5]] },
+      { f: [-588, 1072, -502, 1196], rw: 1.5, lift: 0.3, seg: 12, seat: 1, ads: 8.5, r: [[-8, 6.5, -7.5], [160, 6.5, -7.5]] },
+      { f: 'mid', rw: 1.5, lift: 1.4, seg: 12, seat: 1, r: [[160, 14.5, 22], [235, 14.5, 22]] },
+      { f: 'mid', rw: 2, lift: 0.2, seg: 12, r: [[215, -12, -24], [315, -12, -24]] },
+      { f: [-655, 1400, -578, 1388], rw: 2, lift: 0.2, seg: 12, r: [[0, -3, 10], [65, -3, 10]] },
+    ],
+    boxes: [{ f: [-588, 1072, -502, 1196], b: [[78, 146, -9.5, -3, 341.3, 0], [146, 162, -8.5, 5.5, 341, 1]] },
+      { f: 'mid', b: [[143, 155, 25.5, 34.5, 306.8, 0], [155, 166, 25.5, 34.5, 302.4, 0], [166, 177, 25.5, 34.5, 297.7, 0]] }],
+    range: { f: [-642, 1070, -688, 1148], n: 30, tg: -1, fl: -50 },
+    finish: { f: [-588, 1072, -502, 1196], d: 75, t0: 9.5, t1: 25 }, // where the finish line is is a guess
+    mast: [[-606, 1403, 14.9], [-641, 1409, 14.3], [-760, 1272, 40.6], [-711, 1185, 37.8], [-709, 1312, 40.4], [-616, 1375, 31.8], [-550, 1260, 31.9], [-651, 1211, 41.9], [-64, 1042, 27.4], [-225, 997, 28.9], [-274, 979, 27.1], [-315, 964, 27.5]],
+  },
 };
+// an arena frame: origin, unit axis, length; the t front / back of a stand at d (linear between ribs), null outside it
+export const arenaFrame = (f) => { const q = f === 'jump' ? [...LM.jump.top, ...LM.jump.end] : f === 'mid' ? [...LM.mid.top, ...LM.mid.end] : f, L = Math.hypot(q[2] - q[0], q[3] - q[1]); return [q[0], q[1], (q[2] - q[0]) / L, (q[3] - q[1]) / L, L]; };
+// where a floodlight mast points: the nearer jump's axis, abreast of the mast (d clamped to the landing hill and outrun)
+export const mastAim = (x, z) => { let best = 1e9, a = [x, z]; for (const f of ['jump', 'mid']) { const F = arenaFrame(f), dx = x - F[0], dz = z - F[1], d = clamp(dx * F[2] + dz * F[3], 150, F[4] + 60), t = -dx * F[3] + dz * F[2]; if (Math.abs(t) < best) { best = Math.abs(t); a = [F[0] + F[2] * d, F[1] + F[3] * d]; } } return a; };
+export const standAt = (r, d) => { if (d < r[0][0] || d > r[r.length - 1][0]) return null; let i = 0; while (i < r.length - 2 && d > r[i + 1][0]) i++; const a = r[i], b = r[i + 1], k = (d - a[0]) / (b[0] - a[0] || 1); return [a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]; };
 
 // ---------- noise ----------
 const P = new Uint8Array(512);
@@ -91,6 +118,15 @@ export async function genWorld(tick, Q, startAt) {
     }
   }
 
+  // ---- window border: the terrain beyond the map repeats the edge texels, so smooth the outer 160 m along the edge (no streaks to the horizon) ----
+  { const BW = 80, R = 160, ps = new Float64Array(HN + 1), line = new Float32Array(HN);
+    for (let side = 0; side < 4; side++) for (let r = 0; r < BW; r++) {
+      const w = (1 - r / BW) ** 1.5, at = (t) => side === 0 ? r * HN + t : side === 1 ? (HN - 1 - r) * HN + t : side === 2 ? t * HN + r : t * HN + HN - 1 - r;
+      for (let t = 0; t < HN; t++) ps[t + 1] = ps[t] + H[at(t)];
+      for (let t = 0; t < HN; t++) { const t0 = Math.max(0, t - R), t1 = Math.min(HN, t + R + 1); line[t] = (ps[t1] - ps[t0]) / (t1 - t0); }
+      for (let t = 0; t < HN; t++) { const k = at(t); H[k] = lerp(H[k], line[t], w); }
+    } }
+
   // ---- lakes: connected water -> flat ice at the local water level ----
   const lakes = [];
   { const lab = new Int32Array(HN * HN), st = new Int32Array(HN * HN);
@@ -136,6 +172,11 @@ export async function genWorld(tick, Q, startAt) {
   // inside a ski jump's footprint (inrun, wind screens, landing hill out to d = far along its axis, widened by m)?
   const inJump = (x, z, far, m) => { for (const J of [LM.jump, LM.mid]) { const ex = J.end[0] - J.top[0], ez = J.end[1] - J.top[1], l = Math.hypot(ex, ez), d = ((x - J.top[0]) * ex + (z - J.top[1]) * ez) / l, t = Math.abs((x - J.top[0]) * -ez + (z - J.top[1]) * ex) / l;
     if (d > -6 && d < (far || l) && t < m + 13 + 0.3 * clamp(d - 60, 0, 110)) return true; } return false; };
+  // inside an arena stand, stand building or the shooting range (LM.arena), widened by m?
+  const AR = LM.arena, arF = (f, x, z) => { const F = arenaFrame(f), dx = x - F[0], dz = z - F[1]; return [dx * F[2] + dz * F[3], -dx * F[3] + dz * F[2]]; };
+  const inArena = (x, z, m) => { for (const S of AR.stands) { const p = arF(S.f, x, z), q = standAt(S.r, p[0]); if (q && p[1] > Math.min(q[0], q[1]) - m && p[1] < Math.max(q[0], q[1]) + m) return true; }
+    for (const B of AR.boxes) { const p = arF(B.f, x, z); for (const c of B.b) if (p[0] > c[0] - m && p[0] < c[1] + m && p[1] > c[2] - m && p[1] < c[3] + m) return true; }
+    const p = arF(AR.range.f, x, z); return p[0] > -6 - m && p[0] < 96 + m && p[1] > AR.range.fl - 6 - m && p[1] < AR.range.tg + 2 + m; };
   // ---- buildings: rotated rectangles on levelled pads ----
   const buildings = [];
   { const b = blob('bld'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength), bh = meta.blobs.bldh ? blob('bldh') : null; // bldh (tools/geo/buildings.py): lidar eave 0.2 m, rise 0.1 m, flags 1 valid 2 flat 4 ridge along d
@@ -145,7 +186,7 @@ export async function genWorld(tick, Q, startAt) {
       if (Math.hypot(B.x - cabin.x, B.z - cabin.z) < 50 || Math.hypot(B.x - LM.chapel.x, B.z - LM.chapel.z) < 22 || W.lakeAt(B.x, B.z) > 0.3) continue;
       if (B.w * B.d > 2600) continue; // arena stands, hotel complexes: not box-shaped
       if (bh && bh[i * 3 + 2] & 8) continue; // an outline with no roof in the lidar (stands, ski-jump parts)
-      if (inJump(B.x, B.z, 205, 0)) continue; // inside a ski jump: the jump itself is a prop
+      if (inJump(B.x, B.z, 205, 0) || inArena(B.x, B.z, 0)) continue; // inside a ski jump or an arena stand: those are props
       B.y = heightAt(B.x, B.z); const r = Math.hypot(B.w, B.d) / 2;
       flatten(B.x, B.z, r * 0.7, r * 0.7 + 12, B.y, 0.75); buildings.push(B);
     } }
@@ -284,7 +325,7 @@ export async function genWorld(tick, Q, startAt) {
       lamps.push({ x: px, z: pz, y: heightAt(px, pz), yaw: Math.atan2(x - px, z - pz) });
     }
   }
-  const spill = [[-3.3, 6.5, 0.5], [3.3, 6.5, 0.5], [0, 7.5, 0.6], [-3, -6.3, 0.4], [3, -6.3, 0.4], [8.5, 0, 0.35], [-8.5, 0, 0.35]].map((q) => ({ x: cabin.x + Math.cos(cabin.yaw) * q[0] + Math.sin(cabin.yaw) * q[1], z: cabin.z - Math.sin(cabin.yaw) * q[0] + Math.cos(cabin.yaw) * q[1], yaw: 0, k: q[2], off: 0 }));
+  const spill = [[-6, 21.5, 0.45], [6, 21.5, 0.45], [20.5, -4, 0.4], [20.5, 6, 0.4], [-22, -2, 0.35], [-2, -14, 0.35], [6, -14, 0.35]].map((q) => ({ x: cabin.x + Math.cos(cabin.yaw) * q[0] + Math.sin(cabin.yaw) * q[1], z: cabin.z - Math.sin(cabin.yaw) * q[0] + Math.cos(cabin.yaw) * q[1], yaw: 0, k: q[2], off: 0 }));
   for (const L of lamps.concat(spill)) {
     const lx = L.x + Math.sin(L.yaw) * (L.k ? 0 : 1.6), lz = L.z + Math.cos(L.yaw) * (L.k ? 0 : 1.6), R = L.k ? 12 : 30, i0 = Math.max(0, Math.floor(w2t(lx - R))), i1 = Math.min(HN - 1, Math.ceil(w2t(lx + R))), j0 = Math.max(0, Math.floor(w2t(lz - R))), j1 = Math.min(HN - 1, Math.ceil(w2t(lz + R)));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
@@ -292,6 +333,11 @@ export async function genWorld(tick, Q, startAt) {
       const v = L.k ? 255 * L.k * Math.exp(-d2 / 14) : 255 * 30 * 5.5 / Math.pow(d2 + h2, 1.5) * (1 - smooth(18, 30, Math.sqrt(d2)));
       nrm[k * 4 + 3] = Math.min(255, nrm[k * 4 + 3] + v);
     }
+  }
+  for (const M of LM.arena.mast) { // arena floodlights: a broad pool thrown towards the jump axis, wider and brighter for the tall masts
+    const a = mastAim(M[0], M[1]), dx = a[0] - M[0], dz = a[1] - M[1], l = Math.hypot(dx, dz) || 1, o = Math.min(l, M[2] * 1.1), lx = M[0] + dx / l * o, lz = M[1] + dz / l * o, s2 = 2 * (M[2] * 1.1) ** 2, R = M[2] * 2.6;
+    for (let j = Math.max(0, Math.floor(w2t(lz - R))); j <= Math.min(HN - 1, Math.ceil(w2t(lz + R))); j++) for (let i = Math.max(0, Math.floor(w2t(lx - R))); i <= Math.min(HN - 1, Math.ceil(w2t(lx + R))); i++) {
+      const k = j * HN + i, d2 = ((i + 0.5) * TEX - HALF - lx) ** 2 + ((j + 0.5) * TEX - HALF - lz) ** 2; nrm[k * 4 + 3] = Math.min(255, nrm[k * 4 + 3] + 65 * Math.exp(-d2 / s2)); }
   }
 
   // ---- trees: jittered grid, kept with a chance from the lidar cover, heights from the lidar canopy height ----
@@ -317,8 +363,8 @@ export async function genWorld(tick, Q, startAt) {
           if (cv < 0.02 || bm[ti] || mat[ti * 4] > 8 || tD[ti] < 6.2 || mat[ti * 4 + 1] > 40) continue;
           const y = heightAt(x, z), slope = Math.hypot(H[ti + 1] - H[ti - 1], H[ti + HN] - H[ti - HN]) / (2 * TEX);
           if (slope > 1.1) continue;
-          { const dx = x - cabin.x, dz = z - cabin.z, fr = Math.cos(cabin.yaw) * dz + Math.sin(cabin.yaw) * dx; if (Math.hypot(dx, dz) < (fr > 0 ? 75 : 34)) continue; } // open view in front of the lodge
-          if (inJump(x, z, 0, 4)) continue;
+          { const dx = x - cabin.x, dz = z - cabin.z, fr = Math.cos(cabin.yaw) * dz + Math.sin(cabin.yaw) * dx; if (Math.hypot(dx, dz) < (fr > 0 ? 75 : 24)) continue; } // open view in front of the lodge (south, over the city); the forest closes in behind
+          if (inJump(x, z, 0, 4) || inArena(x, z, 3)) continue;
           const bog = mat[ti * 4 + 2] / 255, r1 = hash2(hx, hz + 104729), r2 = hash2(hx + 31337, hz + 17), r3 = hash2(hx - 999, hz + 5);
           let p = Math.min(1, cv * 1.35) * (inner ? TK_IN : TK_OUT) * smooth(6.2, 9, tD[ti]); // planting chance follows the measured cover (full from 75 %: the slim crowns leave gaps)
           const hc = canH(x, z) || 9, hf = 0.6 + 0.45 * Math.sqrt(r2); // p90 of the cell = its tallest trees; the rest stand lower
@@ -350,6 +396,13 @@ export async function genWorld(tick, Q, startAt) {
   { const t2 = new Float32Array(HN * HN);
     for (let j = 1; j < HN - 1; j++) for (let i = 1; i < HN - 1; i++) { const k = j * HN + i; t2[k] = (can[k] * 2 + can[k - 1] + can[k + 1] + can[k - HN] + can[k + HN]) / 6; }
     for (let j = 1; j < HN - 1; j++) for (let i = 1; i < HN - 1; i++) { const k = j * HN + i; nrm[k * 4 + 2] = clamp((t2[k] * 2 + t2[k - 1] + t2[k + 1] + t2[k - HN] + t2[k + HN]) / 6 * 255, 0, 255); } }
+  // the ground beyond the map samples the edge texels: blend normals and canopy to their average along the edge over the outer 160 m (no streaks to the horizon)
+  { const BW = 80, R = 200, ps = new Float64Array(HN + 1);
+    for (let c = 0; c < 3; c++) for (let side = 0; side < 4; side++) for (let r = 0; r < BW; r++) {
+      const w = (1 - r / BW) ** 1.5, at = (t) => (side === 0 ? r * HN + t : side === 1 ? (HN - 1 - r) * HN + t : side === 2 ? t * HN + r : t * HN + HN - 1 - r) * 4 + c;
+      for (let t = 0; t < HN; t++) ps[t + 1] = ps[t] + nrm[at(t)];
+      for (let t = 0; t < HN; t++) { const t0 = Math.max(0, t - R), t1 = Math.min(HN, t + R + 1), k = at(t); nrm[k] = lerp(nrm[k], (ps[t1] - ps[t0]) / (t1 - t0), w); }
+    } }
 
   Object.assign(W, {
     PLAY, MW, TREELINE, name: 'nordmarka',
@@ -358,7 +411,7 @@ export async function genWorld(tick, Q, startAt) {
     start: { x: 0, z: 0, yaw: 0 },
   });
   // start on the trail point nearest the chosen place; that trail becomes trails[0] (scripted drives follow it)
-  { const T = startAt === 'holmenkollen' ? [LM.jump.end[0] - 20, LM.jump.end[1] + 45] : [cabin.x + Math.sin(cabin.yaw) * 45, cabin.z + Math.cos(cabin.yaw) * 45];
+  { const T = startAt === 'holmenkollen' ? [LM.jump.end[0] - 20, LM.jump.end[1] + 45] : [cabin.x + 3, cabin.z - 52]; // Frognerseteren: the trail just north of the restaurant
     let bt = 0, bi = 20, bd = 1e9;
     trails.forEach((t, ti) => { if (t.n < 80) return; for (let q = 20; q < t.n - 20; q++) { const d = Math.hypot(t.pts[q * 2] - T[0], t.pts[q * 2 + 1] - T[1]); if (d < bd) { bd = d; bi = q; bt = ti; } } });
     const t = trails.splice(bt, 1)[0]; trails.unshift(t);
