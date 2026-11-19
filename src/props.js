@@ -267,7 +267,7 @@ function lodge(b, c, W) {
 function skiJump(b, W, J) {
   const ex = J.end[0] - J.top[0], ez = J.end[1] - J.top[1], El = Math.hypot(ex, ez), ux = ex / El, uz = ez / El, rx = -uz, rz = ux;
   const L = Math.hypot(J.lip[0] - J.top[0], J.lip[1] - J.top[1]), h = J.w / 2, D = J.deck, d0 = D[0][0], dP = d0 - J.plat, yt = D[0][1], SK = !!J.skirt, RH = SK ? 1.0 : 1.3;
-  const ST = [0.4, 0.42, 0.45], DST = [0.3, 0.31, 0.33], CN = [0.6, 0.6, 0.58], ICE = [0.6, 0.68, 0.77], STP = [0.44, 0.45, 0.46], LMP = [1, 0.9, 0.72];
+  const SV = [0.5, 0.52, 0.56], DST = [0.3, 0.31, 0.33], CN = [0.6, 0.6, 0.58], ICE = [0.6, 0.68, 0.77], STP = [0.44, 0.45, 0.46], LMP = [1, 0.9, 0.72];
   const P = (d, y, t) => [J.top[0] + ux * d + rx * t, y, J.top[1] + uz * d + rz * t];
   const G = (d, t) => W.heightAt(J.top[0] + ux * d + rx * t, J.top[1] + uz * d + rz * t);
   const col = (d, t, r) => { const p = P(d, 0, t); W.colliders.push(p[0], p[2], r); };
@@ -277,7 +277,6 @@ function skiJump(b, W, J) {
   const dep = (d) => d < 66 ? 5.4 + 2.4 * Math.sin(Math.PI * clamp((d - dP) / (66 - dP), 0, 1)) : lerp(5.4, 3, clamp((d - 66) / (L - 66), 0, 1));
   const ub = (d, t) => SK ? Math.min(G(d, t), yd(d)) - 1 : yd(d) - dep(d); // underside of the inrun
   const sq = (pa, pb, pc, pd, uv) => b.quad(pa, pb, pc, pd, uv); // the props pass draws both faces (no culling), so every panel is one quad
-  const strip = (p, q, w) => sq(p, q, [q[0], q[1] + w, q[2]], [p[0], p[1] + w, p[2]]);
   b.at(0, 0, 0);
   const N = Math.ceil((L - dP) / 4);
   for (let i = 0; i < N; i++) {
@@ -287,20 +286,19 @@ function skiJump(b, W, J) {
     for (const s of [-1, 1]) {
       const e0 = eo(s0, s), e1 = eo(s1, s), u0 = ub(s0, s * e0), u1 = ub(s1, s * e1), r0 = a0 + RH, r1 = a1 + RH;
       if (e0 - h > 0.7) { b.set(STP, MAT.paint); sq(P(s0, a0 - 0.12, s * h), P(s1, a1 - 0.12, s * h), P(s1, a1 - 0.12, s * (e1 - 0.3)), P(s0, a0 - 0.12, s * (e0 - 0.3))); } // stairs, swept clear of snow
-      if (SK) b.set(CN, MAT.stone); else b.set(ST, MAT.wood); // walls: concrete, or vertical stainless slats (one board = 0.36 m)
-      sq(P(s0, u0, s * e0), P(s1, u1, s * e1), P(s1, r1, s * e1), P(s0, r0, s * e0), [s0 / 2.4, u0, s1 / 2.4, u1, s1 / 2.4, r1, s0 / 2.4, r0]);
-      sq(P(s0, a0 - 0.15, s * (e0 - 0.3)), P(s1, a1 - 0.15, s * (e1 - 0.3)), P(s1, r1, s * (e1 - 0.3)), P(s0, r0, s * (e0 - 0.3)), [s0 / 2.4, 0, s1 / 2.4, 0, s1 / 2.4, 1, s0 / 2.4, 1]);
-      b.set(SK ? CN : DST, MAT.metal); // rail cap; on the cantilever also the truss diagonals behind the mesh
-      sq(P(s0, r0, s * (e0 - 0.3)), P(s1, r1, s * (e1 - 0.3)), P(s1, r1, s * e1), P(s0, r0, s * e0));
-      if (!SK && s1 < 64) { const f = i & 1, ya = f ? r0 - 0.9 : u0 + 0.5, yb = f ? u1 + 0.5 : r1 - 0.9, t0 = s * (e0 + 0.04), t1 = s * (e1 + 0.04); sq(P(s0, ya, t0), P(s0 + 0.7, ya, t0), P(s1 + 0.7, yb, t1), P(s1, yb, t1)); }
-      if (s0 >= d0) { b.set(LMP, MAT.lamp); sq(P(s0, r0 + 0.03, s * (e0 - 0.3)), P(s1, r1 + 0.03, s * (e1 - 0.3)), P(s1, r1 + 0.03, s * (e1 - 0.16)), P(s0, r0 + 0.03, s * (e0 - 0.16))); // track lighting: a light strip along each rail, lamp heads outside
-        if (i % 2) { const c = (s0 + s1) / 2 - 0.5, y = yd(c) + RH; sq(P(c, y - 0.42, s * (e0 + 0.03)), P(c + 1, y - 0.42, s * (e0 + 0.03)), P(c + 1, y - 0.08, s * (e0 + 0.03)), P(c, y - 0.08, s * (e0 + 0.03))); } }
+      if (SK) { b.set(CN, MAT.stone); // low concrete walls with a cap, lit along the top, lamp heads outside
+        sq(P(s0, u0, s * e0), P(s1, u1, s * e1), P(s1, r1, s * e1), P(s0, r0, s * e0));
+        sq(P(s0, a0 - 0.15, s * (e0 - 0.3)), P(s1, a1 - 0.15, s * (e1 - 0.3)), P(s1, r1, s * (e1 - 0.3)), P(s0, r0, s * (e0 - 0.3)));
+        b.set(CN, MAT.metal); sq(P(s0, r0, s * (e0 - 0.3)), P(s1, r1, s * (e1 - 0.3)), P(s1, r1, s * e1), P(s0, r0, s * e0));
+        b.set(LMP, MAT.lamp); sq(P(s0, r0 + 0.03, s * (e0 - 0.3)), P(s1, r1 + 0.03, s * (e1 - 0.3)), P(s1, r1 + 0.03, s * (e1 - 0.16)), P(s0, r0 + 0.03, s * (e0 - 0.16)));
+        if (i % 2) { const c = (s0 + s1) / 2 - 0.5, y = yd(c) + RH; sq(P(c, y - 0.42, s * (e0 + 0.03)), P(c + 1, y - 0.42, s * (e0 + 0.03)), P(c + 1, y - 0.08, s * (e0 + 0.03)), P(c, y - 0.08, s * (e0 + 0.03))); }
+      } else if (s0 >= d0) { b.set(LMP, MAT.lamp); sq(P(s0, a0 + 0.9, s * (e0 - 0.06)), P(s1, a1 + 0.9, s * (e1 - 0.06)), P(s1, a1 + 1.08, s * (e1 - 0.06)), P(s0, a0 + 1.08, s * (e0 - 0.06))); } // track lighting on the screens
     }
     const el0 = eo(s0, -1), el1 = eo(s1, -1), er0 = eo(s0, 1), er1 = eo(s1, 1);
-    if (!SK) { b.set(DST, MAT.metal); sq(P(s0, ub(s0, 0), -el0), P(s0, ub(s0, 0), er0), P(s1, ub(s1, 0), er1), P(s1, ub(s1, 0), -el1)); }
+    if (!SK) { b.set(SV, MAT.wood); sq(P(s0, ub(s0, 0), -el0), P(s0, ub(s0, 0), er0), P(s1, ub(s1, 0), er1), P(s1, ub(s1, 0), -el1), [-el0 / 2.4, s0, er0 / 2.4, s0, er1 / 2.4, s1, -el1 / 2.4, s1]); } // soffit
     if (ub(s0, 0) - G(s0, 0) < 3.6) col((s0 + s1) / 2, (er0 - el0) / 2, (er0 + el0) / 2 + 0.2);
   }
-  { const el = eo(L, -1), er = eo(L, 1), uL = ub(L, 0); b.set(SK ? CN : ST, SK ? MAT.stone : MAT.metal); sq(P(L, uL, -el), P(L, uL, er), P(L, yd(L), er), P(L, yd(L), -el)); }
+  { const el = eo(L, -1), er = eo(L, 1), uL = ub(L, 0); b.set(SK ? CN : SV, SK ? MAT.stone : MAT.wood); sq(P(L, uL, -el), P(L, uL, er), P(L, yd(L), er), P(L, yd(L), -el)); }
   if (SK) { // start house: stone base, green glass box with a dark frame over the start
     const [ha, hz, ta, tz, hh] = J.house, g = Math.min(G(ha, ta), G(ha, tz), G(hz, ta), G(hz, tz)) - 1, y1 = yt + hh, C = [[ha, ta], [hz, ta], [hz, tz], [ha, tz]];
     for (let k = 0; k < 4; k++) { const p = C[k], q = C[(k + 1) & 3];
@@ -313,20 +311,18 @@ function skiJump(b, W, J) {
     col((ha + hz) / 2, (ta + tz) / 2, Math.min(hz - ha, tz - ta) / 2 + 0.5);
     return;
   }
-  // top gallery: glazed band over the rails, fascia, snow roof, glazed end face, flag mast and beacon
-  const e = eo(dP, 1), yr = yt + 2.9, uP = ub(dP, 0);
-  for (const s of [-1, 1]) {
-    b.set([0.85, 0.85, 0.85], MAT.window); sq(P(dP, yt + RH, s * (e + 0.02)), P(d0, yt + RH, s * (e + 0.02)), P(d0, yr - 0.45, s * (e + 0.02)), P(dP, yr - 0.45, s * (e + 0.02)), [0, 0, (d0 - dP) / 1.4, 0, (d0 - dP) / 1.4, 1, 0, 1]);
-    b.set(ST, MAT.metal); sq(P(dP - 0.8, yr - 0.45, s * (e + 0.3)), P(d0 + 0.4, yr - 0.45, s * (e + 0.3)), P(d0 + 0.4, yr, s * (e + 0.3)), P(dP - 0.8, yr, s * (e + 0.3)));
-  }
-  b.set(ST, MAT.wood); sq(P(dP, uP, -e), P(dP, uP, e), P(dP, yt - 1.6, e), P(dP, yt - 1.6, -e), [0, uP, 2 * e / 2.4, uP, 2 * e / 2.4, yt - 1.6, 0, yt - 1.6]);
-  b.set([0.85, 0.85, 0.85], MAT.window); sq(P(dP - 0.02, yt - 1.6, -e), P(dP - 0.02, yt - 1.6, e), P(dP - 0.02, yr - 0.45, e), P(dP - 0.02, yr - 0.45, -e), [0, 0, 2 * e / 1.3, 0, 2 * e / 1.3, 3, 0, 3]);
-  b.set(ST, MAT.metal); sq(P(dP - 0.8, yr - 0.45, -e - 0.3), P(dP - 0.8, yr - 0.45, e + 0.3), P(dP - 0.8, yr, e + 0.3), P(dP - 0.8, yr, -e - 0.3));
-  b.set(SNOWC, MAT.snow); sq(P(dP - 0.8, yr, -e - 0.3), P(d0 + 0.4, yr, -e - 0.3), P(d0 + 0.4, yr, e + 0.3), P(dP - 0.8, yr, e + 0.3));
+  // top gallery: a flat-topped glazed box on the end of the cantilever, wider than the inrun (lidar roof 423.5); flag mast and beacons
+  const e = eo(dP, 1), ge = e + 1.2, gz = dP + 12, yr = yt + 3, gb = yt - 2.2, uP = ub(dP, 0), G4 = [[dP, -ge], [gz, -ge], [gz, ge], [dP, ge]];
+  for (let k = 0; k < 4; k++) { const p = G4[k], q = G4[(k + 1) & 3], w = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    b.set(SV, MAT.wood); sq(P(p[0], gb, p[1]), P(q[0], gb, q[1]), P(q[0], yt + 0.6, q[1]), P(p[0], yt + 0.6, p[1]), [0, gb, w / 2.4, gb, w / 2.4, yt + 0.6, 0, yt + 0.6]);
+    b.set([0.85, 0.85, 0.85], MAT.window); sq(P(p[0], yt + 0.6, p[1]), P(q[0], yt + 0.6, q[1]), P(q[0], yr - 0.5, q[1]), P(p[0], yr - 0.5, p[1]), [0, 0, w / 1.4, 0, w / 1.4, 1.5, 0, 1.5]);
+    b.set(DST, MAT.metal); sq(P(p[0], yr - 0.5, p[1]), P(q[0], yr - 0.5, q[1]), P(q[0], yr, q[1]), P(p[0], yr, p[1])); }
+  b.set(SV, MAT.wood); sq(P(dP, gb, -ge), P(gz, gb, -ge), P(gz, gb, ge), P(dP, gb, ge)); sq(P(dP, uP, -e), P(dP, uP, e), P(dP, gb, e), P(dP, gb, -e), [0, uP, 2 * e / 2.4, uP, 2 * e / 2.4, gb, 0, gb]);
+  b.set(SNOWC, MAT.snow); sq(P(dP, yr, -ge), P(gz, yr, -ge), P(gz, yr, ge), P(dP, yr, ge));
   b.set(DST, MAT.metal); sq(P(d0 - 3, yt + 0.75, -h), P(d0 - 3, yt + 0.75, h), P(d0 - 3, yt + 0.85, h), P(d0 - 3, yt + 0.85, -h)); // start bar
   b.set(WHITE, MAT.paint); b.cyl(...P(dP + 1.2, yr, 0), ...P(dP + 1.2, yr + 7, 0), 0.07, 0.05, 6);
   b.set(WHITE, MAT.flag); { const a = P(dP + 1.2, yr + 5.6, 0), c = P(dP + 1.2, yr + 6.9, 0), f = P(dP + 3.2, yr + 5.7, 0.3), g = P(dP + 3.2, yr + 6.85, 0.3); sq(a, f, g, c, [0, 1, 1, 1, 1, 0, 0, 0]); }
-  b.set([1, 0.15, 0.08], MAT.beacon); for (const s of [-1, 1]) b.cyl(...P(dP + 0.4, yr, s * e), ...P(dP + 0.4, yr + 0.55, s * e), 0.22, 0.17, 6);
+  b.set([1, 0.15, 0.08], MAT.beacon); for (const s of [-1, 1]) b.cyl(...P(dP + 0.5, yr, s * (ge - 0.5)), ...P(dP + 0.5, yr + 0.55, s * (ge - 0.5)), 0.22, 0.17, 6);
   if (J.core) { // concrete core at the foot of the cantilever, inclined glass lift shaft beside it
     const [ca, cz, cw] = J.core, g = Math.min(G(ca, 0), G(cz, 0)) - 2, C = [[ca, -cw], [cz, -cw], [cz, cw], [ca, cw]]; b.set(CN, MAT.stone);
     for (let k = 0; k < 4; k++) { const p = C[k], q = C[(k + 1) & 3]; sq(P(p[0], g, p[1]), P(q[0], g, q[1]), P(q[0], ub(q[0], q[1]) + 0.2, q[1]), P(p[0], ub(p[0], p[1]) + 0.2, p[1])); }
@@ -340,30 +336,36 @@ function skiJump(b, W, J) {
     b.set(SNOWC, MAT.snow); sq(P(da - 0.4, yB, -hw - 0.4), P(dz, yB, -hw - 0.4), P(dz, yB, hw + 0.4), P(da - 0.4, yB, hw + 0.4));
     b.set([1, 0.8, 0.5], MAT.window); { const yw = G(da, 0) + 0.6; sq(P(da - 0.03, yw, -hw + 1), P(da - 0.03, yw, hw - 1), P(da - 0.03, yw + 2.4, hw - 1), P(da - 0.03, yw + 2.4, -hw + 1), [0, 0, (2 * hw - 2) / 1.6, 0, (2 * hw - 2) / 1.6, 1, 0, 1]); }
     b.set(DST, MAT.metal); for (const d of [da + 3, (da + L) / 2, L - 4]) for (const s of [-1, 1]) { const t = s * (eo(d, s) - 1); if (ub(d, t) > yB + 0.5) { b.cyl(...P(d, yB, t), ...P(d, ub(d, t), t), 0.4, 0.4, 6, 0); b.cyl(...P(d, ub(d, t) - 0.1, t), ...P(d + 4, ub(d + 4, t) - 0.1, t), 0.25, 0.25, 4, 0); } }
-    for (let i = 0; i < 4; i++) { const d = da + (dz - da) * (i + 0.5) / 4; for (const t of [-hw * 0.5, hw * 0.5]) col(d, t, hw * 0.62); }
   }
-  if (J.wing) { // lattice wind-screen arches: top and bottom chords and X diagonals, leaning out; columns under the open arch
-    const Wg = J.wing; b.set([0.56, 0.58, 0.61], MAT.metal);
-    const lean = (d, t, y, bd, s) => { for (const f of [0.3, 0.55, 0.8]) if (y - bd - G(d, s * (t - f * bd)) < 6) return t - f * bd; return t - 0.3 * bd; }; // the bottom chord leans in, onto the knoll where it is near
-    for (const s of [-1, 1]) { let bay = 0;
-      for (let i = 0; i + 1 < Wg.length; i++) {
-        const a = Wg[i], q = Wg[i + 1], n = Math.ceil(Math.hypot(q[0] - a[0], q[1] - a[1]) / 4.5);
-        for (let k = 0; k < n; k++, bay++) {
-          const f0 = k / n, f1 = (k + 1) / n, dA = lerp(a[0], q[0], f0), dB = lerp(a[0], q[0], f1), tA = lerp(a[1], q[1], f0), tB = lerp(a[1], q[1], f1), yA = lerp(a[2], q[2], f0), yB = lerp(a[2], q[2], f1);
-          const gA = G(dA, s * tA), gB = G(dB, s * tB), bA = clamp(0.45 * (yA - gA), 1.5, 7.5), bB = clamp(0.45 * (yB - gB), 1.5, 7.5), lA = s * lean(dA, tA, yA, bA, s), lB = s * lean(dB, tB, yB, bB, s);
-          const TA = P(dA, yA - 0.8, s * tA), TB = P(dB, yB - 0.8, s * tB), BA = P(dA, yA - bA, lA), BB = P(dB, yB - bB, lB);
-          strip(TA, TB, 0.8); strip(BA, BB, 0.65); strip(BA, TB, 0.6); strip(TA, BB, 0.6);
-          const hA = G(dA, lA), hB = G(dB, lB), gap = yA - bA - hA; // the ground under the bottom chord: a closed shell where it is low, an open arch on columns where it is high
-          if (gap < 6) { sq(P(dA, hA - 0.5, lA), P(dB, hB - 0.5, lB), BB, BA); col(dA, lA, 1.7); col((dA + dB) / 2, (lA + lB) / 2, 1.7); }
-          else if (bay % 3 === 0) { b.cyl(BA[0], hA - 0.5, BA[2], BA[0], BA[1], BA[2], 0.32, 0.26, 6, 0); col(dA, lA, 0.7); }
-        }
+  if (J.wing) { // wind screens: one smooth shell from the gallery down both inrun sides (the track lies in a trough), past the take-off and out round the
+    // landing hill (`wing`: lidar top edge), flaring out; silver slats, vertical ribs, a dark coping; down to the soffit on the cantilever, to the ground from the core on
+    const c0 = J.core ? J.core[0] : 62, Q = [[dP, e, yr - 0.4], [gz, eo(gz, 1), yr - 0.4]], R = [];
+    for (let d = gz + 4; d < 86; d += 4) Q.push([d, eo(d, 1), yd(d) + lerp(2.6, 6, clamp((d - gz) / 50, 0, 1))]);
+    for (const w of J.wing) if (w[0] > 90) Q.push(w.slice());
+    for (let k = 0; k < 4; k++) for (let i = 2; i + 1 < Q.length; i++) for (const c of [1, 2]) Q[i][c] = (Q[i - 1][c] + 2 * Q[i][c] + Q[i + 1][c]) / 4;
+    for (let i = 0; i + 1 < Q.length; i++) { const a = Q[i], q = Q[i + 1], n = Math.max(1, Math.ceil(Math.hypot(q[0] - a[0], q[1] - a[1]) / 3.5)); for (let k = 0; k < n; k++) R.push([lerp(a[0], q[0], k / n), lerp(a[1], q[1], k / n), lerp(a[2], q[2], k / n)]); }
+    R.push(Q[Q.length - 1]);
+    for (const s of [-1, 1]) {
+      const bot = (p) => { if (p[0] < c0) return [ub(p[0], 0), p[1]]; const tb = p[0] > 86 ? p[1] - 0.25 * Math.max(0, p[2] - G(p[0], s * p[1])) : p[1]; return [G(p[0], s * tb) - 0.6, tb]; };
+      let arc = 0;
+      for (let i = 0; i + 1 < R.length; i++) {
+        const A = R[i], B = R[i + 1], dd = B[0] - A[0], dt = B[1] - A[1], l = Math.hypot(dd, dt), nd = -dt / l, nt = dd / l, [ba, ta] = bot(A), [bb, tb] = bot(B), ua = arc / 2.4, uv2 = (arc + l) / 2.4;
+        b.set(SV, MAT.wood); sq(P(A[0], ba, s * ta), P(B[0], bb, s * tb), P(B[0], B[2], s * B[1]), P(A[0], A[2], s * A[1]), [ua, ba, uv2, bb, uv2, B[2], ua, A[2]]);
+        b.set(DST, MAT.metal); sq(P(A[0] - nd * 0.3, A[2], s * (A[1] - nt * 0.3)), P(B[0] - nd * 0.3, B[2], s * (B[1] - nt * 0.3)), P(B[0] + nd * 0.3, B[2], s * (B[1] + nt * 0.3)), P(A[0] + nd * 0.3, A[2], s * (A[1] + nt * 0.3)));
+        if (i % 2 === 0 && i) { b.set([0.36, 0.38, 0.41], MAT.metal); for (const o of [-0.1, 0.1]) { const w0 = 0.35 / l; sq(P(A[0] + nd * o, ba, s * (ta + nt * o)), P(A[0] + nd * o + dd * w0, ba, s * (ta + nt * o + dt * w0)), P(A[0] + nd * o + dd * w0, A[2] - 0.3, s * (A[1] + nt * o + dt * w0)), P(A[0] + nd * o, A[2] - 0.3, s * (A[1] + nt * o))); } }
+        if (A[0] >= c0) col(A[0], s * ta, 2.3);
+        arc += l;
       }
     }
   }
+  if (J.edge) { // banner boards along both edges of the landing hill
+    for (let d = J.edge[0][0], i = 0; d < J.edge[J.edge.length - 1][0]; d += 6, i++) { const q = d + 5.8, ta = tab(J.edge, d, 1), tq = tab(J.edge, q, 1);
+      for (const s of [-1, 1]) { const ga = G(d, s * ta), gq = G(q, s * tq); b.set(ADC[(i + (s > 0 ? 2 : 0)) % ADC.length], MAT.paint); sq(P(d, ga - 0.3, s * ta), P(q, gq - 0.3, s * tq), P(q, gq + 0.9, s * tq), P(d, ga + 0.9, s * ta)); } }
+  }
   // flat-roofed buildings [d0, d1, t0, t1, height above the highest corner]: grey slatted walls, a glazed band towards the hill and downhill
-  const hall = (ha, hz, ta, tz, hh) => {
+  const hall = (ha, hz, ta, tz, hh, dk) => {
     const g = Math.min(G(ha, ta), G(ha, tz), G(hz, ta), G(hz, tz)) - 0.5, y1 = Math.max(G(ha, ta), G(ha, tz), G(hz, ta), G(hz, tz)) + hh, C = [[ha, ta], [hz, ta], [hz, tz], [ha, tz]], tf = Math.abs(ta) < Math.abs(tz) ? ta : tz, sg = Math.sign(tz - ta), wy = Math.max(y1 - 3.4, g + 1.2);
-    b.set([0.36, 0.37, 0.38], MAT.wood); for (let k = 0; k < 4; k++) { const p = C[k], q = C[(k + 1) & 3], w = Math.hypot(q[0] - p[0], q[1] - p[1]) / 2.4; sq(P(p[0], g, p[1]), P(q[0], g, q[1]), P(q[0], y1, q[1]), P(p[0], y1, p[1]), [0, g, w, g, w, y1, 0, y1]); }
+    b.set(dk ? [0.11, 0.11, 0.12] : [0.36, 0.37, 0.38], MAT.wood); for (let k = 0; k < 4; k++) { const p = C[k], q = C[(k + 1) & 3], w = Math.hypot(q[0] - p[0], q[1] - p[1]) / 2.4; sq(P(p[0], g, p[1]), P(q[0], g, q[1]), P(q[0], y1, q[1]), P(p[0], y1, p[1]), [0, g, w, g, w, y1, 0, y1]); }
     const o = -Math.sign(tf) * 0.04, nw = (hz - ha - 1) / 1.3, nt = (Math.abs(tz - ta) - 1) / 1.3; b.set([0.85, 0.85, 0.85], MAT.window);
     sq(P(ha + 0.5, wy, tf + o), P(hz - 0.5, wy, tf + o), P(hz - 0.5, y1 - 0.7, tf + o), P(ha + 0.5, y1 - 0.7, tf + o), [0, 0, nw, 0, nw, 2, 0, 2]);
     sq(P(hz + 0.04, wy, ta + sg * 0.5), P(hz + 0.04, wy, tz - sg * 0.5), P(hz + 0.04, y1 - 0.7, tz - sg * 0.5), P(hz + 0.04, y1 - 0.7, ta + sg * 0.5), [0, 0, nt, 0, nt, 2, 0, 2]);
@@ -515,7 +517,38 @@ function arenaXf(W, f) { // frame helpers: P(d, t, y) -> world point, G(d, t) gr
 // the depth evenly (so in the bowl they curve with its outline and close up at the narrow end); otherwise rows S.rw deep run parallel
 // to the front. Ribs every S.seg m. Treads are snow, risers seats or concrete, aisles every S.ai m, a front wall down to the ground
 // in front, a back wall and railing, solid circles along the middle.
+// A stand whose rows run across the slope (the terraces beside a landing hill): the treads are the contour bands, S.rh high, of the plane
+// fitted to the ground under the stand, so they step down the hill at right angles to the rows of the bowl below. Ribs r as in stand().
+function standX(b, W, S) {
+  const X = arenaXf(W, S.f), { P, G, F } = X, r = S.r, sg = Math.sign(r[0][2] - r[0][1]), h = S.rh || 0.5, d0 = r[0][0], d1 = r[r.length - 1][0];
+  let poly = []; for (const q of r) poly.push([q[0], Math.abs(q[1])]); for (let i = r.length - 1; i >= 0; i--) poly.push([r[i][0], Math.abs(r[i][2])]);
+  const pt = []; let md = 0, ms = 0, my = 0;
+  for (let d = d0; d <= d1; d += 2) { const q = standAt(r, d), s0 = Math.min(Math.abs(q[0]), Math.abs(q[1])), s1 = Math.max(Math.abs(q[0]), Math.abs(q[1])); for (let t = s0; t <= s1; t += 2) { const y = G(d, sg * t); pt.push(d, t, y); md += d; ms += t; my += y; } }
+  const n = pt.length / 3; md /= n; ms /= n; my /= n; let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+  for (let i = 0; i < n; i++) { const u = pt[i * 3] - md, v = pt[i * 3 + 1] - ms, y = pt[i * 3 + 2] - my; a11 += u * u; a12 += u * v; a22 += v * v; b1 += u * y; b2 += v * y; }
+  const det = a11 * a22 - a12 * a12 || 1, kd = (b1 * a22 - b2 * a12) / det, ks = (a11 * b2 - a12 * b1) / det, V = (q) => kd * (q[0] - md) + ks * (q[1] - ms);
+  let off = 0; for (let i = 0; i < n; i++) off = Math.max(off, pt[i * 3 + 2] - my - kd * (pt[i * 3] - md) - ks * (pt[i * 3 + 1] - ms)); off = Math.min(off, 1.2) + (S.lift || 0.3);
+  const clip = (pl, L, keepAbove) => { const o = []; for (let i = 0; i < pl.length; i++) { const A = pl[i], B = pl[(i + 1) % pl.length], va = V(A) - L, vb = V(B) - L, ia = keepAbove ? va >= 0 : va <= 0, ib = keepAbove ? vb >= 0 : vb <= 0;
+    if (ia) o.push(A); if (ia !== ib) { const k = va / (va - vb); o.push([A[0] + (B[0] - A[0]) * k, A[1] + (B[1] - A[1]) * k]); } } return o; };
+  let v0 = 1e9, v1 = -1e9; for (const q of poly) { v0 = Math.min(v0, V(q)); v1 = Math.max(v1, V(q)); }
+  const gl = Math.hypot(kd, ks) || 1, nx = -(kd * F[2] + ks * sg * X.rx) / gl, nz = -(kd * F[3] + ks * sg * X.rz) / gl, W3 = (q, y) => P(q[0], sg * q[1], y);
+  b.at(0, 0, 0);
+  for (let L = Math.floor(v0 / h) * h; L < v1; L += h) {
+    const band = clip(clip(poly, L, true), L + h, false); if (band.length < 3) continue; const Y = my + L + h + off;
+    b.set(SNOWC, MAT.snow); for (let i = 1; i + 1 < band.length; i++) nq(b, W3(band[0], Y), W3(band[i], Y), W3(band[i + 1], Y), W3(band[i + 1], Y), 0, 1, 0);
+    const lo = band.filter((q) => Math.abs(V(q) - L) < 1e-4); // the band's downhill edge: its riser
+    if (lo.length >= 2) { b.set(CONC, MAT.stone); nq(b, W3(lo[0], Y - h - 0.05), W3(lo[lo.length - 1], Y - h - 0.05), W3(lo[lo.length - 1], Y), W3(lo[0], Y), nx, 0, nz); }
+  }
+  b.set(CONC, MAT.stone); // walls down to the ground along the front (the hill side) and across the lower end
+  const yP = (d, t) => my + kd * (d - md) + ks * (t - ms) + off + h;
+  for (let i = 0; i + 1 < r.length; i++) { const A = r[i], B = r[i + 1], ta = Math.abs(A[1]), tb = Math.abs(B[1]);
+    nq(b, P(A[0], A[1], G(A[0], A[1]) - 0.6), P(B[0], B[1], G(B[0], B[1]) - 0.6), P(B[0], B[1], yP(B[0], tb)), P(A[0], A[1], yP(A[0], ta)), -sg * X.rx, 0, -sg * X.rz); }
+  { const E = r[r.length - 1], ta = Math.abs(E[1]), tb = Math.abs(E[2]); nq(b, P(E[0], E[1], G(E[0], E[1]) - 0.6), P(E[0], E[2], G(E[0], E[2]) - 0.6), P(E[0], E[2], yP(E[0], tb)), P(E[0], E[1], yP(E[0], ta)), F[2], 0, F[3]); }
+  for (let d = d0; d <= d1 + 0.01;) { const q = standAt(r, Math.min(d, d1)), rr = Math.abs(q[1] - q[0]) / 2, p = P(Math.min(d, d1), (q[0] + q[1]) / 2, 0);
+    if (rr > 0.5) W.colliders.push(p[0], p[2], rr); d += Math.max(2.5, rr * 0.55); }
+}
 function stand(b, W, S) {
+  if (S.x) return standX(b, W, S);
   const X = arenaXf(W, S.f), { P, G } = X, r = S.r, d0 = r[0][0], d1 = r[r.length - 1][0], sg = Math.sign(r[0][2] - r[0][1]), lift = S.lift || 0.25, AI = S.ai || 30;
   const ds = []; { const n = Math.ceil((d1 - d0) / (S.seg || 8)); for (let i = 0; i <= n; i++) ds.push(d0 + (d1 - d0) * i / n); for (let a = d0 + AI; a < d1 - 8; a += AI) ds.push(a - 0.7, a + 0.7); ds.sort((p, q) => p - q); }
   const isA = (d) => { for (let a = d0 + AI; a < d1 - 8; a += AI) if (Math.abs(d - a) < 0.71) return true; return false; };
