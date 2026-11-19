@@ -240,6 +240,7 @@ export function initCombat(C) {
       const x1 = x0 + vx * dt, y1 = y0 + vy * dt, z1 = z0 + vz * dt, len = Math.hypot(vx, vy, vz) * dt, n = type === 3 ? clamp(Math.ceil(len / 1.5), 2, 12) : clamp(Math.ceil(len / 0.6), 2, 48);
       let px = x0, py = y0, pz = z0, hit = false, sf = owner === 0 && type !== 6 && G.inf.n ? inf.seg(type, x0, y0, z0, x1, y1, z1) : 2; // sf: where this frame's travel meets a soldier (2: none)
       const bf = W.br.seg(x0, y0, z0, x1, y1, z1); // bf: where it enters a bridge deck or wall (one exact test per frame: the 0.6 m sub-steps alone could slip through a 1 m slab)
+      if (bf < sf) sf = 2; // a bridge wall or deck in front of the soldier takes the round
       for (let k = 1; k <= n && !hit; k++) {
         const f = k / n, qx = x0 + (x1 - x0) * f, qy = y0 + (y1 - y0) * f, qz = z0 + (z1 - z0) * f;
         if (f >= sf && C.bld.seg(px, py, pz, x0 + (x1 - x0) * sf, y0 + (y1 - y0) * sf, z0 + (z1 - z0) * sf)) sf = 2; // a wall between the round and the soldier takes the hit (the building test below)
@@ -908,6 +909,7 @@ export function initCombat(C) {
     let x = D.x, y = D.y - 0.25, z = D.z, vy = D.vy - 0.3; const h = 0.04; D.iok = false;
     for (let k = 0; k < 400; k++) {
       const nx = x + D.vx * h, ny = y + (vy - GRAV * h * 0.5) * h, nz = z + D.vz * h; vy -= GRAV * h;
+      { const bq = W.br.seg(x, y, z, nx, ny, nz); if (bq <= 1) { D.ix = x + (nx - x) * bq; D.iz = z + (nz - z) * bq; D.iy = y + (ny - y) * bq; D.iok = true; return; } } // sweep the step against bridge slabs: a fast grenade steps right through a 1 m deck between two samples
       if (dropHit(nx, ny, nz)) { let a = 0, b = 1; for (let it = 0; it < 6; it++) { const m = (a + b) * 0.5; if (dropHit(x + (nx - x) * m, y + (ny - y) * m, z + (nz - z) * m)) b = m; else a = m; } // refine to the surface
         D.ix = x + (nx - x) * b; D.iz = z + (nz - z) * b; D.iy = Math.max(y + (ny - y) * b, hAt(D.ix, D.iz)); D.iok = true; return; }
       x = nx; y = ny; z = nz;

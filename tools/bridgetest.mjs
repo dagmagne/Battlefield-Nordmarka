@@ -83,6 +83,10 @@ if (!ONLY) for (let site = 0; site < NB; site++) {
   r = await ev(`(()=>{ calm(); const F=BF(${site}), B=F.B, [x,z]=F.P(F.tc,-B.hw-25); __tp(x,z,F.yawV); __sim(1/60,5); const g=__game; g.dn[1]=2; g.droneType(1); g.droneKey(); const D=g.drone;
     const [dx,dz]=F.P(F.tc,2); Object.assign(D,{x:dx,z:dz,y:F.top(F.tc,2)+28,vx:0,vy:0,vz:0,climb:0}); __sim(1/60,6); const res={ on:D.on, iok:D.iok, iy:+D.iy.toFixed(2), top:+F.top(...F.L(D.ix,D.iz)).toFixed(2), road:+F.road(F.L(D.ix,D.iz)[1]).toFixed(2) }; g.droneKey(); __sim(1/60,2); return res; })()`);
   check(`${S} the bomber's predicted drop point over the deck is at deck height`, r.on && r.iok && Math.abs(r.iy - r.top) < 0.3, r);
+  // 6b. the same from 80 m up: the grenade is then fast enough for a 40 ms prediction step to cross the whole slab between two samples
+  r = await ev(`(()=>{ calm(); const F=BF(${site}), B=F.B, [x,z]=F.P(F.tc,-B.hw-25); __tp(x,z,F.yawV); __sim(1/60,5); const g=__game; g.dn[1]=2; g.droneType(1); g.droneKey(); const D=g.drone;
+    const [dx,dz]=F.P(F.tc,2); Object.assign(D,{x:dx,z:dz,y:F.top(F.tc,2)+80,vx:0,vy:0,vz:0,climb:0}); __sim(1/60,6); const res={ on:D.on, iok:D.iok, iy:+D.iy.toFixed(2), top:+F.top(...F.L(D.ix,D.iz)).toFixed(2), road:+F.road(F.L(D.ix,D.iz)[1]).toFixed(2) }; g.droneKey(); __sim(1/60,2); return res; })()`);
+  check(`${S} the predicted drop point from 80 m above the deck is at deck height`, r.on && r.iok && Math.abs(r.iy - r.top) < 0.3, r);
 }
 
 const F1 = 'BF(0)';
