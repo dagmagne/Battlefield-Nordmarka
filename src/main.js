@@ -305,7 +305,7 @@ async function main() {
   const treeShMod = mod(shadowW + treeDefW + shTreeW, 'treeshadow');
   const treeShPipe = device.createRenderPipeline({ layout: layS, vertex: { module: treeShMod, entryPoint: 'vs', buffers: treeBufs }, primitive: { cullMode: 'none' }, depthStencil: shDepth });
   const LK = Q.lodMul * (+qs.get("lod") || 1), LOD = [37 * LK, 180 * LK, 850 * LK];
-  const BAND = 0.07, SNOWX = (qs.get('sx') || '1,0.69,0.56,0.4,1,1,0.85,0.52').split(',').map(Number);
+  const BAND = 0.07, SNOWX = (qs.get('sx') || '1,0.74,0.5,0.24,1,1,0.85,0.52').split(',').map(Number);
   // LOD range uniforms 0..3, plus 4 = shadow-only "mid model from distance 0" (see the tree detail levels below)
   const lodBuf = [0, 1, 2, 3, 4].map(() => device.createBuffer({ size: 32, usage: U.UNIFORM | U.COPY_DST })), lodD = new Float32Array(8);
   const lodBG = lodBuf.map((b) => device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: b } }] }));

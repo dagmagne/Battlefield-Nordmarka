@@ -8,6 +8,8 @@ const opt = (k, d) => { const i = a.indexOf('--' + k); return i < 0 ? d : a[i + 
 const only = opt('only', ''), dpr = +opt('dpr', 2), mobile = a.includes('--mobile'), q = opt('q', '');
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: false, args: chromeArgs(['--window-size=1728,1117']) });
+// step in chunks: hundreds of queued full-resolution frames in one submit can lose the GPU device
+async function stepN(page, n) { for (let k = 0; k < n; k += 10) await page.evaluate(([m]) => window.__step(1 / 60, m), [Math.min(10, n - k)]); }
 async function run(list, vw, vh, dp, mob, query) {
   const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: dp, hasTouch: mob, isMobile: mob });
   const page = await ctx.newPage();
@@ -19,8 +21,8 @@ async function run(list, vw, vh, dp, mob, query) {
     if (only && !only.split(',').includes(s.name.split('-')[0])) continue;
     if (s.w && (s.w !== page.viewportSize().width)) { await page.setViewportSize({ width: s.w, height: s.h }); await page.waitForTimeout(400); }
     await page.evaluate(s.setup);
-    await page.evaluate(([n]) => window.__step(1 / 60, n), [s.steps]);
-    if (s.post) { await page.evaluate(s.post); await page.evaluate(([n]) => window.__step(1 / 60, n), [s.steps2 || 2]); }
+    await stepN(page, s.steps);
+    if (s.post) { await page.evaluate(s.post); await stepN(page, s.steps2 || 2); }
     await page.evaluate(() => window.__step(1 / 60, 2));
     await page.waitForTimeout(150);
     await page.screenshot({ path: `${out}/${s.name}.png` });
