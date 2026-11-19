@@ -750,7 +750,8 @@ export function initCombat(C) {
           steer(a, lx - a.x, tankY - a.y, lz - a.z, T.vd, Math.min(1, dt * (a.type ? 2.2 : 3.2)));
           if (smk && rnd() < dt * (a.type ? 2.5 : 0.35)) { a.st = 1; a.tx = veh.x + sr() * 90; a.tz = veh.z + sr() * 90; a.vy = Math.abs(a.vy) * 0.3 + 4; ui.toast(T.name + ' lost you in the smoke'); }
         }
-        a.x += a.vx * dt; a.y += a.vy * dt; a.z += a.vz * dt; const g2 = hAt(a.x, a.z);
+        const ax0 = a.x, ay0 = a.y, az0 = a.z; a.x += a.vx * dt; a.y += a.vy * dt; a.z += a.vz * dt; const g2 = hAt(a.x, a.z);
+        { const bf = W.br.seg(ax0, ay0, az0, a.x, a.y, a.z); if (bf <= 1) { a.x = ax0 + (a.x - ax0) * bf; a.y = ay0 + (a.y - ay0) * bf; a.z = az0 + (a.z - az0) * bf; airBoom(a, false); continue; } } // a bridge deck over the tank is cover
         if (Math.hypot(veh.x - a.x, tankY - a.y, veh.z - a.z) < 2.6 || inside(veh, LEO, a.x, a.y, a.z)) { airBoom(a, true); continue; }
         if (a.y < g2 + 0.3 || (a.y < g2 + 9 && C.collAt(a.x, a.z)) || C.bld.at(a.x, a.y, a.z, 0.3) >= 0) { airBoom(a, false); continue; }
         const dd = Math.hypot(dh, tankY - a.y);
@@ -902,7 +903,7 @@ export function initCombat(C) {
   }
   // bomber: where a grenade released now would land (ballistic fall from the drone's height and velocity; ground, roofs and vehicles stop it)
   // where the grenade stops: the same tests as updateShells (ground, round colliders, vehicles, buildings)
-  const dropHit = (x, y, z) => { if (y < hAt(x, z) || W.br.inSolid(x, y, z) >= 0) return true; if (y < hAt(x, z) + 9 && C.collAt(x, z)) return true; if (y < hAt(x, z) + 4) for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, x, y, z)) return true; } return C.bld.at(x, y, z, 0) >= 0; };
+  const dropHit = (x, y, z) => { if (y < hAt(x, z) || W.br.inSolid(x, y, z) >= 0) return true; if (y < hAt(x, z) + 9 && C.collAt(x, z)) return true; if (y < W.groundAt(x, z, y) + 4) for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, x, y, z)) return true; } return C.bld.at(x, y, z, 0) >= 0; };
   function predictDrop() {
     let x = D.x, y = D.y - 0.25, z = D.z, vy = D.vy - 0.3; const h = 0.04; D.iok = false;
     for (let k = 0; k < 400; k++) {
@@ -944,10 +945,12 @@ export function initCombat(C) {
       const ky = Math.min(1, dt * (D.climb > 0 || Math.abs(inp.mvY) > 0.05 ? (D.type === 1 ? 3.2 : 2) : 7)); // height does not coast: it stops sharply when the stick is let go
       D.vx += ((fx * inp.mvZ + rx * inp.mvX) * T.v - D.vx) * k; D.vy += (vy - D.vy) * ky; D.vz += ((fz * inp.mvZ + rz * inp.mvX) * T.v - D.vz) * k;
     }
+    const dx0 = D.x, dy0 = D.y, dz0 = D.z;
     D.x = clamp(D.x + D.vx * dt, -HALF + 60, HALF - 60); D.y = Math.min(D.y + D.vy * dt, g0 + 250); D.z = clamp(D.z + D.vz * dt, -HALF + 60, HALF - 60);
+    const dbf = W.br.seg(dx0, dy0, dz0, D.x, D.y, D.z); if (dbf <= 1) { D.x = dx0 + (D.x - dx0) * dbf; D.y = dy0 + (D.y - dy0) * dbf; D.z = dz0 + (D.z - dz0) * dbf; } // into a slab or bridge wall: stop there and crash (groundAt would lift a drone just under a deck onto it)
     const lean = D.type ? 0.22 : 0.38; D.tp += (-inp.mvZ * lean - D.tp) * Math.min(1, dt * 5); D.tr += (-inp.mvX * lean - D.tr) * Math.min(1, dt * 5); // lean into the motion
-    const gh = W.groundAt(D.x, D.z, D.y), press = inp.fire && !fireWas && !D.auto; let boom = D.type === 0 && press, crash = false; // a deck is ground for a drone above it; under it the road is
-    if (D.y < gh + 0.35) { if (Math.hypot(D.vx, D.vy, D.vz) > 9) crash = true; else { D.y = gh + 0.35; D.vy = Math.max(0, D.vy); } }
+    const gh = W.groundAt(D.x, D.z, D.y), press = inp.fire && !fireWas && !D.auto; let boom = D.type === 0 && press, crash = dbf <= 1; // a deck is ground for a drone above it; under it the road is
+    if (!crash && D.y < gh + 0.35) { if (Math.hypot(D.vx, D.vy, D.vz) > 9) crash = true; else { D.y = gh + 0.35; D.vy = Math.max(0, D.vy); } }
     if ((D.y < gh + 8 && C.collAt(D.x, D.z)) || C.bld.at(D.x, D.y, D.z, 0.3) >= 0 || W.br.inSolid(D.x, D.y, D.z) >= 0) crash = true;
     for (let i = 0; i < MAXE && !crash; i++) { const e = G.enemies[i]; if (e.on && inside(e, ETYPE[e.type].K, D.x, D.y, D.z)) crash = true; }
     if (D.type === 0 && (boom || crash)) { droneBoom(); return; }

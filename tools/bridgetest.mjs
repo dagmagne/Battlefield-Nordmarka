@@ -111,6 +111,12 @@ r = await ev(`(()=>{ calm(); const F=${F1}, B=F.B, g=__game, [x,z]=F.P(F.tc,-B.h
   for (let i=0;i<60*4 && D.on;i++) __sim(1/60,1); const q=F.L(D.bx,D.bz); __inp.mvZ=0; __sim(1/60,300);
   return { under, crash:{ on:D.on, booms:BOOMS.length, lv:+q[1].toFixed(2), face:-B.hw, y:+D.by.toFixed(2) } }; })()`);
 check('S1 an FPV flies under the deck and out the far side', r.under.on && r.under.lvMax > 18, r.under);
+// 9b. a bomber rising slowly under the deck crashes into the slab and is never lifted onto the deck (groundAt accepts a querier up to STEP below the top)
+{ const q = await ev(`(()=>{ calm(); const F=${F1}, B=F.B, g=__game, [x,z]=F.P(F.tc,-B.hw-40); __tp(x,z,F.yawV); __sim(1/60,5); g.dn[1]=2; g.droneType(1); g.droneKey(); const D=g.drone;
+  const [dx,dz]=F.P(F.tc,0), top=F.top(F.tc,0); Object.assign(D,{x:dx,z:dz,y:F.road(0)+2.2,vx:0,vy:0,vz:0,climb:0}); __inp.mvY=1; let maxY=-1e9, n=0;
+  for (let i=0;i<60*4 && D.on;i++){ __sim(1/60,1); if (D.on) { maxY=Math.max(maxY,D.y); n++; } } __inp.mvY=0; __sim(1/60,300);
+  return { on:D.on, frames:n, maxY:+maxY.toFixed(2), slabBottom:+(top-B.th).toFixed(2), top:+top.toFixed(2) }; })()`);
+  check('S1 a drone rising under the deck crashes into the slab, not onto the deck', !q.on && q.frames > 10 && q.maxY < q.slabBottom + 0.05, q); }
 check('S1 an FPV flown at the slab side crashes into it', !r.crash.on && r.crash.booms >= 1 && r.crash.lv < r.crash.face + 0.5 && r.crash.lv > r.crash.face - 3, r.crash);
 // 10. no drone launch under a deck
 r = await ev(`(()=>{ calm(); const F=${F1}, B=F.B, g=__game, [x,z]=F.P(F.tc,0); __tp(x,z,F.yawV); __sim(1/60,5); g.dn[0]=5; g.droneType(0); const n=g.dn[0]; g.droneKey(); const on=g.drone.on; if(on) g.droneKey(); return { launched:on, stock:g.dn[0], before:n }; })()`);

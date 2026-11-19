@@ -24,7 +24,7 @@ st = Image.new('L', (N, N), 0); dr = ImageDraw.Draw(st); b = blobs['bld']
 for k in range(meta['nb']):
     x, z, w, d, yaw = struct.unpack_from('<hhHHh', b, k * 12); x /= 8; z /= 8; w = w / 8 + 4; d = d / 8 + 4; yaw /= 1e4
     cs, sn = math.cos(yaw), math.sin(yaw)
-    dr.polygon([(x + u * cs + v * sn + HALF, z - u * sn + v * cs + HALF) for u, v in ((-w / 2, -d / 2), (w / 2, -d / 2), (w / 2, d / 2), (-w / 2, d / 2))], fill=255)
+    dr.polygon([(x + u * cs - v * sn + HALF, z + u * sn + v * cs + HALF) for u, v in ((-w / 2, -d / 2), (w / 2, -d / 2), (w / 2, d / 2), (-w / 2, d / 2))], fill=255)
 def corridor(p0, p1, hw):
     (x0, z0), (x1, z1) = p0, p1; l = math.hypot(x1 - x0, z1 - z0); nx, nz = -(z1 - z0) / l * hw, (x1 - x0) / l * hw
     dr.polygon([(x0 + nx + HALF, z0 + nz + HALF), (x1 + nx + HALF, z1 + nz + HALF), (x1 - nx + HALF, z1 - nz + HALF), (x0 - nx + HALF, z0 - nz + HALF)], fill=255)

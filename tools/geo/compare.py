@@ -53,7 +53,7 @@ if __name__ == '__main__':
         x, z, w, dd, yaw = struct.unpack_from('<hhHHh', b, k * 12); x /= 8; z /= 8; w /= 8; dd /= 8; yaw /= 1e4
         if not (box[0] < x < box[2] and box[1] < z < box[3]): continue
         cs, sn = np.cos(yaw), np.sin(yaw)
-        P = [(x + (u * cs + v * sn) - box[0], z + (-u * sn + v * cs) - box[1]) for u, v in ((-w / 2, -dd / 2), (w / 2, -dd / 2), (w / 2, dd / 2), (-w / 2, dd / 2))]
+        P = [(x + (u * cs - v * sn) - box[0], z + (u * sn + v * cs) - box[1]) for u, v in ((-w / 2, -dd / 2), (w / 2, -dd / 2), (w / 2, dd / 2), (-w / 2, dd / 2))]
         dr.polygon(P, outline=(0, 255, 0))
     im.save('../../shots/geo/arena_ndsm_bld.png')
     e = np.clip(cr(d) * 12 + 128, 0, 255).astype(np.uint8); Image.fromarray(e).save('../../shots/geo/arena_err.png')

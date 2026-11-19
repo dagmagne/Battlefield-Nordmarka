@@ -111,7 +111,7 @@ const polyDist = (L, x, z) => { let m = 1e9; for (const t of L) for (let i = 0; 
 function footMask(buildings) { // house footprints + 1 m: road beds leave the ground there alone (no buried doorsteps, no cuts under walls)
   const fp = new Uint8Array(HN * HN);
   for (const B of buildings) { const cs = Math.cos(B.yaw), sn = Math.sin(B.yaw), hw = B.w / 2 + 1, hd = B.d / 2 + 1, r = Math.hypot(hw, hd), i0 = Math.max(0, Math.floor((B.x - r + HALF) / TEX)), i1 = Math.min(HN - 1, Math.ceil((B.x + r + HALF) / TEX)), j0 = Math.max(0, Math.floor((B.z - r + HALF) / TEX)), j1 = Math.min(HN - 1, Math.ceil((B.z + r + HALF) / TEX));
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const dx = (i + 0.5) * TEX - HALF - B.x, dz = (j + 0.5) * TEX - HALF - B.z; if (Math.abs(dx * cs - dz * sn) < hw && Math.abs(dx * sn + dz * cs) < hd) fp[j * HN + i] = 1; } }
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const dx = (i + 0.5) * TEX - HALF - B.x, dz = (j + 0.5) * TEX - HALF - B.z; if (Math.abs(dx * cs + dz * sn) < hw && Math.abs(-dx * sn + dz * cs) < hd) fp[j * HN + i] = 1; } }
   return fp;
 }
 function plowRoads(meta, b, H, H0, mat, polish, buildings, portals, roadNet, mapRoads) { // flat bed along a smoothed profile, sunk under the ski bridges (tunnels) with headwalls as props
@@ -175,7 +175,7 @@ function railWorld(meta, b, H, mat, buildings) {
   tr.forEach((t, ti) => { for (let q = 0; q < t.n; q++) cg[cell(t.x[q], t.z[q])] = ti; });
   for (const B of buildings) { const r = Math.hypot(B.w, B.d) / 2 + 2.4, cs = Math.cos(B.yaw), sn = Math.sin(B.yaw); // OSM outlines reaching within 2.2 m of a track (station shelters, roofs over a platform end): the station props replace them
     let hit = false; for (let dz = -r; dz <= r + 15.9 && !hit; dz += 16) for (let dx = -r; dx <= r + 15.9 && !hit; dx += 16) if (cg[cell(B.x + Math.min(dx, r), B.z + Math.min(dz, r))] >= 0) hit = true;
-    if (hit) for (const t of tr) for (let q = 0; q < t.n; q++) { const dx = t.x[q] - B.x, dz = t.z[q] - B.z; if (Math.abs(dx) < r && Math.abs(dz) < r && Math.abs(dx * cs - dz * sn) < B.w / 2 + 2.2 && Math.abs(dx * sn + dz * cs) < B.d / 2 + 2.2) B.gone = 2; } }
+    if (hit) for (const t of tr) for (let q = 0; q < t.n; q++) { const dx = t.x[q] - B.x, dz = t.z[q] - B.z; if (Math.abs(dx) < r && Math.abs(dz) < r && Math.abs(dx * cs + dz * sn) < B.w / 2 + 2.2 && Math.abs(-dx * sn + dz * cs) < B.d / 2 + 2.2) B.gone = 2; } }
   const mask = new Uint8Array(HN * HN), rE = new Uint8Array(HN * HN), rY = new Float32Array(HN * HN), touched = []; // rE: 1 + distance * 50 (0 = not near the line), only the touched texels are visited
   for (const t of tr) for (let q = 0; q < t.n; q++) {
     let nb = 0; for (let k = Math.max(0, q - 2); k <= Math.min(t.n - 1, q + 2); k++) nb |= t.f[k]; // bridge spans of the metro decks (meta.bridges k 1) keep the lidar ground (a road runs under them); other spans (low, over paths) get the bed: an embankment
@@ -471,9 +471,10 @@ export async function genWorld(tick, Q, startAt) {
   const farStart = new Uint32Array(FCN * FCN), farCnt = new Uint32Array(FCN * FCN), farY = new Float32Array(FCN * FCN * 2);
   const tmp = [new Float32Array(8 * 128), new Float32Array(8 * 128), new Float32Array(8 * 128)], tn = [0, 0, 0];
   const can = new Float32Array(HN * HN), bm = new Uint8Array(HN * HN); // bm: house footprints + 1.5 m, no trunks there
+  // world -> building frame: house() draws with at(-B.yaw), so local x is (cos yaw, sin yaw) in world x, z (the same as tools/geo/buildings.py)
   for (const B of buildings) { const cs = Math.cos(B.yaw), sn = Math.sin(B.yaw), hw = B.w / 2 + 1.5, hd = B.d / 2 + 1.5, r = Math.hypot(hw, hd);
     for (let j = Math.max(0, Math.floor(w2t(B.z - r))); j <= Math.min(HN - 1, Math.ceil(w2t(B.z + r))); j++) for (let i = Math.max(0, Math.floor(w2t(B.x - r))); i <= Math.min(HN - 1, Math.ceil(w2t(B.x + r))); i++) {
-      const dx = (i + 0.5) * TEX - HALF - B.x, dz = (j + 0.5) * TEX - HALF - B.z; if (Math.abs(dx * cs - dz * sn) < hw && Math.abs(dx * sn + dz * cs) < hd) bm[j * HN + i] = 1; } }
+      const dx = (i + 0.5) * TEX - HALF - B.x, dz = (j + 0.5) * TEX - HALF - B.z; if (Math.abs(dx * cs + dz * sn) < hw && Math.abs(-dx * sn + dz * cs) < hd) bm[j * HN + i] = 1; } }
   railMask(rail, bm, W.brg);
   for (let fz = 0; fz < FCN; fz++) {
     for (let fx = 0; fx < FCN; fx++) {
