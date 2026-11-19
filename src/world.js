@@ -15,8 +15,9 @@ export const LM = {
   // jump profiles measured from the lidar surface model (tools/geo/jumps.py): deck [d, y], wing [d, t, top y], block [from d, half width]
   jump: { top: [-865.1, 1152.8], lip: [-774.2, 1207.0], end: [-542.2, 1340.4], w: 6.5, plat: 18,
     deck: [[20, 420.8], [32, 411.6], [44, 404.2], [56, 396.2], [68, 390.6], [80, 386.2], [92, 382.3], [106, 380.2]],
-    wing: [[56, 3.3, 399], [80, 9.2, 388], [104, 14, 379], [128, 22, 374.5], [146, 29, 367.4], [158, 33, 363.5], [176, 37, 358], [190, 40, 351], [198, 42, 343]], block: [60, 10] },
-  mid: { top: [-338.1, 932.8], lip: [-247.9, 957.4], end: [-28.3, 1018.6], w: 4.5, plat: 8, skirt: 1,
+    wing: [[82, 9, 381.5], [92, 10.8, 379.5], [102, 13, 378.5], [112, 17, 376.4], [120, 20, 376.5], [128, 22.5, 374], [146, 29, 367.4], [158, 33, 363.5], [176, 37, 358], [190, 40, 351], [198, 42, 343]], block: [62, 8],
+    hb: [[0, 5.2], [30, 5.2], [48, 6], [66, 7.8], [84, 9.5], [106, 11]], core: [58, 72, 4.5], hut: [[190, 202, 47, 55, 9], [190, 199, -53, -47, 5], [32, 80, -31, -10, 8]] }, // hb [d, outer half width]; core [d0, d1, half width]; hut [d0, d1, t0, t1, height]: judges, coaches, visitor centre
+  mid: { top: [-338.1, 932.8], lip: [-247.9, 957.4], end: [-28.3, 1018.6], w: 4.5, plat: 8, skirt: 1, st: [1, 0], house: [-8.5, 1, -6.5, 3.5, 4.4],
     deck: [[0, 372.4], [8, 367.4], [16, 361.8], [24, 356.2], [32, 350.6], [40, 345.0], [48, 339.4], [56, 334.4], [64, 330.3], [72, 327.2], [80, 325.0], [94, 323.2]] },
   tower: { x: -663.5, z: -1486.2, h: 118 }, // centre of the drum in the lidar surface model
   lift: { a: [-693, -1558], b: [-1130, -1875], sp: 46, h: 9 }, // chairlift west of the tower: top station a, running out of the map to the north-west
@@ -64,6 +65,26 @@ export function pn(x, y) {
 }
 export function fbm(x, y, o) { let s = 0, a = 0.5; for (let i = 0; i < o; i++) { s += a * pn(x, y); x = x * 2.03 + 17.1; y = y * 2.03 - 9.3; a *= 0.5; } return s; }
 
+
+// Blend the outer 80 texels of a HN x HN raster (stride values per texel, channel c) towards their running mean along the edge (+-R texels).
+function edgeBlur(A, stride, c, R) {
+  const BW = 80, ps = new Float64Array(HN + 1);
+  for (let side = 0; side < 4; side++) for (let r = 0; r < BW; r++) {
+    const w = (1 - r / BW) ** 1.5, o = side === 0 ? r * HN : side === 1 ? (HN - 1 - r) * HN : side === 2 ? r : HN - 1 - r, st = side < 2 ? 1 : HN;
+    for (let t = 0; t < HN; t++) ps[t + 1] = ps[t] + A[(o + t * st) * stride + c];
+    for (let t = 0; t < HN; t++) { const t0 = Math.max(0, t - R), t1 = Math.min(HN, t + R + 1), k = (o + t * st) * stride + c; A[k] = lerp(A[k], (ps[t1] - ps[t0]) / (t1 - t0), w); }
+  }
+}
+// inside a ski jump's footprint (inrun, wind screens, landing hill out to d = far along its axis, widened by m)?
+const inAB = (x, z) => x > -1100 && x < 200 && z > 750 && z < 1550; // everything below lies in this box: a cheap reject for the 1.3 M tree candidates
+const inJump = (x, z, far, m) => { if (!inAB(x, z)) return false; for (const J of [LM.jump, LM.mid]) { const ex = J.end[0] - J.top[0], ez = J.end[1] - J.top[1], l = Math.hypot(ex, ez), d = ((x - J.top[0]) * ex + (z - J.top[1]) * ez) / l, ts = ((x - J.top[0]) * -ez + (z - J.top[1]) * ex) / l, t = Math.abs(ts);
+  if (d > -10 && d < (far || l) && t < m + 13 + 0.3 * clamp(d - 60, 0, 110)) return true;
+  for (const H of J.hut || []) if (d > H[0] - m - 2 && d < H[1] + m + 2 && ts > Math.min(H[2], H[3]) - m - 2 && ts < Math.max(H[2], H[3]) + m + 2) return true; } return false; }; // + the huts and the visitor centre
+// inside an arena stand, stand building or the shooting range (LM.arena), widened by m?
+const AR = LM.arena, arF = (f, x, z) => { const F = arenaFrame(f), dx = x - F[0], dz = z - F[1]; return [dx * F[2] + dz * F[3], -dx * F[3] + dz * F[2]]; };
+const inArena = (x, z, m) => { if (!inAB(x, z)) return false; for (const S of AR.stands) { const p = arF(S.f, x, z), q = standAt(S.r, p[0]); if (q && p[1] > Math.min(q[0], q[1]) - m && p[1] < Math.max(q[0], q[1]) + m) return true; }
+  for (const B of AR.boxes) { const p = arF(B.f, x, z); for (const c of B.b) if (p[0] > c[0] - m && p[0] < c[1] + m && p[1] > c[2] - m && p[1] < c[3] + m) return true; }
+  const p = arF(AR.range.f, x, z); return p[0] > -6 - m && p[0] < 96 + m && p[1] > AR.range.fl - 6 - m && p[1] < AR.range.tg + 2 + m; };
 
 async function inflate(b64) {
   const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < u.length; i++) u[i] = bin.charCodeAt(i);
@@ -118,14 +139,7 @@ export async function genWorld(tick, Q, startAt) {
     }
   }
 
-  // ---- window border: the terrain beyond the map repeats the edge texels, so smooth the outer 160 m along the edge (no streaks to the horizon) ----
-  { const BW = 80, R = 160, ps = new Float64Array(HN + 1), line = new Float32Array(HN);
-    for (let side = 0; side < 4; side++) for (let r = 0; r < BW; r++) {
-      const w = (1 - r / BW) ** 1.5, at = (t) => side === 0 ? r * HN + t : side === 1 ? (HN - 1 - r) * HN + t : side === 2 ? t * HN + r : t * HN + HN - 1 - r;
-      for (let t = 0; t < HN; t++) ps[t + 1] = ps[t] + H[at(t)];
-      for (let t = 0; t < HN; t++) { const t0 = Math.max(0, t - R), t1 = Math.min(HN, t + R + 1); line[t] = (ps[t1] - ps[t0]) / (t1 - t0); }
-      for (let t = 0; t < HN; t++) { const k = at(t); H[k] = lerp(H[k], line[t], w); }
-    } }
+  edgeBlur(H, 1, 0, 160); // the terrain beyond the map repeats the edge texels: smooth the outer 160 m along the edge (no streaks to the horizon)
 
   // ---- lakes: connected water -> flat ice at the local water level ----
   const lakes = [];
@@ -169,14 +183,6 @@ export async function genWorld(tick, Q, startAt) {
   cabin.y = heightAt(cabin.x, cabin.z) + 0.3;
   flatten(cabin.x, cabin.z, 30, 55, cabin.y);
 
-  // inside a ski jump's footprint (inrun, wind screens, landing hill out to d = far along its axis, widened by m)?
-  const inJump = (x, z, far, m) => { for (const J of [LM.jump, LM.mid]) { const ex = J.end[0] - J.top[0], ez = J.end[1] - J.top[1], l = Math.hypot(ex, ez), d = ((x - J.top[0]) * ex + (z - J.top[1]) * ez) / l, t = Math.abs((x - J.top[0]) * -ez + (z - J.top[1]) * ex) / l;
-    if (d > -6 && d < (far || l) && t < m + 13 + 0.3 * clamp(d - 60, 0, 110)) return true; } return false; };
-  // inside an arena stand, stand building or the shooting range (LM.arena), widened by m?
-  const AR = LM.arena, arF = (f, x, z) => { const F = arenaFrame(f), dx = x - F[0], dz = z - F[1]; return [dx * F[2] + dz * F[3], -dx * F[3] + dz * F[2]]; };
-  const inArena = (x, z, m) => { for (const S of AR.stands) { const p = arF(S.f, x, z), q = standAt(S.r, p[0]); if (q && p[1] > Math.min(q[0], q[1]) - m && p[1] < Math.max(q[0], q[1]) + m) return true; }
-    for (const B of AR.boxes) { const p = arF(B.f, x, z); for (const c of B.b) if (p[0] > c[0] - m && p[0] < c[1] + m && p[1] > c[2] - m && p[1] < c[3] + m) return true; }
-    const p = arF(AR.range.f, x, z); return p[0] > -6 - m && p[0] < 96 + m && p[1] > AR.range.fl - 6 - m && p[1] < AR.range.tg + 2 + m; };
   // ---- buildings: rotated rectangles on levelled pads ----
   const buildings = [];
   { const b = blob('bld'), dv = new DataView(b.buffer, b.byteOffset, b.byteLength), bh = meta.blobs.bldh ? blob('bldh') : null; // bldh (tools/geo/buildings.py): lidar eave 0.2 m, rise 0.1 m, flags 1 valid 2 flat 4 ridge along d
@@ -396,13 +402,7 @@ export async function genWorld(tick, Q, startAt) {
   { const t2 = new Float32Array(HN * HN);
     for (let j = 1; j < HN - 1; j++) for (let i = 1; i < HN - 1; i++) { const k = j * HN + i; t2[k] = (can[k] * 2 + can[k - 1] + can[k + 1] + can[k - HN] + can[k + HN]) / 6; }
     for (let j = 1; j < HN - 1; j++) for (let i = 1; i < HN - 1; i++) { const k = j * HN + i; nrm[k * 4 + 2] = clamp((t2[k] * 2 + t2[k - 1] + t2[k + 1] + t2[k - HN] + t2[k + HN]) / 6 * 255, 0, 255); } }
-  // the ground beyond the map samples the edge texels: blend normals and canopy to their average along the edge over the outer 160 m (no streaks to the horizon)
-  { const BW = 80, R = 200, ps = new Float64Array(HN + 1);
-    for (let c = 0; c < 3; c++) for (let side = 0; side < 4; side++) for (let r = 0; r < BW; r++) {
-      const w = (1 - r / BW) ** 1.5, at = (t) => (side === 0 ? r * HN + t : side === 1 ? (HN - 1 - r) * HN + t : side === 2 ? t * HN + r : t * HN + HN - 1 - r) * 4 + c;
-      for (let t = 0; t < HN; t++) ps[t + 1] = ps[t] + nrm[at(t)];
-      for (let t = 0; t < HN; t++) { const t0 = Math.max(0, t - R), t1 = Math.min(HN, t + R + 1), k = at(t); nrm[k] = lerp(nrm[k], (ps[t1] - ps[t0]) / (t1 - t0), w); }
-    } }
+  for (let c = 0; c < 3; c++) edgeBlur(nrm, 4, c, 200); // same for the normals and the canopy the far ground samples
 
   Object.assign(W, {
     PLAY, MW, TREELINE, name: 'nordmarka',
