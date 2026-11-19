@@ -12,11 +12,11 @@ export const NEAR = 32, NCN = WS / NEAR, FAR = 128, FCN = WS / FAR;
 // landmark geometry (from tools/geo/raw/landmarks.json)
 export const LM = {
   frogner: { x: -139.5, z: -259.0, yaw: 0 }, // restaurant footprint centre from the lidar; local +z (front, terrace) faces south over the city
-  // jump profiles measured from the lidar surface model (tools/geo/jumps.py): deck [d, y], wing [d, t, top y], block [from d, half width]
-  jump: { top: [-865.1, 1152.8], lip: [-774.2, 1207.0], end: [-542.2, 1340.4], w: 6.5, plat: 18,
-    deck: [[20, 420.8], [32, 411.6], [44, 404.2], [56, 396.2], [68, 390.6], [80, 386.2], [92, 382.3], [106, 380.2]],
-    wing: [[82, 9, 381.5], [92, 10.8, 379.5], [102, 13, 378.5], [112, 17, 376.4], [120, 20, 376.5], [128, 22.5, 374], [146, 29, 367.4], [158, 33, 363.5], [176, 37, 358], [190, 40, 351], [198, 42, 343]], block: [62, 7], edge: [[112, 13.5], [128, 18], [146, 22.5], [160, 18.5], [190, 18.5], [222, 16], [260, 17.5]],
-    hb: [[0, 5.2], [30, 5.2], [48, 6], [66, 7.8], [84, 9.5], [106, 11]], core: [58, 72, 4.5], hut: [[186, 200, -56, -46, 11, 1], [204, 216, 49, 59, 13, 1], [32, 80, -31, -10, 8]] }, // hb [d, outer half width]; core [d0, d1, half width]; hut [d0, d1, t0, t1, height, dark]: judges, the dark block, visitor centre; edge [d, t] the landing hill edge
+  // jump profiles: Midtstubakken deck [d, y] from the lidar surface model (tools/geo/jumps.py); wing [d, t, top y] lidar wing tops; block [from d, half width]
+  jump: { top: [-865.1, 1152.8], lip: [-774.2, 1207.0], end: [-542.2, 1340.4], w: 6.5, plat: 16, roof: 423.5,
+    track: { s: [18, 420.5], g: 36, lip: [106, 373], tl: 6.7, ta: 11 }, // analytic inrun (the section): start s [d, y], straight at g degrees, one arc, take-off table tl m at ta degrees to the lip [d, y]
+    wing: [[82, 9, 381.5], [92, 10.8, 379.5], [102, 13, 378.5], [112, 17, 376.4], [120, 20, 376.5], [128, 22.5, 374], [146, 29, 367.4], [158, 33, 363.5], [176, 37, 358], [190, 40, 351], [198, 42, 343]], block: [86, 7], edge: [[112, 13.5], [128, 18], [146, 22.5], [160, 18.5], [190, 18.5], [222, 16], [260, 17.5]],
+    hb: [[0, 5.2], [30, 5.2], [48, 6], [66, 7.8], [84, 9.5], [106, 11]], core: [80, 92, 5.5], strut: [44, 52], hut: [[186, 200, -56, -46, 7, 1], [204, 216, 49, 59, 9, 1], [32, 80, -31, -10, 8]] }, // hb [d, outer half width]; core [d0, d1, half width] the base under the knee; strut [d at the girder, d at the foot]; hut [d0, d1, t0, t1, height, dark]: judges, the dark block, visitor centre; edge [d, t] the landing hill edge
   mid: { top: [-338.1, 932.8], lip: [-247.9, 957.4], end: [-28.3, 1018.6], w: 4.5, plat: 8, skirt: 1, st: [1, 0], house: [-8.5, 1, -6.5, 3.5, 4.4],
     deck: [[0, 372.4], [8, 367.4], [16, 361.8], [24, 356.2], [32, 350.6], [40, 345.0], [48, 339.4], [56, 334.4], [64, 330.3], [72, 327.2], [80, 325.0], [94, 323.2]] },
   tower: { x: -663.5, z: -1486.2, h: 118 }, // centre of the drum in the lidar surface model
