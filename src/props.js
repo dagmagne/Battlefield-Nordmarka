@@ -749,12 +749,144 @@ function arena(b, W, A) {
   for (const M of A.mast) mast(b, W, M, A);
   W.arenaStat = { tris: (b.i.length - i0) / 3, circles: (W.colliders.length - c0) / 3 }; // for tests (props mesh triangles, solid circles)
 }
+// ---- Holmenkollbanen (world.js railWorld, tools/geo/rail.py): bed, rails, third rail, platforms, shelters, lamps, signs, buffer stops, parked MX3000 units ----
+const RUST = [0.15, 0.1, 0.075], HEADC = [0.55, 0.55, 0.57], TRC = [0.1, 0.1, 0.095], TRT = [0.36, 0.33, 0.22], CONP = [0.46, 0.46, 0.45], PAVE = [0.27, 0.27, 0.28], TBLUE = [0.03, 0.12, 0.42];
+const MXW = [0.8, 0.81, 0.82], MXB = [0.025, 0.027, 0.03], MXG = [0.3, 0.31, 0.33], STW = [0.14, 0.085, 0.05];
+const railAt = (t, s, o) => { s = clamp(s, 0, t.s[t.n - 1]); let a = 0, c = t.n - 1; while (c - a > 1) { const m = (a + c) >> 1; if (t.s[m] > s) c = m; else a = m; } const f = (s - t.s[a]) / (t.s[c] - t.s[a] || 1); o[0] = lerp(t.x[a], t.x[c], f); o[1] = lerp(t.y[a], t.y[c], f); o[2] = lerp(t.z[a], t.z[c], f); return o; };
+// extrude cross-section faces (offset and height of both ends, colour, material, optional segment skip test) along the breakpoints K of track t; uv: offset, distance
+function railStrip(b, t, K, faces) {
+  const n = K.length, rx = new Float32Array(n), rz = new Float32Array(n);
+  for (let q = 0; q < n; q++) { const a = K[Math.max(0, q - 1)], c = K[Math.min(n - 1, q + 1)], dx = t.x[c] - t.x[a], dz = t.z[c] - t.z[a], l = Math.hypot(dx, dz) || 1; rx[q] = -dz / l; rz[q] = dx / l; }
+  for (const F of faces) {
+    const [o0, d0, o1, d1, col, mt, skip] = F, ex = o1 - o0, ey = d1 - d0, el = Math.hypot(ex, ey) || 1, nr = -ey / el, ny = ex / el; b.set(col, mt); let prev = -1;
+    for (let q = 0; q < n; q++) { const k = K[q], x = t.x[k], y = t.y[k], z = t.z[k], s = t.s[k];
+      const v0 = b.vert(x + rx[q] * o0, y + d0, z + rz[q] * o0, rx[q] * nr, ny, rz[q] * nr, o0, s), v1 = b.vert(x + rx[q] * o1, y + d1, z + rz[q] * o1, rx[q] * nr, ny, rz[q] * nr, o1, s);
+      if (prev >= 0 && !(skip && skip(K[q - 1], k))) b.i.push(prev, v0, v1, prev, v1, prev + 1); prev = v0; }
+  }
+}
+function railway(b, W, R) {
+  const i0 = b.i.length, c0 = W.colliders.length, bl0 = W.bld.length; W.railGlow = []; b.at(0, 0, 0); let nSeg = 0, tT = 0; // the strips are written in world coordinates
+  const LX = R.cross.filter((c) => c[2] === 0), nearLX = (x, z, r) => LX.some((c) => Math.hypot(c[0] - x, c[1] - z) < r);
+  const fx = (x0, y0, z0, th, boxes, area) => W.bld.push({ x: x0, y: y0, z: z0, th, v0: 0, v1: 0, area: 1e4, col: CONP, fix: 1, boxes });
+  // ---- bed and rails: breakpoints as far apart as the curve allows (8 cm off the measured line, at most 40 m), bridge spans left open ----
+  for (const t of R.tr) {
+    let side = 1; { const m = t.n >> 1; let bd = 1e9; for (const u of R.tr) if (u !== t) for (let k = 0; k < u.n; k += 2) { const d = Math.hypot(u.x[k] - t.x[m], u.z[k] - t.z[m]); if (d < bd) { bd = d; const a = Math.max(0, m - 1), c = Math.min(t.n - 1, m + 1); side = Math.sign(-(t.z[c] - t.z[a]) * (u.x[k] - t.x[m]) + (t.x[c] - t.x[a]) * (u.z[k] - t.z[m])) || 1; } } } // third rail between the tracks: clear of the side platforms
+    const gap = new Uint8Array(t.n); for (let q = 0; q < t.n; q++) if (t.f[q]) for (let k = Math.max(0, q - 2); k <= Math.min(t.n - 1, q + 2); k++) gap[k] = 1; // same margin as the levelling in world.js
+    for (let a = 0; a < t.n - 1;) {
+      if (gap[a + 1]) { a++; continue; } let e = a + 1; while (e < t.n - 1 && !gap[e + 1]) e++; // run of points a..e clear of bridge spans and their abutments
+      const K = [a]; let i = a;
+      while (i < e) { let j = i + 1; const lim = nearLX(t.x[i], t.z[i], 16) ? 2 : 20;
+        while (j < e && j - i < lim) { const c = j + 1, dx = t.x[c] - t.x[i], dz = t.z[c] - t.z[i], dy = t.y[c] - t.y[i], L = Math.hypot(dx, dz) || 1; let ok = true;
+          for (let k = i + 1; k < c && ok; k++) { const f = ((t.x[k] - t.x[i]) * dx + (t.z[k] - t.z[i]) * dz) / (L * L); if (Math.abs((t.x[k] - t.x[i]) * dz - (t.z[k] - t.z[i]) * dx) / L > 0.08 || Math.abs(t.y[i] + dy * f - t.y[k]) > 0.08) ok = false; }
+          if (!ok) break; j++; }
+        K.push(j); i = j; nSeg++; }
+      const atLX = (p, q) => nearLX((t.x[p] + t.x[q]) / 2, (t.z[p] + t.z[q]) / 2, 7), g = 0.7175 + 0.036, s3 = side * 1.5;
+      railStrip(b, t, K, [[-2.7, -0.45, -1.45, 0.05, CONP, MAT.ballast, atLX], [-1.45, 0.05, 1.45, 0.05, CONP, MAT.ballast, atLX], [1.45, 0.05, 2.7, -0.45, CONP, MAT.ballast, atLX],
+        [-g - 0.036, 0.02, -g - 0.036, 0.19, RUST, MAT.metal], [-g - 0.036, 0.19, -g + 0.036, 0.19, HEADC, MAT.metal], [-g + 0.036, 0.19, -g + 0.036, 0.02, RUST, MAT.metal],
+        [g - 0.036, 0.02, g - 0.036, 0.19, RUST, MAT.metal], [g - 0.036, 0.19, g + 0.036, 0.19, HEADC, MAT.metal], [g + 0.036, 0.19, g + 0.036, 0.02, RUST, MAT.metal],
+        [s3 - 0.04, -0.05, s3 - 0.04, 0.27, TRC, MAT.metal, atLX], [s3 - 0.04, 0.27, s3 + 0.05, 0.27, TRT, MAT.wood, atLX], [s3 + 0.05, 0.27, s3 + 0.05, -0.05, TRC, MAT.metal, atLX]]);
+      a = e;
+    }
+  }
+  tT = (b.i.length - i0) / 3;
+  // ---- buffer stops: steel frame with a striped beam on a concrete block ----
+  for (const [x, z, yaw] of R.bs) {
+    const y = W.heightAt(x, z) + 0.1;
+    b.at(x, y, z, yaw); b.set([0.4, 0.4, 0.39], MAT.stone); b.box(-1.4, -0.6, 0.6, 1.4, 1.0, 2.4);
+    b.set([0.2, 0.2, 0.21], MAT.metal); for (const s of [-1, 1]) { b.box(s * 0.75 - 0.1, 0, -0.2, s * 0.75 + 0.1, 1.15, 0.1); b.cyl(s * 0.75, 0.2, 0.1, s * 0.75, 1.0, 1.7, 0.07, 0.07, 5); }
+    for (let k = 0; k < 6; k++) { b.set(k & 1 ? [0.85, 0.85, 0.82] : [0.6, 0.06, 0.04], MAT.paint); b.box(-1.25 + k * 0.4167, 0.7, -0.32, -1.25 + (k + 1) * 0.4167, 1.05, -0.12); }
+    b.set([0.6, 0.06, 0.04], MAT.lamp); b.box(-0.12, 1.15, -0.3, 0.12, 1.4, -0.1);
+    fx(x, y, z, yaw, [box(x + Math.sin(yaw) * 1.0, z + Math.cos(yaw) * 1.0, yaw, 1.5, 1.5, y - 0.6, 1.7, 0)]);
+  }
+  // ---- stations ----
+  for (const S of R.st) {
+    const big = S.name === 'Frognerseteren' || S.name === 'Holmenkollen';
+    S.p.forEach((Q, pi) => {
+      const { x, z, yaw, hl, hw, top, edge } = Q, ax = Math.sin(yaw), az = Math.cos(yaw), bx = Math.cos(yaw), bz = -Math.sin(yaw), ex = edge, oc = -edge;
+      let yb = top; for (let u = -1; u <= 1; u += 0.5) for (const v of [-1, 1]) yb = Math.min(yb, W.heightAt(x + ax * u * (hl + 3) + bx * v * hw, z + az * u * (hl + 3) + bz * v * hw)); yb -= 0.6;
+      b.at(x, 0, z, yaw); const T = top;
+      b.set(CONP, MAT.stone); b.box(-hw, yb, -hl, hw, T - 0.02, hl);
+      b.set(PAVE, MAT.paint); b.quad([-hw, T, hl], [hw, T, hl], [hw, T, -hl], [-hw, T, -hl]);
+      b.set([0.8, 0.8, 0.77], MAT.paint); bx2(b, ex * hw, T - 0.25, -hl, ex * (hw - 0.3), T + 0.012, hl); // coping
+      b.set([0.85, 0.66, 0.06], MAT.paint); bx2(b, ex * (hw - 0.55), T, -hl, ex * (hw - 0.85), T + 0.014, hl); // tactile warning line
+      b.set(SNOWC, MAT.snow); bx2(b, oc * hw, T, -hl, oc * (hw - 0.7), T + 0.12, hl);
+      for (const e of [-1, 1]) { b.set(CONP, MAT.stone); // ramps down at both ends
+        const g = W.heightAt(x + ax * e * (hl + 4), z + az * e * (hl + 4)) + 0.05, za = e * hl, zb = e * (hl + 4);
+        b.quad([-hw, T, za], [hw, T, za], [hw, g, zb], [-hw, g, zb]); for (const s of [-1, 1]) b.quad([s * hw, T, za], [s * hw, g, zb], [s * hw, yb, zb], [s * hw, yb, za]);
+        b.set([0.2, 0.2, 0.21], MAT.metal); b.cyl(oc * (hw - 0.1), T + 1.0, za, oc * (hw - 0.1), g + 1.0, zb, 0.03, 0.03, 4); }
+      fx(x, T, z, yaw, [box(x, z, yaw, hw, hl + 4, yb, T - yb, 0)]);
+      // shelters: where the OSM shelter stood, else one in the middle; timber at Frognerseteren and Holmenkollen, glass and steel elsewhere
+      const SH = Q.sh.length ? Q.sh : [[hl * 0.2, 6]];
+      for (const [u, len] of SH) {
+        const L = clamp(len, 4, Math.min(12, 2 * hl - 6)) / 2, uc = clamp(u, -hl + L + 1, hl - L - 1), d = 1.7, x0 = oc * (hw - 0.35), x1 = x0 - oc * d, hh = 2.55;
+        if (big) {
+          b.set(STW, MAT.plank); bx2(b, x0, T, uc - L, x0 + oc * 0.15, T + hh, uc + L); bx2(b, x0, T, uc - L, x1, T + hh, uc - L + 0.15); bx2(b, x0, T, uc + L - 0.15, x1, T + hh, uc + L);
+          b.set([1, 0.78, 0.45], MAT.window); b.quad([x0 - oc * 0.01, T + 1.2, uc - L + 0.8], [x0 - oc * 0.01, T + 1.2, uc + L - 0.8], [x0 - oc * 0.01, T + 2.1, uc + L - 0.8], [x0 - oc * 0.01, T + 2.1, uc - L + 0.8], [0, 0, Math.round((2 * L - 1.6) / 1.1), 0, Math.round((2 * L - 1.6) / 1.1), 1, 0, 1]);
+          b.set([0.3, 0.07, 0.05], MAT.wood); slab(b, [x0 + oc * 0.5, T + hh + 0.3, uc - L - 0.4], [x0 + oc * 0.5, T + hh + 0.3, uc + L + 0.4], [x1 - oc * 0.6, T + hh - 0.1, uc + L + 0.4], [x1 - oc * 0.6, T + hh - 0.1, uc - L - 0.4], 0.12);
+          b.set(SNOWC, MAT.snow); slab(b, [x0 + oc * 0.52, T + hh + 0.5, uc - L - 0.42], [x0 + oc * 0.52, T + hh + 0.5, uc + L + 0.42], [x1 - oc * 0.62, T + hh + 0.1, uc + L + 0.42], [x1 - oc * 0.62, T + hh + 0.1, uc - L - 0.42], 0.2);
+        } else {
+          b.set([0.12, 0.13, 0.14], MAT.metal); for (const zz of [uc - L, uc + L]) for (const xx of [x0, x1]) b.box(xx - 0.05, T, zz - 0.05, xx + 0.05, T + hh, zz + 0.05);
+          b.set([0.35, 0.45, 0.5], MAT.glass); b.quad([x0, T + 0.1, uc - L], [x0, T + 0.1, uc + L], [x0, T + hh - 0.1, uc + L], [x0, T + hh - 0.1, uc - L]); for (const zz of [uc - L, uc + L]) b.quad([x0, T + 0.1, zz], [x1 + oc * 0.5, T + 0.1, zz], [x1 + oc * 0.5, T + hh - 0.1, zz], [x0, T + hh - 0.1, zz]);
+          b.set([0.12, 0.13, 0.14], MAT.metal); bx2(b, x0 + oc * 0.15, T + hh, uc - L - 0.2, x1 - oc * 0.3, T + hh + 0.12, uc + L + 0.2); b.set(SNOWC, MAT.snow); bx2(b, x0 + oc * 0.12, T + hh + 0.12, uc - L - 0.17, x1 - oc * 0.27, T + hh + 0.3, uc + L + 0.17);
+        }
+        b.set(WOOD, MAT.wood); bx2(b, x0 - oc * 0.1, T + 0.42, uc - L + 0.4, x0 - oc * 0.5, T + 0.48, uc + L - 0.4);
+      }
+      // lamps on the back edge, heads over the platform
+      for (const u of Q.lamps) { const lx = oc * (hw - 0.45);
+        b.set([0.2, 0.21, 0.22], MAT.metal); b.cyl(lx, T, u, lx, T + 4.6, u, 0.07, 0.05, 6); b.cyl(lx, T + 4.5, u, lx + ex * 1.1, T + 4.6, u, 0.035, 0.035, 4); bx2(b, lx + ex * 0.8, T + 4.45, u - 0.25, lx + ex * 1.3, T + 4.65, u + 0.25);
+        b.set([1, 0.95, 0.82], MAT.lamp); b.quad([lx + ex * 0.82, T + 4.44, u - 0.22], [lx + ex * 1.28, T + 4.44, u - 0.22], [lx + ex * 1.28, T + 4.44, u + 0.22], [lx + ex * 0.82, T + 4.44, u + 0.22]);
+        const wx = lx + ex * 1.05; W.railGlow.push(x + bx * wx + ax * u, T + 4.35, z + bz * wx + az * u); }
+      // name boards (both ends) and the T sign at the entrance end
+      for (const e of [-1, 1]) { const zz = e * hl * 0.55, xs = oc * (hw - 0.3);
+        b.set([0.2, 0.21, 0.22], MAT.metal); for (const o of [-1.1, 1.1]) b.cyl(xs, T, zz + o, xs, T + 2.5, zz + o, 0.04, 0.04, 5);
+        b.set(TBLUE.map((c, k) => c + (k === 0 ? 0.002 * (pi + 3 * e + S.name.length) : 0)), MAT.sign); b.quad([xs + ex * 0.04, T + 1.9, zz - 1.2], [xs + ex * 0.04, T + 1.9, zz + 1.2], [xs + ex * 0.04, T + 2.45, zz + 1.2], [xs + ex * 0.04, T + 2.45, zz - 1.2], [0, 0, 1, 0, 1, 1, 0, 1]); }
+      if (pi === 0) { const zz = hl + 2.5, xs = oc * (hw + 0.6), gy = W.heightAt(x + ax * zz + bx * xs, z + az * zz + bz * xs);
+        b.set([0.2, 0.21, 0.22], MAT.metal); b.cyl(xs, gy - 0.3, zz, xs, gy + 3.2, zz, 0.05, 0.05, 6);
+        b.set(TBLUE, MAT.paint); b.cyl(xs, gy + 3.2, zz - 0.05, xs, gy + 3.2, zz + 0.05, 0.42, 0.42, 16);
+        b.set([0.92, 0.92, 0.9], MAT.paint); for (const s of [-1, 1]) { bx2(b, xs - 0.26, gy + 3.33, zz + s * 0.06, xs + 0.26, gy + 3.45, zz + s * 0.07); bx2(b, xs - 0.06, gy + 2.95, zz + s * 0.06, xs + 0.06, gy + 3.4, zz + s * 0.07); } }
+    });
+  }
+  // ---- parked MX3000 units (3 cars, white with a black window band, three doors a side) ----
+  const tS = b.i.length;
+  const P0 = new Float32Array(3), P1 = new Float32Array(3);
+  for (const [ti, sc] of R.train) {
+    const t = R.tr[ti], CL = [18.2, 17.9, 18.2], len = CL[0] + CL[1] + CL[2] + 0.8, boxes = []; let s0 = sc - len / 2;
+    for (let c = 0; c < 3; c++) {
+      const L = CL[c], h = L / 2; railAt(t, s0, P0); railAt(t, s0 + L, P1); s0 += L + 0.4;
+      const cx = (P0[0] + P1[0]) / 2, cy = (P0[1] + P1[1]) / 2 + 0.19, cz = (P0[2] + P1[2]) / 2, yaw = Math.atan2(P1[0] - P0[0], P1[2] - P0[2]), pitch = -Math.atan2(P1[1] - P0[1], Math.hypot(P1[0] - P0[0], P1[2] - P0[2]));
+      b.at(cx, cy, cz, yaw, pitch);
+      b.set([0.06, 0.06, 0.065], MAT.metal); for (const e of [-1, 1]) { b.box(-1.15, 0.12, e * (h - 2.6) - 1.4, 1.15, 0.85, e * (h - 2.6) + 1.4); for (const w of [-1, 1]) for (const s of [-1, 1]) b.cyl(s * 0.72, 0.4, e * (h - 2.6) + w * 0.95, s * 0.78, 0.4, e * (h - 2.6) + w * 0.95, 0.4, 0.4, 8); }
+      b.set(MXG, MAT.metal); b.box(-1.45, 0.75, -h + 0.3, 1.45, 1.05, h - 0.3);
+      b.set(MXW, MAT.paint); b.box(-1.58, 1.0, -h, 1.58, 1.95, h); b.box(-1.58, 2.88, -h, 1.58, 3.45, h, 0.25, 0); b.set(MXG, MAT.metal); b.box(-1.3, 3.45, -h + 0.5, 1.3, 3.66, h - 0.5, 0.3, 0.2);
+      b.set(MXB, MAT.paint); b.box(-1.57, 1.95, -h, 1.57, 2.88, h);
+      const D = [-h + 3.0, 0, h - 3.0]; // door centres
+      for (const s of [-1, 1]) { const xx = s * 1.595;
+        b.set([0.88, 0.85, 0.8], MAT.window); for (let k = 0; k < 4; k++) { const za = k ? D[k - 1] + 0.85 : -h + 0.6, zb = k < 3 ? D[k] - 0.85 : h - 0.6; if (zb - za < 0.5) continue; const np = Math.max(1, Math.round((zb - za) / 1.5));
+          b.quad([xx, 2.02, s > 0 ? za : zb], [xx, 2.02, s > 0 ? zb : za], [xx, 2.8, s > 0 ? zb : za], [xx, 2.8, s > 0 ? za : zb], [0, 0, np, 0, np, 1, 0, 1]); }
+        for (const dz of D) { b.set([0.42, 0.43, 0.45], MAT.metal); bx2(b, xx - s * 0.02, 1.02, dz - 0.67, xx + s * 0.01, 3.0, dz + 0.67); b.set([0.88, 0.85, 0.8], MAT.window); b.quad([xx + s * 0.012, 1.95, dz - 0.55], [xx + s * 0.012, 1.95, dz + 0.55], [xx + s * 0.012, 2.8, dz + 0.55], [xx + s * 0.012, 2.8, dz - 0.55], [0, 0, 2, 0, 2, 1, 0, 1]); }
+      }
+      if (c !== 1) { const e = c === 0 ? -1 : 1, zf = e * h; // cab end: black raked front, windscreen, head and tail lights
+        b.set(MXB, MAT.paint); b.quad([-1.5, 1.0, zf], [1.5, 1.0, zf], [1.45, 1.95, zf + e * 0.35], [-1.45, 1.95, zf + e * 0.35]);
+        b.set([0.02, 0.03, 0.04], MAT.glass); b.quad([-1.45, 1.95, zf + e * 0.35], [1.45, 1.95, zf + e * 0.35], [1.3, 3.2, zf], [-1.3, 3.2, zf]);
+        b.set(MXW, MAT.paint); b.quad([-1.3, 3.2, zf], [1.3, 3.2, zf], [1.2, 3.55, zf - e * 0.3], [-1.2, 3.55, zf - e * 0.3]);
+        for (const s of [-1, 1]) { b.set([1, 0.96, 0.85], MAT.lamp); b.box(s * 1.05 - 0.14, 1.3, zf + e * 0.12, s * 1.05 + 0.14, 1.45, zf + e * 0.2); b.set([0.9, 0.05, 0.03], MAT.beacon); b.box(s * 1.05 - 0.1, 1.55, zf + e * 0.17, s * 1.05 + 0.1, 1.65, zf + e * 0.25); }
+        b.set([0.12, 0.12, 0.13], MAT.metal); b.box(-0.35, 0.65, zf - e * 0.1, 0.35, 1.0, zf + e * 0.45); }
+      else { b.set(MXB, MAT.rubber); for (const e of [-1, 1]) b.box(-1.2, 1.0, e * h - 0.25, 1.2, 3.3, e * h + 0.25); }
+      boxes.push(box(cx, cz, yaw, 1.6, h, cy - 0.2, 3.85, 0));
+    }
+    fx(boxes[1].x, boxes[1].y, boxes[1].z, boxes[1].th, boxes);
+  }
+  b.at(0, 0, 0);
+  W.railStat = { seg: nSeg, track: tT, train: (b.i.length - tS) / 3, tris: (b.i.length - i0) / 3, circles: (W.colliders.length - c0) / 3, boxes: W.bld.slice(bl0).reduce((s, r) => s + r.boxes.length, 0) };
+}
+const bx2 = (b, x0, y0, z0, x1, y1, z1) => b.box(Math.min(x0, x1), y0, Math.min(z0, z1), Math.max(x0, x1), y1, Math.max(z0, z1));
 export function buildProps(W) {
   const b = new MB();
   W.colliders = []; W.bld = []; // circle colliders (x, z, r); building records with their solid boxes (see buildings.js)
   const PLAY = W.PLAY;
   if (W.name === 'fantasy') { cabin(b, W.cabin, W); bridge(b, W.bridge); dam(b, W.dam); }
-  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => house(b, B, i, W)); skiJump(b, W, W.lm.jump); skiJump(b, W, W.lm.mid); arena(b, W, W.lm.arena); tvTower(b, W, W.lm.tower); skiLift(b, W, W.lm.lift); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
+  else { lodge(b, W.cabin, W); W.buildings.forEach((B, i) => B.gone || house(b, B, i, W)); skiJump(b, W, W.lm.jump); skiJump(b, W, W.lm.mid); arena(b, W, W.lm.arena); tvTower(b, W, W.lm.tower); skiLift(b, W, W.lm.lift); chapel(b, W, W.lm.chapel); W.portals.forEach((p) => portal(b, W, p)); }
+  if (W.rail) railway(b, W, W.rail); // Holmenkollbanen
   for (let i = 0; i < W.pylons.length; i++) { pylon(b, W.pylons[i]); if (i) wires(b, W.pylons[i - 1], W.pylons[i]); W.colliders.push(W.pylons[i].x + Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z - Math.sin(W.pylons[i].yaw) * 2.6, 0.5, W.pylons[i].x - Math.cos(W.pylons[i].yaw) * 2.6, W.pylons[i].z + Math.sin(W.pylons[i].yaw) * 2.6, 0.5); }
   for (const L of W.lamps) { lamp(b, L); W.colliders.push(L.x, L.z, 0.35); }
   for (const S of W.signs) { sign(b, S); W.colliders.push(S.x, S.z, 0.3); }
@@ -766,6 +898,7 @@ export function buildProps(W) {
     const x = (hash1(i * 3 + 1) * 2 - 1) * (PLAY + 250), z = (hash1(i * 3 + 2) * 2 - 1) * (PLAY + 250), r = hash1(i * 3 + 3);
     const k = (clamp(Math.round((z + 2048) / 2 - 0.5), 0, HN - 1) * HN + clamp(Math.round((x + 2048) / 2 - 0.5), 0, HN - 1)) * 4;
     if ((W.buildings || []).some((B) => Math.abs(B.x - x) < 14 && Math.abs(B.z - z) < 14)) continue;
+    if (W.rail && W.rail.mask[k >> 2]) continue; // not on the track bed or a platform
     const alp = W.mat[k + 3] / 255; if (W.mat[k] > 0 || W.mat[k + 1] > 0 || W.mat[k + 2] > 20) continue;
     if (r > alp * 0.5 + 0.012) continue;
     let near = false; for (const t of W.trails) { for (let q = 0; q < t.n; q += 3) if (Math.abs(t.pts[q * 2] - x) < 6 && Math.abs(t.pts[q * 2 + 1] - z) < 6) { near = true; break; } if (near) break; }

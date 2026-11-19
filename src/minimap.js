@@ -45,13 +45,23 @@ export function initMinimap(W, B, HALF, kOpt) {
   c.setLineDash([3.5 * ls, 2.5 * ls]); c.strokeStyle = real ? '#8fb8e088' : '#a8cdf0d0'; c.lineWidth = (real ? 1.1 : 1.5) * ls;
   for (const t of W.trails) line(t.pts, t.pts.length >> 1);
   c.setLineDash([]);
-  // ---- roads: dark casing, then the fill; wide roads brighter and wider ----
+  // ---- roads: dark casing, then the fill; streets and service roads (cls >= 4) thin and dim, wide roads brighter and wider ----
   if (W.mapRoads) {
-    const main = (r) => r.hw >= 3.2;
-    c.strokeStyle = '#0c1218e0';
-    for (const r of W.mapRoads) { c.lineWidth = (main(r) ? 5 : 3.6) * ls; line(r.pts, r.pts.length >> 1); }
-    for (let pass = 0; pass < 2; pass++) for (const r of W.mapRoads) { if (main(r) !== !!pass) continue;
-      c.strokeStyle = pass ? '#f3eee2' : '#b4aea0'; c.lineWidth = (pass ? 3 : 1.9) * ls; line(r.pts, r.pts.length >> 1); }
+    const tier = (r) => (r.cls >= 4 ? 0 : r.hw >= 3.2 ? 2 : 1), CW = [2.3, 3.6, 5], FW = [1.05, 1.9, 3], FC = ['#8d897f', '#b4aea0', '#f3eee2'];
+    for (let t = 0; t < 3; t++) { c.strokeStyle = t ? '#0c1218e0' : '#0c121890'; for (const r of W.mapRoads) if (tier(r) === t) { c.lineWidth = CW[t] * ls; line(r.pts, r.pts.length >> 1); } }
+    for (let t = 0; t < 3; t++) { c.strokeStyle = FC[t]; for (const r of W.mapRoads) if (tier(r) === t) { c.lineWidth = FW[t] * ls; line(r.pts, r.pts.length >> 1); } }
+  }
+  // ---- Holmenkollbanen: dark casing with white dashes, platforms, station rings; names on the large map ----
+  if (W.rail) {
+    const R = W.rail, tl = (t) => { c.beginPath(); for (let i = 0; i < t.n; i++) c.lineTo(X(t.x[i]), X(t.z[i])); c.stroke(); }, dashed = [];
+    for (const t of R.tr.slice().sort((a, b) => b.n - a.n)) { const m = t.n >> 1; if (!dashed.some((u) => { for (let k = 0; k < u.n; k += 3) if (Math.hypot(u.x[k] - t.x[m], u.z[k] - t.z[m]) < 8) return true; return false; })) dashed.push(t); } // one dash pattern per double track
+    c.strokeStyle = '#15171cf0'; c.lineWidth = 3.6 * ls; for (const t of R.tr) tl(t);
+    c.strokeStyle = '#eceef0'; c.lineWidth = 1.7 * ls; c.setLineDash([4.5 * ls, 4.5 * ls]); for (const t of dashed) tl(t); c.setLineDash([]);
+    for (const S of R.st) for (const Q of S.p) { const ax = Math.sin(Q.yaw), az = Math.cos(Q.yaw); c.setTransform(az * k, -ax * k, ax * k, az * k, X(Q.x), X(Q.z)); c.fillStyle = '#d9d4c8'; c.fillRect(-Math.max(Q.hw, 2.2), -Q.hl, 2 * Math.max(Q.hw, 2.2), 2 * Q.hl); }
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    for (const S of R.st) { c.beginPath(); c.arc(X(S.x), X(S.z), 3.2 * ls, 0, 6.2832); c.fillStyle = '#ffffff'; c.fill(); c.lineWidth = 1.4 * ls; c.strokeStyle = '#1a3f9a'; c.stroke(); }
+    if (ls > 1.4) { c.font = `600 ${Math.round(8.5 * ls)}px system-ui, sans-serif`; c.textBaseline = 'middle'; c.lineWidth = 2.5 * ls; c.strokeStyle = '#101418d0'; c.fillStyle = '#dfe8ff';
+      for (const S of R.st) { c.strokeText(S.name, X(S.x) + 5 * ls, X(S.z) - 4 * ls); c.fillText(S.name, X(S.x) + 5 * ls, X(S.z) - 4 * ls); } }
   }
   // ---- fantasy set pieces: dam, bridge, cabin ----
   if (!real) {
@@ -61,6 +71,7 @@ export function initMinimap(W, B, HALF, kOpt) {
   // ---- buildings (repainted on damage) ----
   const COL = ['#e2d2ad', '#b07a52', '#7a3a26'];
   const paint = (i, s) => {
+    if (B.fix && B.fix[i]) return; // platforms and trains: drawn with the railway
     const bx = B.box; c.fillStyle = COL[s];
     for (let q = B.b0[i]; q < B.b1[i]; q++) { const o = q * 10, ux = bx[o + 2], uz = bx[o + 3], hw = Math.max(bx[o + 4], 2.6), hd = Math.max(bx[o + 5], 2.6);
       c.setTransform(ux * k, uz * k, -uz * k, ux * k, X(bx[o]), X(bx[o + 1])); c.fillRect(-hw, -hd, 2 * hw, 2 * hd); }

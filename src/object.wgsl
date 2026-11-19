@@ -92,6 +92,14 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     if (cx < 0.09 || cy < 0.125) { alb = vec3f(0.9); }
     if (cx < 0.045 || cy < 0.0625) { alb = vec3f(0.0, 0.03, 0.2); }
   }
+  else if (m == 29u) { // track bed (uv = across, along in metres): concrete sleepers every 0.6 m in dark ballast, drifted over with snow in patches
+    let fy = fract(uv.y / 0.6); let ax = abs(uv.x);
+    let slp = (1.0 - smoothstep(0.11, 0.135, abs(fy - 0.5))) * (1.0 - smoothstep(1.25, 1.3, ax));
+    let grav = vn(wp.xz * 9.0) * 0.6 + vn(wp.xz * 31.0) * 0.4;
+    alb = mix(vec3f(0.075, 0.068, 0.06) * (0.55 + 0.9 * grav), vec3f(0.4, 0.39, 0.37) * (0.85 + 0.3 * vn(uv * vec2f(4.0, 19.0))), slp);
+    let cover = smoothstep(0.14, 0.56, fbm3(wp.xz * 0.33) + 0.35 * (vn(wp.xz * 3.1) - 0.5) - 0.22 * slp + 0.35 * smoothstep(1.2, 1.9, ax) - 0.1 * (1.0 - smoothstep(0.6, 0.85, ax)));
+    alb = mix(alb, vec3f(0.93, 0.95, 0.98), cover); spec = 0.03; gloss = 12.0;
+  }
   else if (m == 21u) { // Russian protective green: flat, grimy, a little snow dust
     alb *= 0.8 + 0.4 * vn(in.lp.xz * 2.7 + in.lp.y * 4.1);
     alb = mix(alb, vec3f(0.55, 0.57, 0.6), 0.3 * smoothstep(0.45, 0.62, vn(in.lp.xz * 1.9 + 5.0)) * saturate(n.y));
@@ -125,7 +133,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let sh = shadowSunS(wp, n, dist, 3) * terrainShadow(wp.xz, hAbove);
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.0) + lampLight(wp.xz, hAbove) * (0.5 + 0.5 * saturate(n.y + 0.6));
-  var col = alb * (sun * ndl + ambient(n) * select(0.55 + 0.45 * saturate(hAbove * 0.5), 1.0, m == 2u && n.y > 0.7) + ll) + emis;
+  var col = alb * (sun * ndl + ambient(n) * select(0.55 + 0.45 * saturate(hAbove * 0.5), 1.0, (m == 2u && n.y > 0.7) || (m == 29u && n.y > 0.3)) + ll) + emis;
   let Hh = normalize(L + v);
   col += sun * spec * pow(saturate(dot(n, Hh)), gloss) * ndl * 4.0;
   if (refl > 0.0) {
