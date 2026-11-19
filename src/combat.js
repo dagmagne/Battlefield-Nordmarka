@@ -909,7 +909,9 @@ export function initCombat(C) {
     let x = D.x, y = D.y - 0.25, z = D.z, vy = D.vy - 0.3; const h = 0.04; D.iok = false;
     for (let k = 0; k < 400; k++) {
       const nx = x + D.vx * h, ny = y + (vy - GRAV * h * 0.5) * h, nz = z + D.vz * h; vy -= GRAV * h;
-      { const bq = W.br.seg(x, y, z, nx, ny, nz); if (bq <= 1) { D.ix = x + (nx - x) * bq; D.iz = z + (nz - z) * bq; D.iy = y + (ny - y) * bq; D.iok = true; return; } } // sweep the step against bridge slabs: a fast grenade steps right through a 1 m deck between two samples
+      { const bq = W.br.seg(x, y, z, nx, ny, nz); if (bq <= 1) { // sweep the step against bridge slabs: a fast grenade steps right through a 1 m deck between two samples
+          let f = bq; for (let q = 1; q <= 4; q++) { const g = bq * q / 4 - 1e-3; if (g > 0 && dropHit(x + (nx - x) * g, y + (ny - y) * g, z + (nz - z) * g)) { f = g; break; } } // a vehicle standing on the deck is met first
+          D.ix = x + (nx - x) * f; D.iz = z + (nz - z) * f; D.iy = y + (ny - y) * f; D.iok = true; return; } }
       if (dropHit(nx, ny, nz)) { let a = 0, b = 1; for (let it = 0; it < 6; it++) { const m = (a + b) * 0.5; if (dropHit(x + (nx - x) * m, y + (ny - y) * m, z + (nz - z) * m)) b = m; else a = m; } // refine to the surface
         D.ix = x + (nx - x) * b; D.iz = z + (nz - z) * b; D.iy = Math.max(y + (ny - y) * b, hAt(D.ix, D.iz)); D.iok = true; return; }
       x = nx; y = ny; z = nz;

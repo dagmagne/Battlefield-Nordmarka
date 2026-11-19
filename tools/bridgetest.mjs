@@ -114,6 +114,12 @@ r = await ev(`(()=>{ calm(); const F=${F1}, B=F.B, g=__game, [x,z]=F.P(F.tc,-B.h
   const [sx,sz]=F.P(F.tc+4,-B.hw-12); Object.assign(D,{x:sx,z:sz,y:F.top(F.tc+4,-B.hw)-B.th*0.5,vx:0,vy:0,vz:0,yaw:F.yawV,pitch:0}); BOOMS.length=0;
   for (let i=0;i<60*4 && D.on;i++) __sim(1/60,1); const q=F.L(D.bx,D.bz); __inp.mvZ=0; __sim(1/60,300);
   return { under, crash:{ on:D.on, booms:BOOMS.length, lv:+q[1].toFixed(2), face:-B.hw, y:+D.by.toFixed(2) } }; })()`);
+// 8b. the bomber's predicted drop point over a T-72 standing on the deck is on the tank, not on the deck under it
+{ const q = await ev(`(()=>{ calm(); const F=${F1}, B=F.B, g=__game, [x,z]=F.P(F.tc,-B.hw-40); __tp(x,z,F.yawV); __sim(1/60,5);
+  g.spawn(0,0); const e=g.enemies.filter((v)=>v.on).pop(); const [ex,ez]=F.P(F.tc,0), top=F.top(F.tc,0); Object.assign(e,{x:ex,z:ez,y:top,yaw:F.yawV,path:-1,immob:true,hp:400}); __sim(1/60,20);
+  g.dn[1]=2; g.droneType(1); g.droneKey(); const D=g.drone; Object.assign(D,{x:e.x,z:e.z,y:e.y+50,vx:0,vy:0,vz:0,climb:0}); __sim(1/60,6);
+  const res={ on:D.on, iok:D.iok, iy:+D.iy.toFixed(2), top:+top.toFixed(2), ey:+e.y.toFixed(2) }; g.droneKey(); e.on=false; __sim(1/60,2); return res; })()`);
+  check('S1 the predicted drop point over a T-72 on the deck is on the tank', q.on && q.iok && Math.abs(q.ey - q.top) < 0.3 && q.iy > q.top + 0.8 && q.iy < q.top + 3, q); }
 check('S1 an FPV flies under the deck and out the far side', r.under.on && r.under.lvMax > 18, r.under);
 // 9b. a bomber rising slowly under the deck crashes into the slab and is never lifted onto the deck (groundAt accepts a querier up to STEP below the top)
 { const q = await ev(`(()=>{ calm(); const F=${F1}, B=F.B, g=__game, [x,z]=F.P(F.tc,-B.hw-40); __tp(x,z,F.yawV); __sim(1/60,5); g.dn[1]=2; g.droneType(1); g.droneKey(); const D=g.drone;
