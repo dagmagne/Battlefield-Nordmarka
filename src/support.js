@@ -37,6 +37,7 @@ export function initSupport(C, G, h) {
     if (!hit) return false;
     for (let i = 0; i < 8; i++) { const m = (t + tp) * 0.5; if (oy + dy * m < hAt(ox + dx * m, oz + dz * m)) t = m; else tp = m; }
     const fb = C.bld.ray(ox, oy, oz, ox + dx * t, oy + dy * t, oz + dz * t, false); if (fb < 1) t *= fb;
+    const fq = W.br.seg(ox, oy, oz, ox + dx * t, oy + dy * t, oz + dz * t); if (fq < 1) t *= fq; // a bridge deck
     P[0] = ox + dx * t; P[1] = oy + dy * t; P[2] = oz + dz * t; return true;
   }
 
@@ -74,7 +75,7 @@ export function initSupport(C, G, h) {
   function impact(x, y, z, bSkip) {
     S.hits++;
     h.explode(x, y, z, 3.6);
-    const gh = hAt(x, z), P0 = C.parts;
+    const gh = W.groundAt(x, z, y + 0.5), P0 = C.parts; // on a bridge deck the fountain starts from the deck
     if (y - gh < 2) { // a 155 mm round in the snow: a tall fountain of snow and frozen earth, then a dark cloud that hangs for a while
       for (let i = 0; i < 46; i++) { const a = rnd() * 6.283, r = rnd() * 7, dk = rnd() < 0.45, up = 14 + rnd() * 20;
         P0.emit(x + Math.cos(a) * rnd() * 1.5, gh + 0.3, z + Math.sin(a) * rnd() * 1.5, Math.cos(a) * r, up, Math.sin(a) * r, 1.6 + rnd() * 1.4, dk ? 0.07 + rnd() * 0.1 : 0.05 + rnd() * 0.06, 0, 0, dk ? 0.1 : 1, dk ? 0.085 : 1, dk ? 0.07 : 1, 0.95); }

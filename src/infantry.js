@@ -59,7 +59,9 @@ export function initInfantry(C, G, h) {
     REL[i] = 1 + rnd() * 2; SPT[i] = 0; LOST[i] = 0; LX[i] = x; LZ[i] = z; SUP[i] = 0; TX[i] = x; TZ[i] = z; EX[i] = NaN; BN[i] = 0; BT[i] = 0; AT[i] = 0; MT[i] = 0; FT[i] = 0;
     if (i >= I.n) I.n = i + 1; return i;
   }
-  const footOk = (x, z) => Math.abs(x) < PLAY - 40 && Math.abs(z) < PLAY - 40 && !C.collAt(x, z) && B.at(x, hAt(x, z) + 1, z, 0.8) < 0;
+  const footOk = (x, z) => Math.abs(x) < PLAY - 40 && Math.abs(z) < PLAY - 40 && !C.collAt(x, z) && B.at(x, hAt(x, z) + 1, z, 0.8) < 0 && W.br.id(x, z, 3) < 0; // (not on or under a bridge)
+  const gAt = (x, z, y) => W.groundAt(x, z, y); // ground for a soldier at height y: on a deck when walking on it, the road under it otherwise
+  const leave = (i) => { const o = i * 8; if (HB[i] < 0 || B.push(d[o], d[o + 2], 0.5, SO) === 0) return; d[o] = SO[0]; d[o + 2] = SO[1]; d[o + 1] = hAt(d[o], d[o + 2]); }; // out through the nearest wall before the house binding is dropped (rare event)
   const yawTo = (x, z, tx, tz) => Math.atan2(-(tx - x), -(tz - z));
 
   // ---------- RPG teams: in a house along a road, or at a forest edge, ahead on the enemy axis ----------
@@ -113,8 +115,8 @@ export function initInfantry(C, G, h) {
     if (free() < 4) return -1; const q = squad(QDIS); if (q < 0) return -1; e.dsm = 1;
     const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw), rx = Math.cos(e.yaw), rz = -Math.sin(e.yaw), px = veh.x - e.x, pz = veh.z - e.z, pd = Math.hypot(px, pz) || 1;
     for (let k = 0; k < n; k++) { const lat = (k - (n - 1) / 2) * 1.1; let x = e.x - fx * (4.6 + (k & 1) * 0.8) + rx * lat, z = e.z - fz * (4.6 + (k & 1) * 0.8) + rz * lat;
-      if (C.solid(x, z, 0.4, SO)) { x = SO[0]; z = SO[1]; }
-      const i = soldier(q, n >= 5 && k === 1 ? RPG : RIF, x, z, e.yaw + 3.1416); if (i < 0) break;
+      if (C.solid(x, z, 0.4, SO, e.y)) { x = SO[0]; z = SO[1]; }
+      const i = soldier(q, n >= 5 && k === 1 ? RPG : RIF, x, z, e.yaw + 3.1416); if (i < 0) break; d[i * 8 + 1] = gAt(x, z, e.y + 0.5); // (on a deck if the vehicle stands on one)
       BP[i] = rnd() < 0.6 ? 4 : 3; const sp = (k - (n - 1) / 2) * 5; // deploy: a line abreast on the player's side of the vehicle
       cover(i, e.x + px / pd * 10 - pz / pd * sp, e.z + pz / pd * 10 + px / pd * sp); MD[i] = M_MOVE; MT[i] = 0; }
     QS[q] = 0; QT[q] = 0; return q;
@@ -146,7 +148,7 @@ export function initInfantry(C, G, h) {
   function onBld(b, s) {
     for (let i = 0; i < I.n; i++) { if (HB[i] !== b || d[i * 8 + 7] !== 1) continue;
       if (s === 2 || rnd() < 0.5) { kill(i, 'house'); continue; }
-      HB[i] = -1; EX[i] = NaN; flee(i, 30 + rnd() * 15); REL[i] = 25 + rnd() * 10; SUP[i] = 6; }
+      leave(i); HB[i] = -1; EX[i] = NaN; flee(i, 30 + rnd() * 15); REL[i] = 25 + rnd() * 10; SUP[i] = 6; }
   }
   function flee(i, r) { const o = i * 8, px = d[o] - veh.x, pz = d[o + 2] - veh.z, l = Math.hypot(px, pz) || 1, s = rnd() - 0.5; cover(i, d[o] + (px / l + s * pz / l) * r, d[o + 2] + (pz / l - s * px / l) * r); MD[i] = M_FLEE; MT[i] = 0; BP[i] = 4; }
 
@@ -219,8 +221,8 @@ export function initInfantry(C, G, h) {
     if (F) for (let f = 0; f < F.length; f += 4) { if (!F[f + 3]) continue; const fx = x - F[f], fz = z - F[f + 1], fd = Math.hypot(fx, fz) || 1, rr = F[f + 2] + 6; if (fd < rr) { const w = (rr - fd) / 6 * 1.8; ux += fx / fd * w; uz += fz / fd * w; } }
     const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
     let nx = clamp(x + ux * sp * dt, -PLAY, PLAY), nz = clamp(z + uz * sp * dt, -PLAY, PLAY);
-    if (C.solid(nx, nz, 0.4, SO)) { nx = SO[0]; nz = SO[1]; }
-    d[o] = nx; d[o + 2] = nz; d[o + 1] = hAt(nx, nz); d[o + 3] += wrap(Math.atan2(-ux, -uz) - d[o + 3]) * Math.min(1, dt * 8);
+    if (C.solid(nx, nz, 0.4, SO, d[o + 1])) { nx = SO[0]; nz = SO[1]; }
+    d[o] = nx; d[o + 2] = nz; d[o + 1] = gAt(nx, nz, d[o + 1]); d[o + 3] += wrap(Math.atan2(-ux, -uz) - d[o + 3]) * Math.min(1, dt * 8);
     d[o + 5] += dt * sp / (sp > 2.6 ? RUN_V : WALK_V); // the gait clock follows ground speed so planted feet don't slide (soldier.js)
     return false;
   }
@@ -231,7 +233,7 @@ export function initInfantry(C, G, h) {
     if (seen) for (let i = 0; i < I.n; i++) if (SQ[i] === q) KN[i] = Math.max(KN[i], 8); // what one sees, the squad knows
     QT[q] += dt;
     if (QS[q] === 3) return;
-    if (live * 3 <= QI[q] && QK[q] === QDIS || G.state === 0 && lastState === 1) { QS[q] = 3; for (let i = 0; i < I.n; i++) if (SQ[i] === q && d[i * 8 + 7] === 1) { HB[i] = -1; EX[i] = NaN; flee(i, 330); } return; } // broken, or the wave is over: withdraw out of the fight (the slot is freed once 300 m away)
+    if (live * 3 <= QI[q] && QK[q] === QDIS || G.state === 0 && lastState === 1) { QS[q] = 3; for (let i = 0; i < I.n; i++) if (SQ[i] === q && d[i * 8 + 7] === 1) { leave(i); HB[i] = -1; EX[i] = NaN; flee(i, 330); } return; } // broken, or the wave is over: withdraw out of the fight (the slot is freed once 300 m away)
     if (QK[q] !== QDIS) return;
     const md = Math.hypot(cx / live - veh.x, cz / live - veh.z);
     if (QS[q] === 0) { if (!moving || QT[q] > 10) { QS[q] = 1; QA[q] = 0; bound(q); } return; }
@@ -265,7 +267,7 @@ export function initInfantry(C, G, h) {
       const x = d[o], z = d[o + 2], dx = veh.x - x, dz = veh.z - z, dist = Math.hypot(dx, dz);
       // run over: the tank's hull footprint (a still tank pushes them aside)
       if (dist < 5 && !veh.dead) { const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw), lx = c * -dx - s * -dz, lz = s * -dx + c * -dz;
-        if (Math.abs(lx) < 2.15 && Math.abs(lz) < 4.1 && d[o + 1] - veh.y < 1.5) { if (Math.abs(veh.v) > 0.6 || Math.abs(veh.yawRate || 0) > 0.15) { kill(i, 'tracks'); continue; } const sd = lx < 0 ? -1 : 1, p = 2.15 * sd - lx; d[o] += c * p; d[o + 2] -= s * p; } }
+        if (Math.abs(lx) < 2.15 && Math.abs(lz) < 4.1 && Math.abs(d[o + 1] - veh.y) < 1.5) { if (Math.abs(veh.v) > 0.6 || Math.abs(veh.yawRate || 0) > 0.15) { kill(i, 'tracks'); continue; } const sd = lx < 0 ? -1 : 1, p = 2.15 * sd - lx; d[o] += c * p; d[o + 2] -= s * p; } }
       // withdrawn out of everyone's way: the slot is freed
       if (SQ[i] >= 0 && QS[SQ[i]] === 3 && dist > 300 && Math.hypot(x - cam.x, z - cam.z) > 300) { d[o + 7] = 0; continue; }
       // perception (staggered)
@@ -289,7 +291,7 @@ export function initInfantry(C, G, h) {
       const known = SEE[i] >= 1 || KN[i] > 0; if (known) d[o + 3] += wrap(Math.atan2(-dx, -dz) - d[o + 3]) * Math.min(1, dt * 3);
       let pose = SUP[i] > 1.5 && HB[i] < 0 ? 4 : BP[i]; if (md === M_FIRE && known && pose === 0) pose = 5;
       const can = SEE[i] >= 1 && VIS[i] > 0 && !G.peace && !veh.dead && SUP[i] < 3, q = SQ[i];
-      if (role === RPG && can && dist < RPG_R && REL[i] <= 0 && RK[i] > 0) { pose = 7; AT[i] += dt; if (AT[i] >= 1.2) { rocket(i, dist); RK[i]--; REL[i] = RPG_RL * (0.9 + rnd() * 0.2); AT[i] = 0; FT[i] = 0.7; if (!RK[i]) { HB[i] = -1; EX[i] = NaN; flee(i, 60 + rnd() * 40); } } } // out of rockets: the gunner pulls back
+      if (role === RPG && can && dist < RPG_R && REL[i] <= 0 && RK[i] > 0) { pose = 7; AT[i] += dt; if (AT[i] >= 1.2) { rocket(i, dist); RK[i]--; REL[i] = RPG_RL * (0.9 + rnd() * 0.2); AT[i] = 0; FT[i] = 0.7; if (!RK[i]) { leave(i); HB[i] = -1; EX[i] = NaN; flee(i, 60 + rnd() * 40); } } } // out of rockets: the gunner pulls back
       else if (role === ATG && can && VIS[i] > 0.1 && dist < ATG_R && REL[i] <= 0) { pose = 3; AT[i] += dt; if (AT[i] >= 2) { missile(i); REL[i] = ATG_RL * (0.9 + rnd() * 0.3); AT[i] = 0; } }
       else if (role === RIF && can && dist < RIF_R && (md === M_FIRE || (q >= 0 && QS[q] > 0))) { if (pose === 0) pose = 5;
         if (BN[i] > 0) { BT[i] -= dt; if (BT[i] <= 0) { BT[i] = 0.11; BN[i]--; rifle(i, dist); } }
@@ -338,6 +340,6 @@ export function initInfantry(C, G, h) {
   };
   // tests: kind 'rpg' (house b, or forest at x, z), 'atgm', 'dis' (dismounts from enemy e), 'auto-rpg' (placeRPG on the axis)
   G.infSquad = (kind, x, z, n, b) => kind === 'rpg' ? (b >= 0 ? houseTeam(b, n || 2) : fieldTeam(x, z, n || 2)) : kind === 'atgm' ? atgmTeam(x, z) : kind === 'dis' ? dismount(x, n || 5) : kind === 'auto-rpg' ? placeRPG(x) : kind === 'auto-atgm' ? placeATGM(x) : -1;
-  I.kill = kill; I.flee = flee; I.reset = reset; I.ex = EX; I.ey = EY; I.ez = EZ;
+  I.kill = kill; I.flee = flee; I.reset = reset; I.tx = TX; I.tz = TZ; I.mt = MT; I.ex = EX; I.ey = EY; I.ez = EZ;
   return { update, seg, aimHit, blast, onBld, trail, lpos, map, scan, wave, reset, hitKill: (by) => { if (I.hi >= 0) kill(I.hi, by); } };
 }

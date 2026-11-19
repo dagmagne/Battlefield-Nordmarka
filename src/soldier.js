@@ -275,7 +275,7 @@ function evalSlump(P, A, v) {
   set3(P, 24, -0.3, 0.5, 0.05 * k); set3(P, 27, 0.32, 0.52, -0.05 * k); set3(P, 30, -0.4, -0.2, 1); set3(P, 33, 0.4, -0.2, 1); // arms hanging
 }
 
-export function initSoldiers(MAXI, heightAt) {
+export function initSoldiers(MAXI, heightAt) { // heightAt(x, z, y): the ground for a querier at height y (W.groundAt: bridge decks count)
   const PA = new Float32Array(NP), PB = new Float32Array(NP), PC = new Float32Array(NP), PS = new Float32Array(NP);
   const cur = new Int8Array(MAXI).fill(-1), prv = new Int8Array(MAXI).fill(-1), dvar = new Int8Array(MAXI), dfrom = new Int8Array(MAXI);
   const bt = new Float32Array(MAXI), prvPh = new Float32Array(MAXI), prvAim = new Float32Array(MAXI), lastPh = new Float32Array(MAXI), lastAim = new Float32Array(MAXI);
@@ -340,15 +340,15 @@ export function initSoldiers(MAXI, heightAt) {
     // root: world from character space; lying bodies pivot about their middle to follow the slope
     trs(B, x, y, z, yaw, 0, 0);
     if (L > 0.001) {
-      const pz = P[2], cy = Math.cos(yaw), sy = Math.sin(yaw), hc = heightAt(x + sy * pz, z + cy * pz);
-      const hf = heightAt(x + sy * (pz - 0.85), z + cy * (pz - 0.85)), hb = heightAt(x + sy * (pz + 0.85), z + cy * (pz + 0.85));
-      const hr = heightAt(x + cy * 0.3 + sy * pz, z - sy * 0.3 + cy * pz), hl = heightAt(x - cy * 0.3 + sy * pz, z + sy * 0.3 + cy * pz);
+      const pz = P[2], cy = Math.cos(yaw), sy = Math.sin(yaw), hc = heightAt(x + sy * pz, z + cy * pz, y + 0.6);
+      const hf = heightAt(x + sy * (pz - 0.85), z + cy * (pz - 0.85), y + 0.6), hb = heightAt(x + sy * (pz + 0.85), z + cy * (pz + 0.85), y + 0.6);
+      const hr = heightAt(x + cy * 0.3 + sy * pz, z - sy * 0.3 + cy * pz, y + 0.6), hl = heightAt(x - cy * 0.3 + sy * pz, z + sy * 0.3 + cy * pz, y + 0.6);
       trs(M1, 0, L * (hc - y), pz, 0, L * Math.atan((hf - hb) / 1.7), L * Math.atan((hr - hl) / 0.6)); M2.fill(0); M2[0] = M2[5] = M2[10] = M2[15] = 1; M2[14] = -pz;
       mul(M3, M1, M2); mul(Bp, B, M3); B.set(Bp);
     }
     // feet follow the ground under them when upright
     let dL = 0, dR = 0;
-    if (L < 0.5) { tp(B, P[12], P[13], P[14], T, 0); dL = Math.max(-0.35, Math.min(0.35, heightAt(T[0], T[2]) - y)); tp(B, P[15], P[16], P[17], T, 0); dR = Math.max(-0.35, Math.min(0.35, heightAt(T[0], T[2]) - y)); }
+    if (L < 0.5) { tp(B, P[12], P[13], P[14], T, 0); dL = Math.max(-0.35, Math.min(0.35, heightAt(T[0], T[2], y + 0.6) - y)); tp(B, P[15], P[16], P[17], T, 0); dR = Math.max(-0.35, Math.min(0.35, heightAt(T[0], T[2], y + 0.6) - y)); }
     const drop = Math.min(0, dL, dR);
     trs(M1, P[0], P[1] + drop, P[2], P[3], P[4], P[5]); mul(Mp, B, M1);
     trs(M1, 0, WAIST, 0, P[6], P[7], P[8]); mul(Mt, Mp, M1);

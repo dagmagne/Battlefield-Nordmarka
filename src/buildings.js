@@ -12,11 +12,11 @@ export function initBuildings(W, mesh, HALF) {
   const L = W.bld || [], n = L.length; let nb = 0; for (const b of L) nb += b.boxes.length;
   const B = { n, nb, x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n), hp: new Float32Array(n), hpM: new Float32Array(n), st: new Uint8Array(n),
     v0: new Uint32Array(n), v1: new Uint32Array(n), b0: new Uint32Array(n), b1: new Uint32Array(n), size: new Float32Array(n), box: new Float32Array(nb * BS),
-    mesh, upload: null, debUpload: null, dv: new Float32Array(DMAX * 24 * VS), di: null, dN: 0, dHead: 0, changed: [], pris: new Array(n) };
+    fix: new Uint8Array(n), mesh, upload: null, debUpload: null, dv: new Float32Array(DMAX * 24 * VS), di: null, dN: 0, dHead: 0, changed: [], pris: new Array(n) };
   const X = B.box;
   let k = 0;
   L.forEach((r, i) => {
-    B.x[i] = r.x; B.y[i] = r.y; B.z[i] = r.z; B.v0[i] = r.v0; B.v1[i] = r.v1; B.b0[i] = k;
+    B.x[i] = r.x; B.y[i] = r.y; B.z[i] = r.z; B.fix[i] = r.fix ? 1 : 0; B.v0[i] = r.v0; B.v1[i] = r.v1; B.b0[i] = k;
     B.hpM[i] = B.hp[i] = clamp(60 + 0.5 * r.area, 60, 400); B.size[i] = Math.sqrt(r.area);
     for (const q of r.boxes) { const o = k++ * BS; X[o] = q.x; X[o + 1] = q.z; X[o + 2] = Math.cos(q.th); X[o + 3] = -Math.sin(q.th); X[o + 4] = q.hw; X[o + 5] = q.hd; X[o + 6] = q.y; X[o + 7] = q.wall; X[o + 8] = q.rise; X[o + 9] = i; }
     B.b1[i] = k;
@@ -166,7 +166,7 @@ export function initBuildings(W, mesh, HALF) {
   }
   // damage building i; returns its new state when it changed, else -1
   B.damage = (i, d) => {
-    if (i < 0 || i >= n || B.st[i] === 2 || d <= 0) return -1;
+    if (i < 0 || i >= n || B.st[i] === 2 || d <= 0 || B.fix[i]) return -1; // fix: solid but not destructible (platforms, the parked trains)
     B.hp[i] = Math.max(0, B.hp[i] - d);
     const s = B.hp[i] <= 0 ? 2 : B.hp[i] < 0.5 * B.hpM[i] ? 1 : 0; if (s === B.st[i]) return -1;
     B.st[i] = s; show(i); if (s === 2) debris(i, L[i].col); if (B.onState) B.onState(i, s); return s;

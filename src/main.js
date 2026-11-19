@@ -24,6 +24,7 @@ import { buildSoldier, initSoldiers, IST, WALK_V, RUN_V } from './soldier.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { initBuildings, DMAX } from './buildings.js';
+import { initBridges } from './bridges.js';
 import { Particles } from './particles.js';
 import { initUI, inp } from './ui.js';
 import { initAudio } from './audio.js';
@@ -106,6 +107,7 @@ async function main() {
   await tick('Shaping terrain', 0);
   const W = wsel === 'fantasi' ? await genFantasy(tick, Q) : await genWorld(tick, Q, wsel);
   const PLAY = W.PLAY, MW = W.MW;
+  W.br = initBridges(W.brg || [], W.heightAt); W.groundAt = W.br.groundAt; const brUndo = W.br.shade(W.nrm, HN, HALF); // functional bridges (src/bridges.js): deck slabs over the heightfield, walls; the road under a deck is shaded
   await tick('Building scene', 0.95);
 
   // ---------- static textures ----------
@@ -120,7 +122,7 @@ async function main() {
     chain.forEach((d, i) => { const s = HN >> i; device.queue.writeTexture({ texture: t, mipLevel: i }, d, { bytesPerRow: s * 4 }, [s, s]); });
     return t;
   };
-  const normTex = mkMip(W.nrm), matTex = mkMip(W.mat);
+  const normTex = mkMip(W.nrm), matTex = mkMip(W.mat); brUndo(); // the road under a deck is shaded on the GPU only: line of sight and enemy routing read W.nrm's canopy without it
   const tshTex = device.createTexture({ size: [1024, 1024], format: 'rg16float', usage: RA | TB });
   const maskA = device.createTexture({ size: [Q.mask, Q.mask], format: 'rgba8unorm', usage: RA | TB });
   const maskB = device.createTexture({ size: [Q.mask, Q.mask], format: 'rg16float', usage: RA | TB });
@@ -236,10 +238,12 @@ async function main() {
   const collAt = (x, z) => { const C = W.colliders, c = clamp(Math.floor((z + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((x + HALF) / CG), 0, NCG - 1);
     for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = x - C[i], dz = z - C[i + 1]; if (dx * dx + dz * dz < C[i + 2] * C[i + 2]) return true; } return false; };
   // push a circle (r <= 4.5) out of the buildings and the circle colliders; out = [x, z, nx, nz, depth]; returns the contact count
-  const solid = (x, z, r, out) => {
+  const BO = new Float32Array(5);
+  const solid = (x, z, r, out, y) => { // y (optional): the querier's ground level, for bridge walls
     let n = BL.push(x, z, r, out); const C = W.colliders, c = clamp(Math.floor((out[1] + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((out[0] + HALF) / CG), 0, NCG - 1);
     for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = out[0] - C[i], dz = out[1] - C[i + 1], rr = C[i + 2] + r, d2 = dx * dx + dz * dz;
       if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = rr - d; out[0] += dx / d * k; out[1] += dz / d * k; n++; if (k > out[4]) { out[2] = dx / d; out[3] = dz / d; out[4] = k; } } }
+    if (y !== undefined) { const m = W.br.push(out[0], out[1], y, r, BO); if (m) { out[0] = BO[0]; out[1] = BO[1]; n += m; if (BO[4] > out[4]) { out[2] = BO[2]; out[3] = BO[3]; out[4] = BO[4]; } } }
     return n;
   };
   const SO = new Float32Array(5);
@@ -440,7 +444,7 @@ async function main() {
     for (let k = 1; k < 3; k++) {
       const i = k * 4, mv = Math.hypot(stCur[i] - stPrev[i], stCur[i + 1] - stPrev[i + 1]) + Math.hypot(stCur[i + 2] - stPrev[i + 2], stCur[i + 3] - stPrev[i + 3]);
       if (mv < 0.07) continue;
-      if (!(veh.air && veh.y - veh.gPrev > 0.12)) {
+      if (!(veh.air && veh.y - veh.gPrev > 0.12) && !veh.deck) {
         const o = stN * 16, d = stData;
         d[o] = stPrev[i]; d[o + 1] = stPrev[i + 1]; d[o + 2] = stPrev[i + 2]; d[o + 3] = stPrev[i + 3];
         d[o + 4] = stCur[i]; d[o + 5] = stCur[i + 1]; d[o + 6] = stCur[i + 2]; d[o + 7] = stCur[i + 3];
@@ -470,6 +474,8 @@ async function main() {
   let glowN = 0, glowBuf;
   { const g = [];
     for (const L of W.lamps) g.push(L.x + Math.sin(L.yaw) * 1.55, L.y + 6.0, L.z + Math.cos(L.yaw) * 1.55, 0.95, 0.9, 0.65, 0.34, 0, 2, 0, 0, 0);
+    const AG = W.glows || []; for (let i = 0; i < AG.length; i += 3) g.push(AG[i], AG[i + 1], AG[i + 2], 1, 0.95, 0.85, 1.6, 0, 2, 0, 0, 0); // arena floodlights (props.js)
+    const RG = W.railGlow || []; for (let i = 0; i < RG.length; i += 3) g.push(RG[i], RG[i + 1], RG[i + 2], 0.92, 0.94, 1, 0.3, 0, 2, 0, 0, 0); // platform lamps (props.js railway)
     glowN = g.length / 12; glowBuf = mkBuf(new Float32Array(g), U.VERTEX); }
   const em = { spray: 0, exh: 0, smoke: 0, kick: 0, roost: 0 };
   const tmp3 = new Float32Array(3); let fwdX = 0, fwdZ = -1, eBM = null;
@@ -569,6 +575,7 @@ async function main() {
     if (m === 3 && cam.mode !== 3) { cam.prevMode = cam.mode; cam.yaw = Math.atan2(view[2], view[10]); cam.pitch = Math.asin(clamp(-view[6], -1, 1)); }
     cam.mode = m; R.snap = true; ui.toast(CAMT[m] + (m === 3 && !isTouch ? ' — click to look' : ''));
   }
+  const peacePref = () => { try { return localStorage.gpeace === '1'; } catch (e) { return false; } };
   const api = {
     cam() { if (cam.mode !== 4) setCam(cam.mode === 0 ? 1 : 0); },
     drone() { if (R.game) R.game.droneKey(); },
@@ -587,17 +594,22 @@ async function main() {
     trees(v) { R.treeSel = v; R.trees = v !== 'off'; if (R.trees) setTreeQ(TREEQ.indexOf(v)); try { localStorage.gtrees = v; } catch (e) { /* ignore */ } ui.toast('Trees: ' + v); },
     sound(v) { const on = v === undefined ? !audio.on : !!v; audio.setOn(on); music.sound(on); try { localStorage.gsnd = on ? '1' : '0'; } catch (e) { /* ignore */ } ui.toast(on ? 'Sound on' : 'Sound off'); },
     music(v) { const on = v === undefined ? music.toggle() : (music.set(v), music.on); ui.toast(on ? 'Music on' : 'Music off'); },
+    peace(v) { // menu: free roam without enemies; stored, and applied with a restart so no wave is left half-way
+      if (W.name === 'fantasy') { ui.toast('This world is free roam only'); return; }
+      const on = !!v; if (on === game.peace) return; game.peace = on; try { localStorage.gpeace = on ? '1' : '0'; } catch (e) { /* ignore */ }
+      api.restart(); ui.toast(on ? 'Peace mode: free roam, no enemies' : 'Peace mode off: waves restart');
+    },
     vib(v) { R.hap.setLevel(v); try { localStorage.gvib = String(v); } catch (e) { /* ignore */ } ui.toast(['Vibration off', 'Vibration light', 'Vibration full'][v]); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
+    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, peace: game.peace, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); if (R.hap) R.hap.ev(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' || peacePref() });
   R.game = game; R.aimHit = game.aimHit;
-  const SOL = initSoldiers(MAXI, W.heightAt);
+  const SOL = initSoldiers(MAXI, W.groundAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
   let sndOn = true; /* on by default; a stored choice (M or the menu) and ?mute win */ try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
@@ -631,7 +643,8 @@ async function main() {
     // buildings: the hull as three circles (front, middle, rear); push out along the smallest penetration, slide along the wall
     let a = 0;
     for (let s = -1; s <= 1; s++) { const px = veh.x + fx * 1.8 * s, pz = veh.z + fz * 1.8 * s;
-      if (BL.push(px, pz, 1.9, SO)) { veh.x += SO[0] - px; veh.z += SO[1] - pz; a = Math.max(a, Math.abs(fx * SO[2] + fz * SO[3])); } }
+      if (BL.push(px, pz, 1.9, SO)) { veh.x += SO[0] - px; veh.z += SO[1] - pz; a = Math.max(a, Math.abs(fx * SO[2] + fz * SO[3])); }
+      const qx = veh.x + fx * 1.8 * s, qz = veh.z + fz * 1.8 * s; if (W.br.push(qx, qz, veh.y, 1.9, SO)) { veh.x += SO[0] - qx; veh.z += SO[1] - qz; a = Math.max(a, Math.abs(fx * SO[2] + fz * SO[3])); } } // bridge walls at the hull's own level (abutments under a deck, parapets on it)
     if (a > 0) {
       const sp = Math.abs(veh.v);
       if (!wallC) { // impact: lose the speed into the wall
@@ -681,6 +694,7 @@ async function main() {
     }
     return hits;
   }
+  const gq = (x, z) => W.groundAt(x, z, veh.y); // the track-corner ground query (no closure per frame)
   function simulate(dt) {
     let th = inp.th, st = inp.st;
     if (R.force) { th = R.force[0]; st = R.force[1]; }
@@ -713,7 +727,7 @@ async function main() {
     veh.x = clamp(veh.x + fwdX * veh.v * dt, -PLAY, PLAY); veh.z = clamp(veh.z + fwdZ * veh.v * dt, -PLAY, PLAY);
     const vc = Math.abs(veh.v); collide(dt);
     if (vc > 5 && Math.abs(veh.v) < vc * 0.9 && !wallC) { veh.shake = Math.max(veh.shake, Math.min(1, vc / 18)); veh.v *= 0.5; }
-    const rx = -fwdZ, rz = fwdX, hl = LEO.hl, hw = LEO.hw, h = W.heightAt, fx = fwdX, fz = fwdZ;
+    const rx = -fwdZ, rz = fwdX, hl = LEO.hl, hw = LEO.hw, h = gq, fx = fwdX, fz = fwdZ; // ground at the hull's own level: a bridge deck counts only from STEP below its top
     const a = h(veh.x + fx * hl + rx * hw, veh.z + fz * hl + rz * hw), b = h(veh.x + fx * hl - rx * hw, veh.z + fz * hl - rz * hw), c = h(veh.x - fx * hl + rx * hw, veh.z - fz * hl + rz * hw), d = h(veh.x - fx * hl - rx * hw, veh.z - fz * hl - rz * hw);
     const gY = (a + b + c + d) / 4 + 0.02, gV = clamp((gY - veh.gPrev) / dt, -40, 40); veh.gPrev = gY;
     veh.shake *= 1 - Math.min(1, dt * 3.5);
@@ -724,8 +738,8 @@ async function main() {
     const G = 10.5;
     if (!veh.air) {
       const ball = veh.y + veh.vy * dt - 0.5 * G * dt * dt;
-      if (gY < ball - 0.05 && sp > 6) { veh.air = true; veh.airT = 0; veh.y = ball; } // crest: leave the ground
-      else { veh.vy = gV; veh.y = gY; }
+      if ((gY < ball - 0.05 && sp > 6) || gY < veh.y - 1.2) { veh.air = true; veh.airT = 0; veh.y = ball; } // crest, or the ground falls away under the hull (an edge): leave the ground
+      else { veh.vy = gY - veh.y > 0.2 ? 0 : gV; veh.y = gY; } // a step up (onto a deck edge, a kerb) is climbed, not launched from
     }
     if (veh.air) {
       veh.vy -= G * dt; veh.y += veh.vy * dt; veh.airT += dt;
@@ -741,6 +755,7 @@ async function main() {
       const k = Math.min(1, dt * 10);
       veh.pitch += (Math.atan2((a + b - c - d) / 2, hl * 2) - veh.pitch) * k; veh.roll += (Math.atan2((a + c - b - d) / 2, hw * 2) - veh.roll) * k;
     }
+    veh.deck = W.br.top(veh.x, veh.z, veh.y) > W.heightAt(veh.x, veh.z) + 0.3; // on a bridge deck (no track marks: the snow mask is 2-D and would mark the road below)
   }
   // sight line -> aim point (terrain ray march), then slew turret and gun towards the ballistic solution
   const AMMO_V = 1650;
@@ -811,10 +826,10 @@ async function main() {
         const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
         if (D.view === 0) { // outside: behind and above the airframe along the heading, looking a little ahead of it (handy for landing on the tank)
           const hx = -Math.sin(D.yaw), hz = -Math.cos(D.yaw);
-          cam.x = D.x - hx * 4.5; cam.z = D.z - hz * 4.5; cam.y = Math.max(D.y + 1.8, W.heightAt(cam.x, cam.z) + 0.6);
+          cam.x = D.x - hx * 4.5; cam.z = D.z - hz * 4.5; cam.y = Math.min(Math.max(D.y + 1.8, W.groundAt(cam.x, cam.z, D.y) + 0.6), W.br.over(D.x, D.z, D.y) - 0.3);
           lookAt(view, cam.x, cam.y, cam.z, D.x + hx * 5, D.y - 1.2, D.z + hz * 5, 0, 1, 0);
         } else {
-          cam.x = D.x; cam.z = D.z; cam.y = Math.max(D.y - 0.2, W.heightAt(cam.x, cam.z) + 0.3);
+          cam.x = D.x; cam.z = D.z; cam.y = Math.max(D.y - 0.2, W.groundAt(cam.x, cam.z, D.y) + 0.3);
           if (cp < 0.02) lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, -Math.sin(D.yaw), 0, -Math.cos(D.yaw)); // straight down: up is the heading
           else lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy, cam.z + fz, 0, 1, 0);
         }
@@ -827,16 +842,16 @@ async function main() {
           D.tpS += (D.tp - D.tpS) * Math.min(1, dt * 1.2);
           const ro = -D.tr - D.yr * 0.22, pa = D.pitch + (D.tp - D.tpS) * 0.8, cq = Math.cos(pa), gx = -Math.sin(D.yaw) * cq, gy = Math.sin(pa), gz = -Math.cos(D.yaw) * cq;
           const rl = Math.hypot(gx, gz) || 1, rx = -gz / rl, rz = gx / rl, ux = -rz * gy, uy = rz * gx - rx * gz, uz = rx * gy, cr = Math.cos(ro), sr = Math.sin(ro);
-          cam.x = D.x + fx * 0.3; cam.z = D.z + fz * 0.3; cam.y = Math.max(D.y + fy * 0.3 + 0.06, W.heightAt(cam.x, cam.z) + 0.2);
+          cam.x = D.x + fx * 0.3; cam.z = D.z + fz * 0.3; cam.y = Math.max(D.y + fy * 0.3 + 0.06, W.groundAt(cam.x, cam.z, D.y) + 0.2);
           lookAt(view, cam.x, cam.y, cam.z, cam.x + gx, cam.y + gy, cam.z + gz, ux * cr + rx * sr, uy * cr, uz * cr + rz * sr);
         } else {
           const cd = D.view ? 2.3 : 7, cu = D.view ? 0.55 : 1.9;
-          cam.x = D.x - fx * cd; cam.z = D.z - fz * cd; cam.y = Math.max(D.y - fy * cd + cu, W.heightAt(cam.x, cam.z) + 0.4);
+          cam.x = D.x - fx * cd; cam.z = D.z - fz * cd; cam.y = Math.min(Math.max(D.y - fy * cd + cu, W.groundAt(cam.x, cam.z, D.y) + 0.4), W.br.over(D.x, D.z, D.y) - 0.3);
           lookAt(view, cam.x, cam.y, cam.z, cam.x + fx, cam.y + fy - (D.view ? 0.06 : 0.2), cam.z + fz, 0, 1, 0);
         }
       } else { // after the detonation: pull back and up, and keep watching the blast for a few seconds
-        const tx = D.bx + Math.sin(D.yaw) * 11, tz = D.bz + Math.cos(D.yaw) * 11, ty = Math.max(D.by + 5, W.heightAt(tx, tz) + 2.5), k = Math.min(1, dt * 1.5);
-        cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.z += (tz - cam.z) * k; cam.y = Math.max(cam.y, W.heightAt(cam.x, cam.z) + 0.6);
+        const tx = D.bx + Math.sin(D.yaw) * 11, tz = D.bz + Math.cos(D.yaw) * 11, ty = Math.min(Math.max(D.by + 5, W.groundAt(tx, tz, D.by) + 2.5), W.br.over(D.bx, D.bz, D.by) - 0.4), k = Math.min(1, dt * 1.5);
+        cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.z += (tz - cam.z) * k; cam.y = Math.max(cam.y, W.groundAt(cam.x, cam.z, D.by) + 0.6);
         lookAt(view, cam.x, cam.y, cam.z, D.bx, D.by + 0.6, D.bz, 0, 1, 0);
       }
       R.snap = false;
@@ -855,10 +870,14 @@ async function main() {
     } else { // commander view: behind and above the turret, looking along the sight line
       cam.dist = clamp(cam.dist * Math.exp(inp.zoom), 7, 45);
       const cd = cam.dist, tx = veh.x, ty = veh.y + 2.6 + cd * 0.1, tz = veh.z;
-      const ex = tx - aim.dx * cd, ez = tz - aim.dz * cd, ey = Math.max(ty - aim.dy * cd * 0.6, W.heightAt(ex, ez) + 1.0);
+      const ex = tx - aim.dx * cd, ez = tz - aim.dz * cd, ey = Math.max(ty - aim.dy * cd * 0.6, W.groundAt(ex, ez, veh.y + 1) + 1.0);
       const k = R.frame < 3 || R.snap ? 1 : Math.min(1, dt * 14); R.snap = false;
       cam.x += (ex - cam.x) * k; cam.y += (ey - cam.y) * k; cam.z += (ez - cam.z) * k;
-      cam.y = Math.max(cam.y, W.heightAt(cam.x, cam.z) + 0.8);
+      cam.y = Math.max(cam.y, W.groundAt(cam.x, cam.z, veh.y + 1) + 0.8);
+      const cl = Math.min(W.br.over(veh.x, veh.z, veh.y + 1), W.br.over(cam.x, cam.z, veh.y + 1)); // under a deck: the camera stays below the slab, pulled in towards the turret when the ground or a wall is in the way
+      if (cl < 1e8) { const cy = Math.min(cam.y, cl - 0.8); let f = 1;
+        while (f > 0.15 && (W.groundAt(veh.x + (cam.x - veh.x) * f, veh.z + (cam.z - veh.z) * f, veh.y + 1) + 0.6 > cy || W.br.inSolid(veh.x + (cam.x - veh.x) * f, cy, veh.z + (cam.z - veh.z) * f) >= 0)) f -= 0.1;
+        cam.x = veh.x + (cam.x - veh.x) * f; cam.z = veh.z + (cam.z - veh.z) * f; cam.y = cy; }
       const sk = veh.shake * veh.shake * 0.35, t = R.time;
       lookAt(view, cam.x + Math.sin(t * 37) * sk, cam.y + Math.sin(t * 43 + 1) * sk, cam.z + Math.sin(t * 29 + 2) * sk, cam.x + aim.dx, cam.y + aim.dy, cam.z + aim.dz, 0, 1, 0);
     }
@@ -902,7 +921,7 @@ async function main() {
     cam.sightK += ((cam.mode === 1 && !R.pose ? 1 : 0) - cam.sightK) * Math.min(1, dt * 12);
     cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
     emitParticles(dt, BM);
-    const pn = parts.update(dt, W.heightAt, 1.3, 0.5);
+    const pn = parts.update(dt, W.groundAt, 1.3, 0.5); // chunks land on a bridge deck
     audio.update(dt); hap.update(dt);
     if (R.simOnly) return; // logic-only step for scripted tests (window.__sim)
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
@@ -1060,7 +1079,7 @@ async function main() {
   window.__aimAt = (x, y, z) => { R.aimAt = x === undefined ? null : [x, y, z]; };
   window.__aim = (yaw, pitch, mode) => { R.pose = null; R.chase = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
-  window.__tp = (x, z, yaw) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = W.heightAt(x, z) + 0.03; stInit = false; R.snap = true; };
+  window.__tp = (x, z, yaw, top) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = (top ? W.groundAt(x, z, 1e5) : W.heightAt(x, z)) + 0.03; stInit = false; R.snap = true; }; // top: on the highest surface (a bridge deck)
   Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none'; music.game();

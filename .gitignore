@@ -6,3 +6,5 @@ tools/geo/raw/
 tools/geo/__pycache__/
 .claude/worktrees/
 tools/snd/__pycache__/
+tools/geo/.venv/
+src/data/world.bin.lock
