@@ -1074,13 +1074,13 @@ async function main() {
   // walkers/runners get their phase advanced every frame; the dead ones fall and then lie still
   window.__infDemo = (x, z, o = {}) => {
     const I = game.inf, d = I.d, poses = o.poses || [0, 1, 2, 5, 3, 7, 4, 6], n = Math.min(MAXI, o.n || poses.length), cols = o.cols || n, sp = o.sp || 2.2, yaw = o.yaw || 0;
-    const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = -fz, rz = fx, sx = new Float32Array(n), sz = new Float32Array(n);
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = -fz, rz = fx, sx = new Float32Array(n), sz = new Float32Array(n), pz = new Float32Array(n), ay = new Float32Array(n), ya = new Float32Array(n);
     d.fill(0); SOL.reset();
     for (let i = 0; i < n; i++) { const c = i % cols, r = (i / cols) | 0, ps = poses[i % poses.length], k = i * 8;
       sx[i] = x + rx * (c - (cols - 1) / 2) * sp - fx * r * sp * 1.6; sz[i] = z + rz * (c - (cols - 1) / 2) * sp - fz * r * sp * 1.6;
-      d[k] = sx[i]; d[k + 2] = sz[i]; d[k + 1] = W.heightAt(sx[i], sz[i]); d[k + 3] = yaw + (o.jit ? (rnd() - 0.5) * o.jit : 0); d[k + 4] = ps === 6 ? 6 : ps; d[k + 5] = ps === 6 ? (o.dead || 0) : i * 0.37; d[k + 6] = o.aim || 0; d[k + 7] = ps === 6 ? 2 : 1; }
+      d[k] = sx[i]; d[k + 2] = sz[i]; d[k + 1] = W.heightAt(sx[i], sz[i]); d[k + 3] = yaw + (o.jit ? (rnd() - 0.5) * o.jit : 0); d[k + 4] = ps === 6 ? 6 : ps; d[k + 5] = ps === 6 ? (o.dead || 0) : i * 0.37; d[k + 6] = o.aim || 0; d[k + 7] = ps === 6 ? 2 : 1; pz[i] = d[k + 4]; ay[i] = d[k + 6]; ya[i] = d[k + 3]; }
     I.n = n;
-    infDemo = (dt) => { for (let i = 0; i < I.n; i++) { const k = i * 8, ps = d[k + 4]; if (d[k + 7] < 0.5) continue; d[k + 5] += dt;
+    infDemo = (dt) => { for (let i = 0; i < I.n; i++) { const k = i * 8, ps = d[k + 4]; if (d[k + 7] < 0.5) continue; d[k + 5] += dt; if (d[k + 7] === 1) { d[k + 4] = pz[i]; d[k + 6] = ay[i]; d[k + 3] = ya[i]; } // the infantry logic also ticks these slots: keep the demo's pose
       if (o.move && (ps === 1 || ps === 2)) { const v = ps === 1 ? WALK_V : RUN_V, ax = -Math.sin(d[k + 3]), az = -Math.cos(d[k + 3]); d[k] += ax * v * dt; d[k + 2] += az * v * dt;
         if (Math.hypot(d[k] - sx[i], d[k + 2] - sz[i]) > (o.move > 1 ? o.move : 8)) { d[k] = sx[i]; d[k + 2] = sz[i]; } d[k + 1] = W.heightAt(d[k], d[k + 2]); } } };
     return n;
