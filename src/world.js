@@ -64,15 +64,27 @@ export async function genWorld(tick, Q, startAt) {
   const cr = (a, b, c, d, t) => b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
   const waterM = blob('water'), wetM = blob('wet'), treeM = blob('tree'), TN = meta.tn;
   const col = new Float32Array(4);
+  const NZ = meta.hstep < 8 ? 0.2 : 1; // lidar terrain carries its own detail: only a little noise on top
   for (let j = 0; j < HN; j++) {
     const z = (j + 0.5) * TEX - HALF, gz = clamp((z + HALF) / meta.hstep, 1, GN - 2.001), jz = gz | 0, tz = gz - jz;
     for (let i = 0; i < HN; i++) {
       const x = (i + 0.5) * TEX - HALF, gx = clamp((x + HALF) / meta.hstep, 1, GN - 2.001), ix = gx | 0, tx = gx - ix, k = j * HN + i;
       for (let r = 0; r < 4; r++) { const o = clamp(jz - 1 + r, 0, GN - 1) * GN + ix; col[r] = cr(G[o - 1], G[o], G[o + 1], G[Math.min(o + 2, GN * GN - 1)], tx); }
-      H[k] = cr(col[0], col[1], col[2], col[3], tz) + 1.6 * fbm(x * 0.011, z * 0.011, 3) + 0.45 * fbm(x * 0.06 + 5, z * 0.06, 2);
+      H[k] = cr(col[0], col[1], col[2], col[3], tz) + NZ * (1.6 * fbm(x * 0.011, z * 0.011, 3) + 0.45 * fbm(x * 0.06 + 5, z * 0.06, 2));
       mat[k * 4] = waterM[k]; mat[k * 4 + 2] = wetM[k] * 0.9;
     }
     if ((j & 255) === 255) await tick('Shaping terrain', j / HN * 0.4);
+  }
+
+  // ---- detail insets: lidar heights at every 2 m texel (the ski arena), feathered into the base over 16 m ----
+  for (let n = 0; n < (meta.insets || []).length; n++) {
+    const [i0, j0, w, h] = meta.insets[n], b = blob('ins' + n), q = new Int32Array(w * h);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const k = j * w + i, p = j && i ? q[k - 1] + q[k - w] - q[k - w - 1] : i ? q[k - 1] : j ? q[k - w] : 0;
+      q[k] = (p + b[k] + (b[w * h + k] << 8)) & 0xFFFF;
+      const f = smooth(0, 8, Math.min(i, j, w - 1 - i, h - 1 - j)), o = (j0 + j) * HN + i0 + i;
+      H[o] = lerp(H[o], meta.hmin + q[k] * 0.1, f);
+    }
   }
 
   // ---- lakes: connected water -> flat ice at the local water level ----
