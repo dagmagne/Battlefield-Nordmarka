@@ -117,7 +117,7 @@ function footMask(buildings) { // house footprints + 1 m: road beds leave the gr
 function plowRoads(meta, b, H, H0, mat, polish, buildings, portals, roadNet, mapRoads) { // flat bed along a smoothed profile, sunk under the ski bridges (tunnels) with headwalls as props
   const TUN = meta.tunnels, BR = (meta.rbr || []).map((r) => r[0]), LID = meta.hstep < 8, DEPTH = LID ? 0 : 5, dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let o = 0;
   const dTun = (x, z) => polyDist(TUN, x, z), fp = footMask(buildings), w2t = (x) => (x + HALF) / TEX - 0.5;
-  const CV = (meta.bridges || []).map((B) => B.tun), TUC = TUN.filter((t, k) => !CV.includes(k)), TCV = TUN.filter((t, k) => CV.includes(k)); // tunnels turned into functional bridges (bridgeWorld): no sinking, no portals; the road runs through at grade
+  const K2 = (meta.bridges || []).some((B) => B.k === 2), CV = (meta.bridges || []).filter((B) => B.tun !== undefined).map((B) => B.tun), TUC = TUN.filter((t, k) => !CV.includes(k)), TCV = TUN.filter((t, k) => CV.includes(k)); // tunnels turned into functional bridges (bridgeWorld): no sinking, no portals; the road runs through at grade
   const rE = new Float32Array(HN * HN).fill(99), rY = new Float32Array(HN * HN), rM = new Uint8Array(HN * HN); // nearest road: distance past its asphalt edge, bed level, 1 = minor
   for (const [n, w10, cls = 0] of meta.roads) {
     let pts = []; for (let i = 0; i < n; i++, o += 4) pts.push([dv.getInt16(o, true) / 8, dv.getInt16(o + 2, true) / 8]);
@@ -141,10 +141,11 @@ function plowRoads(meta, b, H, H0, mat, polish, buildings, portals, roadNet, map
         for (let i = 0; i < m; i++) { if (dl[i] === dl[i]) { ld = dl[i]; ls = sd[i]; } const w = 1 - (sd[i] - ls) / 30; if (w > 0) { f[i] = ld * w; g[i] = sd[i] - ls; } }
         ls = 1e9; for (let i = m - 1; i >= 0; i--) { if (dl[i] === dl[i]) { ld = dl[i]; ls = sd[i]; } const w = 1 - (ls - sd[i]) / 30; if (w > 0 && ls - sd[i] < g[i]) f[i] = ld * w; }
         for (let i = 0; i < m; i++) y[i] += f[i]; } }
-    if (cls <= 3 || (cls <= 5 && sd[m - 1] > 250)) for (let q0 = 0; q0 < m;) { let q1 = q0; while (q1 < m && dk2[q1] > 100 && Math.abs(pts[q1][0]) < PLAY - 50 && Math.abs(pts[q1][1]) < PLAY - 50) q1++; // runs of road well away from the tunnels, inside the playable area (enemies followed roads out to the edge)
+    if (cls <= 3 || (cls <= 5 && sd[m - 1] > 250)) for (let q0 = 0; q0 < m;) { let q1 = q0; while (q1 < m && dkc[q1] > 100 && Math.abs(pts[q1][0]) < PLAY - 50 && Math.abs(pts[q1][1]) < PLAY - 50) q1++; // runs of road well away from the tunnels, inside the playable area (enemies followed roads out to the edge)
       if (q1 - q0 >= 20) { const f = new Float32Array((q1 - q0) * 2); for (let q = q0; q < q1; q++) { f[(q - q0) * 2] = pts[q][0]; f[(q - q0) * 2 + 1] = pts[q][1]; } roadNet.push({ pts: f, n: q1 - q0, hw, cls }); }
       q0 = q1 + 1; }
     for (let q = 0; q < m; q++) {
+      if (K2 && brIn(meta.bridges, pts[q][0], pts[q][1], 2, 1)) continue; // on a road deck over the metro: the asphalt is a prop, the ground under it is the rail bed (bridgeWorld)
       const cx = pts[q][0], cz = pts[q][1], R = hw + (minor ? 6 : 18), i0 = Math.max(0, Math.floor(w2t(cx - R))), i1 = Math.min(HN - 1, Math.ceil(w2t(cx + R))), j0 = Math.max(0, Math.floor(w2t(cz - R))), j1 = Math.min(HN - 1, Math.ceil(w2t(cz + R)));
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
         const k = j * HN + i, e = Math.hypot((i + 0.5) * TEX - HALF - cx, (j + 0.5) * TEX - HALF - cz) - hw;
@@ -177,7 +178,8 @@ function railWorld(meta, b, H, mat, buildings) {
     if (hit) for (const t of tr) for (let q = 0; q < t.n; q++) { const dx = t.x[q] - B.x, dz = t.z[q] - B.z; if (Math.abs(dx) < r && Math.abs(dz) < r && Math.abs(dx * cs - dz * sn) < B.w / 2 + 2.2 && Math.abs(dx * sn + dz * cs) < B.d / 2 + 2.2) B.gone = 2; } }
   const mask = new Uint8Array(HN * HN), rE = new Uint8Array(HN * HN), rY = new Float32Array(HN * HN), touched = []; // rE: 1 + distance * 50 (0 = not near the line), only the touched texels are visited
   for (const t of tr) for (let q = 0; q < t.n; q++) {
-    let nb = 0; for (let k = Math.max(0, q - 2); k <= Math.min(t.n - 1, q + 2); k++) nb |= t.f[k]; // bridge spans and their abutments keep the lidar ground (a road runs under them)
+    let nb = 0; for (let k = Math.max(0, q - 2); k <= Math.min(t.n - 1, q + 2); k++) nb |= t.f[k]; // bridge spans of the metro decks (meta.bridges k 1) keep the lidar ground (a road runs under them); other spans (low, over paths) get the bed: an embankment
+    if (nb && !brIn(meta.bridges, t.x[q], t.z[q], 1, 4)) nb = 0;
     const cx = t.x[q], cz = t.z[q], R = 5, i0 = Math.max(0, Math.floor(w2t(cx - R))), i1 = Math.min(HN - 1, Math.ceil(w2t(cx + R))), j0 = Math.max(0, Math.floor(w2t(cz - R))), j1 = Math.min(HN - 1, Math.ceil(w2t(cz + R)));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * HN + i, e = Math.hypot((i + 0.5) * TEX - HALF - cx, (j + 0.5) * TEX - HALF - cz);
       if (e < 3.6) mask[k] = 1; if (!nb && e < 5 && (!rE[k] || 1 + e * 50 < rE[k])) { if (!rE[k]) touched.push(k); rE[k] = 1 + e * 50; rY[k] = t.y[q]; } }
@@ -202,7 +204,7 @@ function railWorld(meta, b, H, mat, buildings) {
   return { tr, st, bs: M.bs, cross: M.x, train: M.train, mask, lamps, spill };
 }
 function railMask(R, bm, BR) { if (R) for (let k = 0; k < HN * HN; k++) if (R.mask[k]) bm[k] = 1; // no tree trunks on the bed or the platforms, nor on a functional bridge and its ramps
-  for (const B of BR) brTex(B, 11, 8, (k) => { bm[k] = 1; }); }
+  for (const B of BR) brTex(B, 11, 13, (k) => { bm[k] = 1; }); }
 
 // ---- functional bridges (tools/geo/bridges.py, src/bridges.js; module level like the roads) ----
 // The heightfield stays the lower level: the road runs through at its fitted grade in a hard trench under the deck; outside the trench the
@@ -214,17 +216,19 @@ function brTex(B, pu, pv, f) { // calls f(k, lu, lv) for every texel within the 
     const dx = (i + 0.5) * TEX - HALF - B.c[0], dz = (j + 0.5) * TEX - HALF - B.c[1], lu = dx * ux + dz * uz, lv = dz * ux - dx * uz;
     if (Math.abs(lu) <= B.hl + pu && Math.abs(lv) <= B.hw + pv) f(j * HN + i, lu, lv); }
 }
-function bridgeWorld(meta, H) {
-  const L = meta.bridges || [];
+const BUILT = (B) => !B.blk || B.clr >= 1.8; // a blocked crossing under 1.8 m is not built: the metro runs on through on an embankment
+const brIn = (L, x, z, k, pad) => (L || []).some((B) => BUILT(B) && (k < 0 || (B.k || 0) === k) && Math.abs((x - B.c[0]) * B.u[0] + (z - B.c[1]) * B.u[1]) <= B.hl + pad && Math.abs((z - B.c[1]) * B.u[0] - (x - B.c[0]) * B.u[1]) <= B.hw + pad);
+function bridgeWorld(meta, H, mat) {
+  const L = (meta.bridges || []).filter(BUILT);
   for (const B of L) {
     const [ta, tb] = B.tr, hl = B.hl, hw = B.hw, top = (lu, lv) => B.y0 + B.gu * lu + B.gv * lv, bot = (lu, lv) => top(lu, lv) - B.th - 0.3, ux = B.u[0], uz = B.u[1];
-    brTex(B, 10, 8, (k, lu, lv) => { const al = Math.abs(lu), av = Math.abs(lv);
+    brTex(B, 10, 13, (k, lu, lv) => { const al = Math.abs(lu), av = Math.abs(lv); if (B.k === 2 && al <= hl + 1 && av <= hw + 2) mat[k * 4 + 1] = 0; // (no asphalt on the rail bed under a road deck)
       const wt = av < hw - 0.6 ? 3.2 : 0.2; // inside the faces the road level runs on 3 m behind the abutments, so the step up to the earth stays hidden under the slab
       if (lu >= ta - wt && lu <= tb + wt && al <= hl - 0.5 && av <= hw + 1.5) H[k] = B.r0 + B.rg * lv; // the trench: the road at grade
       else if (al <= hl - 3 && av <= hw - 1.2) H[k] = bot(lu, lv); // earth under the slab, behind the abutments
       else if (al <= hl && av <= hw - 1.2) H[k] = top(lu, lv); // the last 3 m under the slab ends at the deck plane: no dip between the ramp and the deck under a hull corner
       else if (al <= hl && av <= hw + 1.2) { const sv = Math.sign(lv) * (hw + 4.5); H[k] = Math.min(bilin(H, B.c[0] + ux * lu - uz * sv, B.c[1] + uz * lu + ux * sv), bot(lu, lv)); } // under the portal faces: the ground in front of them
-      else if (al > hl) H[k] = lerp(H[k], top(lu, lv), (1 - smooth(hl + 3, hl + 10, al)) * (1 - smooth(hw, hw + 8, av))); }); // ramps: the earth meets the deck at its height (fully for 3 m, so the hull's corners meet no step)
+      else if (al > hl) H[k] = lerp(H[k], top(lu, lv), (1 - smooth(hl + 3, hl + 10, al)) * (1 - smooth(hw, hw + 13, av))); }); // (sideways over 13 m: a steeper fade showed as rock-textured slopes beside the faces) // ramps: the earth meets the deck at its height (fully for 3 m, so the hull's corners meet no step)
   }
   return L;
 }
@@ -419,7 +423,7 @@ export async function genWorld(tick, Q, startAt) {
   plowRoads(meta, blob('roads'), H, H0, mat, polish, buildings, portals, roadNet, mapRoads); // module level (genWorld is near the size where V8 stops optimising it)
   const roadAt = (x, z) => mat[(clamp(Math.round(w2t(z)), 0, HN - 1) * HN + clamp(Math.round(w2t(x)), 0, HN - 1)) * 4 + 1] / 255;
   const rail = W.rail = meta.rail ? railWorld(meta, blob('rail'), H, mat, buildings) : null; // Holmenkollbanen: bed levelling, stations (module level)
-  W.brg = bridgeWorld(meta, H); // functional bridges: trench, earth under the slab, ramps to the deck (module level)
+  W.brg = bridgeWorld(meta, H, mat); // functional bridges: trench, earth under the slab, ramps to the deck (module level)
   await tick('Computing normals', 0.62);
 
   const kickers = []; // (the turbo-mode lake kickers were removed with the groomer)

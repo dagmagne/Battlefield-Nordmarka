@@ -24,7 +24,7 @@ export class Particles {
       s[o] += s[o + 3] * dt; s[o + 1] += s[o + 4] * dt; s[o + 2] += s[o + 5] * dt;
       s[o + 8] += s[o + 9] * dt;
       let gy = 0;
-      if (kind === 0) { gy = heightAt(s[o], s[o + 2]); if (s[o + 1] < gy + 0.05) { s[o + 6] = 0; continue; } }
+      if (kind === 0) { gy = heightAt(s[o], s[o + 2], s[o + 1]); if (s[o + 1] < gy + 0.05) { s[o + 6] = 0; continue; } }
       const q = n * 12;
       out[q] = s[o]; out[q + 1] = s[o + 1]; out[q + 2] = s[o + 2]; out[q + 3] = s[o + 8];
       const fade = kind === 0 ? Math.min(1, (1 - t) * 2.5) : Math.min(t * 8, 1) * (1 - t) * (1 - t);

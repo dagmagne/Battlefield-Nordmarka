@@ -1,14 +1,14 @@
 // Checks the bridge queries (src/bridges.js) without a GPU, on the bridges in src/data/world.bin (meta.bridges):
 // seg against brute-force fine stepping with inSolid on random rays, the STEP rule of top / groundAt, over, push at both levels
-// (abutments only for trench traffic, parapets only for deck traffic, normals pointing out of the wall), and a million mixed queries
+// (the bridges world.js builds: blocked ones under 1.8 m are not; abutments only for trench traffic, parapets only for deck traffic, normals pointing out of the wall), and a million mixed queries
 // without heap growth.  usage: node --expose-gc tools/bridgecheck.mjs
 import { readFileSync } from 'fs';
 import { inflateRawSync } from 'zlib';
 import { initBridges, STEP } from '../src/bridges.js';
 const raw = inflateRawSync(readFileSync(new URL('../src/data/world.bin', import.meta.url))), jl = raw.readUInt32LE(0), meta = JSON.parse(raw.subarray(4, 4 + jl).toString());
-const list = meta.bridges || []; let fail = 0; const bad = (m) => { console.log('FAIL', m); fail++; };
-if (list.length < 2) bad('expected the two arena bridges in meta.bridges, found ' + list.length);
-const ground = (x, z) => 300 + 0.01 * x; // a stand-in terrain far below the decks (seg / inSolid / push do not use it; groundAt does)
+const list = (meta.bridges || []).filter((B) => !B.blk || B.clr >= 1.8); let fail = 0; const bad = (m) => { console.log('FAIL', m); fail++; };
+if (list.length < 2) bad('expected at least the two arena bridges in meta.bridges, found ' + list.length);
+const ground = (x, z) => 100 + 0.01 * x; // a stand-in terrain far below the decks (seg / inSolid / push do not use it; groundAt does)
 const BR = initBridges(list, ground);
 let seed = 12345; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 const toW = (B, lu, lv) => [B.c[0] + B.u[0] * lu - B.u[1] * lv, B.c[1] + B.u[1] * lu + B.u[0] * lv];

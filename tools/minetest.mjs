@@ -42,9 +42,11 @@ check('repaired: it backs out again and the pill is gone', r.moved > 2 && r.immo
 await ev('__R.force=null; __veh.v=0; __sim(1/60,60)');
 
 // 2: HE into the field clears mines around the impact
-await ev(`M.s.fill(0); M.fld.fill(0); M.lay(__veh.x+FX*50, __veh.z+FZ*50, -FZ, FX); __sim(1/60, 120); window.N1=M.armed();
-  { let bi=-1, bd=1e9; for (let i=0;i<M.s.length;i++) if (M.s[i]===1) { const d=Math.hypot(M.x[i]-__veh.x-FX*50, M.z[i]-__veh.z-FZ*50); if (d<bd) { bd=d; bi=i; } } window.MI=bi; }
-  __game.ammo(2); __sim(1/60, 60*7); __aimAt(M.x[MI], M.y[MI]+0.1, M.z[MI]); __cam.mode=1; __sim(1/60, 200); __inp.fire=true; __sim(1/60,3); __inp.fire=false; __sim(1/60, 60*2); __aimAt();`);
+// (on the ice, towards the lake centre: since the lidar terrain (e3b380f) the lake is smaller and 50 m ahead of the tank is the rising bank, where the
+// sight ray from 0.5 m over the mines' level met the slope 6 m short and the round burst out of reach of the field)
+await ev(`M.s.fill(0); M.fld.fill(0); window.HX=__veh.x+L.ax*50; window.HZ=__veh.z+L.az*50; M.lay(HX, HZ, -L.az, L.ax); __sim(1/60, 120); window.N1=M.armed();
+  { let bi=-1, bd=1e9; for (let i=0;i<M.s.length;i++) if (M.s[i]===1) { const d=Math.hypot(M.x[i]-HX, M.z[i]-HZ); if (d<bd) { bd=d; bi=i; } } window.MI=bi; }
+  __game.ammo(2); __sim(1/60, 60*7); __aimAt(M.x[MI], M.y[MI]+0.05, M.z[MI]); __cam.mode=1; __sim(1/60, 360); __inp.fire=true; __sim(1/60,3); __inp.fire=false; __sim(1/60, 60*2); __aimAt();`);
 r = await ev('({before:N1, after:M.armed()})');
 check('an HE round into the field sets off the mines around the impact', r.after < r.before, r);
 
@@ -57,7 +59,7 @@ await ev(`{ let bi=-1, bd=1e9; for (let i=0;i<M.s.length;i++) if (M.s[i]===2) { 
 await ev('__R.pose=null'); await ev(`__look(__veh.x-FX*6, 9, __veh.z-FZ*6, __veh.x+FX*40, 0, __veh.z+FZ*40)`); await shot('surface-mines-overview'); await ev('__R.pose=null');
 
 // 4: the MG picks off a surface mine
-await ev(`window.N3=M.armed(); __aimAt(M.x[SI], M.y[SI]+0.08, M.z[SI]); __cam.mode=1; __cam.zoom=1; __sim(1/60, 120); __inp.mg=true; __sim(1/60, 90); __inp.mg=false; __sim(1/60, 30); __aimAt(); __cam.zoom=0; __cam.mode=0;`);
+await ev(`window.N3=M.armed(); __aimAt(M.x[SI], M.y[SI]+0.05, M.z[SI]); __cam.mode=1; __cam.zoom=1; __sim(1/60, 330); /* the nearest mine may be behind the turret: 5.5 s to traverse (2 s was enough only while the old lake layout put it ahead) */ __inp.mg=true; __sim(1/60, 90); __inp.mg=false; __sim(1/60, 30); __aimAt(); __cam.zoom=0; __cam.mode=0;`);
 r = await ev('({before:N3, after:M.armed(), gone:M.s[SI]!==2, d:Math.hypot(M.x[SI]-__veh.x,M.z[SI]-__veh.z)|0})');
 check('a burst of MG fire sets off the surface mine it hits', r.gone && r.after < r.before, r);
 

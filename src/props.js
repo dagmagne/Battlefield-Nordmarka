@@ -558,8 +558,14 @@ function overpass(b, W, i) {
   b.set(BDARK, MAT.concrete); obox(b, cx, cz, ux, uz, -hl, hl, -hw + 0.2, hw - 0.2, y0 - th, y0 - 0.02, gu, gv); // the slab: a dark soffit seen from the road
   for (const s of [-1, 1]) { b.set(BFAS, MAT.concrete); obox(b, cx, cz, ux, uz, -hl, hl, s < 0 ? -hw : hw - 0.2, s < 0 ? -hw + 0.2 : hw, y0 - th - 0.12, y0 + 0.06, gu, gv); } // fascia beams along both faces, a little deeper than the slab
   for (let v = -hw + 2.2; v < hw - 1.5; v += 2.6) { b.set(BDARK, MAT.concrete); obox(b, cx, cz, ux, uz, ta - 0.9, tb + 0.9, v - 0.22, v + 0.22, y0 - th - 0.32, y0 - th + 0.01, gu, gv); } // ribs under the soffit across the span
-  b.set(SNOWC, MAT.snow); obox(b, cx, cz, ux, uz, -hl - 1.2, hl + 1.2, -hw + 0.35, hw - 0.35, y0 - 0.3, y0 + 0.13, gu, gv); // snow on the deck, running out onto the earth at both ends
+  const K = B.k || 0, sb = K === 1 ? y0 - 0.45 : y0 - 0.3, st = K === 1 ? y0 : y0 + 0.13; // the deck surface: snow (k 0), packed snow round the metro's ballast up to 5 cm under its top (k 1), a plowed road with snow beside it (k 2)
+  if (K === 2 && B.rw) { const r0 = Math.max(-hw + 0.35, B.rv - B.rw), r1 = Math.min(hw - 0.35, B.rv + B.rw); b.set([0.3, 0.31, 0.33], MAT.paint); obox(b, cx, cz, ux, uz, -hl - 0.6, hl + 0.6, r0, r1, y0 - 0.3, y0 + 0.02, gu, gv);
+    b.set(SNOWC, MAT.snow); if (r0 > -hw + 0.6) obox(b, cx, cz, ux, uz, -hl - 1.2, hl + 1.2, -hw + 0.35, r0, sb, y0 + 0.22, gu, gv); if (r1 < hw - 0.6) obox(b, cx, cz, ux, uz, -hl - 1.2, hl + 1.2, r1, hw - 0.35, sb, y0 + 0.22, gu, gv); }
+  else { b.set(SNOWC, MAT.snow); obox(b, cx, cz, ux, uz, -hl, hl, -hw + 0.35, hw - 0.35, sb, st, gu, gv);
+    for (const e of [-1, 1]) obox(b, cx + ux * e * hl, cz + uz * e * hl, ux, uz, e < 0 ? -1.6 : 0, e < 0 ? 0 : 1.6, -hw + 0.35, hw - 0.35, y0 + gu * e * hl - 0.6, y0 + gu * e * hl + (st - y0), gu - e * 0.28, gv); } // a wedge at each end that runs down into the earth's snow (no scalloped edge where the ramp's soft snow meets the deck)
   for (let k = 0; k < BR.nw; k++) { if (BR.WB[k] !== i) continue; const q = k * 9, W_ = BR.WL, K = BR.WK[k], ax = W_[q + 2], az = W_[q + 3], l = W_[q + 4], m = W_[q + 5], yb = W_[q + 6], yt = W_[q + 7], g = W_[q + 8];
+    if (K === 4) { const yB = yb + 1 + B.clr - 0.55; for (let v = -l, n = 0; v < l - 0.01; v += 0.6, n++) { b.set(n & 1 ? [0.06, 0.06, 0.06] : [0.85, 0.65, 0.05], MAT.paint); obox(b, W_[q], W_[q + 1], ax, az, v, Math.min(l, v + 0.6), -0.12, 0.12, yB, yB + 0.35, g, 0); } // height barrier: a striped beam on two posts
+      b.set([0.35, 0.36, 0.38], MAT.metal); for (const e of [-l, l]) obox(b, W_[q], W_[q + 1], ax, az, e - 0.12, e + 0.12, -0.12, 0.12, yb + 0.5, yB + 0.35, g, 0); continue; }
     b.set(K === 0 ? [0.25, 0.25, 0.245] : BCON, MAT.concrete); obox(b, W_[q], W_[q + 1], ax, az, -l, l, -m, m, yb, yt - (K === 1 ? 0.05 : 0), g, 0);
     if (K === 2 || K === 3) { b.set(SNOWC, MAT.snow); obox(b, W_[q], W_[q + 1], ax, az, -l, l, -m - 0.04, m + 0.04, yt, yt + 0.12, g, 0); } // snow caps
     if (K === 0) for (let v = -l + 4; v < l - 2; v += 9) { b.set([1, 0.86, 0.62], MAT.lamp); const s = Math.sign((W_[q] - cx) * ux + (W_[q + 1] - cz) * uz - (ta + tb) / 2) || 1, lu0 = s * (m + 0.03);
@@ -792,10 +798,10 @@ function railway(b, W, R) {
   const i0 = b.i.length, c0 = W.colliders.length, bl0 = W.bld.length; W.railGlow = []; b.at(0, 0, 0); let nSeg = 0, tT = 0; // the strips are written in world coordinates
   const LX = R.cross.filter((c) => c[2] === 0), nearLX = (x, z, r) => LX.some((c) => Math.hypot(c[0] - x, c[1] - z) < r);
   const fx = (x0, y0, z0, th, boxes, area) => W.bld.push({ x: x0, y: y0, z: z0, th, v0: 0, v1: 0, area: 1e4, col: CONP, fix: 1, boxes });
-  // ---- bed and rails: breakpoints as far apart as the curve allows (8 cm off the measured line, at most 40 m), bridge spans left open ----
+  // ---- bed and rails: breakpoints as far apart as the curve allows (8 cm off the measured line, at most 40 m), continuous over the bridge spans ----
   for (const t of R.tr) {
     let side = 1; { const m = t.n >> 1; let bd = 1e9; for (const u of R.tr) if (u !== t) for (let k = 0; k < u.n; k += 2) { const d = Math.hypot(u.x[k] - t.x[m], u.z[k] - t.z[m]); if (d < bd) { bd = d; const a = Math.max(0, m - 1), c = Math.min(t.n - 1, m + 1); side = Math.sign(-(t.z[c] - t.z[a]) * (u.x[k] - t.x[m]) + (t.x[c] - t.x[a]) * (u.z[k] - t.z[m])) || 1; } } } // third rail between the tracks: clear of the side platforms
-    const gap = new Uint8Array(t.n); for (let q = 0; q < t.n; q++) if (t.f[q]) for (let k = Math.max(0, q - 2); k <= Math.min(t.n - 1, q + 2); k++) gap[k] = 1; // same margin as the levelling in world.js
+    const gap = new Uint8Array(t.n); // (no gaps any more: the spans are metro decks (meta.bridges k 1) or, low over a path, run on an embankment)
     for (let a = 0; a < t.n - 1;) {
       if (gap[a + 1]) { a++; continue; } let e = a + 1; while (e < t.n - 1 && !gap[e + 1]) e++; // run of points a..e clear of bridge spans and their abutments
       const K = [a]; let i = a;

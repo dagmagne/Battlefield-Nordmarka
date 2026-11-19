@@ -31,8 +31,10 @@ export function initBridges(list, heightAt) {
       const hF = gh(f * (hw + 2)), hE = gh(f * (hw + L)); if (Math.max(hF, hE) < road(f * (hw + 2)) + 1.2) continue;
       const y0 = top(lu, f * hw) - B.th, y1 = Math.min(y0 - 0.5, Math.max(road(f * (hw + L)) + 0.8, hE + 0.15)), g = (y1 - y0) / L * f, cv = f * (hw + L / 2), yt = (y0 + y1) / 2;
       wall(i, B, 3, lu, cv, 1, L / 2, 0.45, Math.min(road(cv) - 1.2, yt - 2) - Math.abs(g - B.rg) * L / 2, yt, g); B.wings.push([lu, f, L]); }
+    // a blocked crossing (under 3.4 m clearance): a height barrier across the opening in front of each face; it stops vehicles (push only: shells and sight pass under it)
+    if (B.blk) for (const f of [-1, 1]) { const m = (ta + tb) / 2, lv = f * (hw + 0.8); wall(i, B, 4, m, lv, 0, (tb - ta) / 2 + 0.5, 0.25, road(lv) - 1, top(m, lv) - B.th, B.gu); }
   }
-  const nw = walls.length, WL = new Float32Array(Math.max(1, nw) * WS), WB = new Int16Array(Math.max(1, nw)), WK = new Uint8Array(Math.max(1, nw)); // WK: 0 abutment, 1 portal face, 2 parapet, 3 wing wall
+  const nw = walls.length, WL = new Float32Array(Math.max(1, nw) * WS), WB = new Int16Array(Math.max(1, nw)), WK = new Uint8Array(Math.max(1, nw)); // WK: 0 abutment, 1 portal face, 2 parapet, 3 wing wall, 4 height barrier (blocked crossings)
   walls.forEach((w, k) => { WB[k] = w[0]; WK[k] = w[1]; for (let q = 0; q < WS; q++) WL[k * WS + q] = w[q + 2]; });
   // AABBs: the slab and every wall of a bridge, in xz; the global box also holds the y range (for segments)
   const grow = (i, x, z, y0, y1) => { const o = i * 4; if (x < BB[o]) BB[o] = x; if (z < BB[o + 1]) BB[o + 1] = z; if (x > BB[o + 2]) BB[o + 2] = x; if (z > BB[o + 3]) BB[o + 3] = z;
@@ -61,7 +63,7 @@ export function initBridges(list, heightAt) {
   R.inSolid = (x, y, z) => { if (away(x, z, 0) || y < GB[4] || y > GB[5]) return -1;
     for (let i = 0; i < nb; i++) { if (!inBB(i, x, z, 0)) continue; const o = i * DS, dx = x - DK[o], dz = z - DK[o + 1], lu = dx * DK[o + 2] + dz * DK[o + 3], lv = dz * DK[o + 2] - dx * DK[o + 3];
       if (Math.abs(lu) <= DK[o + 4] && Math.abs(lv) <= DK[o + 5]) { const t = DK[o + 6] + DK[o + 7] * lu + DK[o + 8] * lv; if (y <= t && y >= t - DK[o + 9]) return i; } }
-    for (let k = 0; k < nw; k++) { const o = k * WS, dx = x - WL[o], dz = z - WL[o + 1], l = dx * WL[o + 2] + dz * WL[o + 3], m = dz * WL[o + 2] - dx * WL[o + 3];
+    for (let k = 0; k < nw; k++) { if (WK[k] === 4) continue; const o = k * WS, dx = x - WL[o], dz = z - WL[o + 1], l = dx * WL[o + 2] + dz * WL[o + 3], m = dz * WL[o + 2] - dx * WL[o + 3];
       if (Math.abs(l) <= WL[o + 4] && Math.abs(m) <= WL[o + 5] && y >= WL[o + 6] + WL[o + 8] * l && y <= WL[o + 7] + WL[o + 8] * l) return WB[k]; }
     return -1; };
   // a sheared box (|l| <= hl, |m| <= hw, yb <= y - gl l - gm m <= yt) against the segment p0 + (p1 - p0) t: entry fraction, or 2
@@ -79,7 +81,7 @@ export function initBridges(list, heightAt) {
     const ex = x1 - x0, ey = y1 - y0, ez = z1 - z0; let best = 2;
     for (let i = 0; i < nb; i++) { const b = i * 4; if (Math.max(x0, x1) < BB[b] || Math.min(x0, x1) > BB[b + 2] || Math.max(z0, z1) < BB[b + 1] || Math.min(z0, z1) > BB[b + 3]) continue;
       const o = i * DS, t = box(DK[o], DK[o + 1], DK[o + 2], DK[o + 3], DK[o + 4], DK[o + 5], DK[o + 6] - DK[o + 9], DK[o + 6], DK[o + 7], DK[o + 8], x0, y0, z0, ex, ey, ez); if (t < best) best = t;
-      for (let k = 0; k < nw; k++) { if (WB[k] !== i) continue; const q = k * WS, s = box(WL[q], WL[q + 1], WL[q + 2], WL[q + 3], WL[q + 4], WL[q + 5], WL[q + 6], WL[q + 7], WL[q + 8], 0, x0, y0, z0, ex, ey, ez); if (s < best) best = s; } }
+      for (let k = 0; k < nw; k++) { if (WB[k] !== i || WK[k] === 4) continue; const q = k * WS, s = box(WL[q], WL[q + 1], WL[q + 2], WL[q + 3], WL[q + 4], WL[q + 5], WL[q + 6], WL[q + 7], WL[q + 8], 0, x0, y0, z0, ex, ey, ez); if (s < best) best = s; } }
     return best; };
   // push a circle (radius r) at height y (a vehicle's ground level) out of the walls whose span overlaps [y + 0.3, y + 2.5]; out = [x, z, nx, nz, depth] like the buildings' push
   R.push = (x, z, y, r, out) => { out[0] = x; out[1] = z; out[4] = 0; if (away(x, z, r + 1)) return 0; let hits = 0;
@@ -97,11 +99,12 @@ export function initBridges(list, heightAt) {
     for (let i = 0; i < nb; i++) { const o = i * DS, dx = x - DK[o], dz = z - DK[o + 1], lu = dx * DK[o + 2] + dz * DK[o + 3], lv = dz * DK[o + 2] - dx * DK[o + 3]; if (Math.abs(lu) <= DK[o + 4] + pad && Math.abs(lv) <= DK[o + 5] + pad) return i; }
     return -1; };
   // the road under a deck reads as shaded: canopy density (nrm B) in the trench, which the terrain shader turns into less sky light and, beyond the cascades, less sun
-  R.shade = (nrm, HN, HALF) => { const T = 2 * HALF / HN;
+  R.shade = (nrm, HN, HALF) => { const T = 2 * HALF / HN, K = [], V = []; // returns an undo (the CPU copy is restored after the GPU upload)
     for (let i = 0; i < nb; i++) { const B = list[i], o = i * 4;
       for (let j = Math.max(0, Math.floor((BB[o + 1] + HALF) / T)); j <= Math.min(HN - 1, Math.ceil((BB[o + 3] + HALF) / T)); j++) for (let q = Math.max(0, Math.floor((BB[o] + HALF) / T)); q <= Math.min(HN - 1, Math.ceil((BB[o + 2] + HALF) / T)); q++) {
         const dx = (q + 0.5) * T - HALF - B.c[0], dz = (j + 0.5) * T - HALF - B.c[1], lu = dx * B.u[0] + dz * B.u[1], lv = dz * B.u[0] - dx * B.u[1];
         if (lu < B.tr[0] - 1 || lu > B.tr[1] + 1 || Math.abs(lv) > B.hw + 3) continue; const k = (j * HN + q) * 4 + 2, w = 1 - Math.max(0, Math.abs(lv) - B.hw + 3) / 6;
-        nrm[k] = Math.max(nrm[k], Math.round(110 * w)); } } };
+        K.push(k); V.push(nrm[k]); nrm[k] = Math.max(nrm[k], Math.round(110 * w)); } }
+    return () => { for (let q = K.length - 1; q >= 0; q--) nrm[K[q]] = V[q]; }; };
   return R;
 }

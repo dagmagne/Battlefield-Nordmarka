@@ -176,7 +176,7 @@ export function initCombat(C) {
     else { const d = Math.hypot(veh.x - x, veh.y + 1 - y, veh.z - z); if (d < r + 2.5) hurtPlayer(dT * clamp(1 - (d - 2.5) / r, 0, 1), 1, false); }
   }
   function impact(type, owner, x, y, z, t, zone, fc) {
-    if (t) hitVehicle(type, t, zone, fc, x, y, z); else if (MCLR[type] && y - hAt(x, z) < 1.5) mineHit(x, z, MCLR[type]);
+    if (t) hitVehicle(type, t, zone, fc, x, y, z); else if (MCLR[type] && y - W.groundAt(x, z, y + 0.5) < 1.5) mineHit(x, z, MCLR[type], y);
     if (type === 0 || type === 4) { explode(x, y, z, t ? 0.9 : 0.55); if (t) for (let i = 0; i < 14; i++) parts.emit(x, y, z, sr() * 14, rnd() * 9, sr() * 14, 0.3 + rnd() * 0.4, 0.02 + rnd() * 0.02, 0, 0, 3, 2.2, 1, 1); }
     else if (type === 1) { explode(x, y, z, 1.7); splash(x, y, z, 3.5, 6, 40, owner); }
     else if (type === 2) { explode(x, y, z, 3.2); splash(x, y, z, 9, 12, 70, owner); C.bld.splash(x, y, z, 9, 30, bSkip, bldFx); }
@@ -190,7 +190,7 @@ export function initCombat(C) {
     else if (type === 11) G.support.impact(x, y, z, bSkip); // own artillery (support.js)
     else if (type === 9) { if (!t) for (let i = 0; i < 2; i++) parts.emit(x, y + 0.1, z, sr() * 2, 1.2 + rnd() * 2, sr() * 2, 0.35, 0.012, 0, 0, 1, 1, 1, 0.9); }
   }
-  function smokeBurst(x, y, z) { C.sfx('smoke', x, y, z, 0.5); const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, hAt(x, z) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
+  function smokeBurst(x, y, z) { C.sfx('smoke', x, y, z, 0.5); const o = clNext * 5; clNext = (clNext + 1) % 16; CL[o] = x; CL[o + 1] = Math.max(y, W.groundAt(x, z, y) + 2); CL[o + 2] = z; CL[o + 3] = 0; CL[o + 4] = 1; flashAdd(x, y, z, 1.5, 0.08, 20, 18, 14); }
 
   // ---------- buildings: damage, collapse ----------
   const FI = new Float32Array(8 * 5); let fiNext = 0, bSkip = -1; // building fires: x y z time-left radius
@@ -291,7 +291,7 @@ export function initCombat(C) {
     const rd = ETYPE[e.type].road || 0;
     for (let n = 0; n < 2; n++) { const L = NETS[n], R0 = rd === 2 ? 240 : rd ? 130 : n ? 60 : 45, bonus = rd ? 0 : n === 1 ? (e.role === RAID ? 30 : 10) : 0; // road-bound vehicles head for a road or trail up to 240 m off (both count the same), BMPs 130 m
       for (let p = 0; p < L.length; p++) { const t = L[p], P = t.pts;
-        for (let i = 2; i < t.n - 2; i += 3) { const px = P[i * 2], pz = P[i * 2 + 1], dx = px - e.x, dz = pz - e.z; if (dx * dx + dz * dz > R0 * R0) continue;
+        for (let i = 2; i < t.n - 2; i += 3) { const px = P[i * 2], pz = P[i * 2 + 1], dx = px - e.x, dz = pz - e.z; if (dx * dx + dz * dz > R0 * R0 || W.br.id(px, pz, 6) >= 0) continue; // no join point on or under a bridge (the trail over a deck is not 'nearest' to a vehicle in the road under it); driving along a route passes through
           const dp = Math.sqrt(dx * dx + dz * dz);
           let lb = -1; // the drive to the join point is a straight line: only through open ground (lazily tested, for candidates that would win)
           for (let s = -1; s <= 1; s += 2) { const j = clamp(i + s * 30, 0, t.n - 1); let g = dg - Math.hypot(P[j * 2] - e.gx, P[j * 2 + 1] - e.gz) - dp * 0.6 + bonus;
@@ -300,7 +300,7 @@ export function initCombat(C) {
     if (bn < 0) return false;
     e.net = bn; e.path = bp; e.pi = bi; e.dir = bd; e.jn = 1; return true;
   }
-  const okSpot = (x, z, lim = 110) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && (!R.trees || canAt(x, z) < lim) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2;
+  const okSpot = (x, z, lim = 110) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && (!R.trees || canAt(x, z) < lim) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2 && W.br.id(x, z, 10) < 0; // (not on or under a bridge)
   const canLim = (e) => ETYPE[e.type].road ? 45 : 110; // wheeled vehicles and BMPs only stop in open ground or thin forest
   // overwatch: a spot r0..r1 from the player around bearing b, scored by height over the player, a clear view and the drive to get there
   function pickSpot(e, b, r0, r1) {
@@ -334,7 +334,7 @@ export function initCombat(C) {
     for (let k = 0; k < (dir ? 420 : 260); k++) {
       const n = rd ? k & 1 : k & 1 ? 0 : net, L = NETS[n], ti = (rnd() * L.length) | 0, t = L[ti]; if (!t || t.n < 30) continue;
       const i = 4 + ((rnd() * (t.n - 8)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
-      if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380 || (rd && R.trees && canAt(x, z) > 90)) continue; // (wheeled ones never start in dense forest)
+      if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380 || (rd && R.trees && canAt(x, z) > 90) || W.br.id(x, z, 8) >= 0) continue; // (wheeled ones never start in dense forest)
       let ok = true; for (const q of G.enemies) if (q.on && !q.dead && Math.hypot(q.x - x, q.z - z) < 45) { ok = false; break; } if (!ok) continue;
       let sc;
       if (!dir) sc = (d > 480 && d < 900 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 480–900 m away and to the north
@@ -412,7 +412,7 @@ export function initCombat(C) {
     }
     // keep station in a column: do not drive into the back of a friendly vehicle
     if (e.tgt > 0) { const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw);
-      for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = q.x - e.x, qz = q.z - e.z, qd = Math.hypot(qx, qz), ah = qx * fx + qz * fz;
+      for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on || (Math.abs(q.y - e.y) > 3 && W.br.id(e.x, e.z, 3) >= 0)) continue; const qx = q.x - e.x, qz = q.z - e.z, qd = Math.hypot(qx, qz), ah = qx * fx + qz * fz;
         if (qd < 16 && ah > qd * 0.6) { e.tgt = Math.min(e.tgt, q.dead ? 1.5 : Math.max(0, q.v * 0.8)); if (q.dead || qd < 10) e.st = clamp(e.st + (qx * fz - qz * fx > 0 ? 0.6 : -0.6), -1, 1); } } } // and steer round it
     // stuck: wanted to move for a while but did not get anywhere -> back off (or push forward), then sidestep and look for a new route
     e.stT += dt; if (Math.abs(e.tgt) > 2) e.wantT += dt;
@@ -496,10 +496,10 @@ export function initCombat(C) {
       e.state = engage ? 1 : 0;
       // movement: role-driven (see drive())
       drive(e, E, d, dt); const tgt = e.tgt, st = e.st;
-      for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = e.x - q.x, qz = e.z - q.z, qd = Math.hypot(qx, qz); if (qd < 7 && qd > 0.01) { const k = (7 - qd) / qd * (q.dead ? 1 : 0.5); e.x += qx * k; e.z += qz * k; } }
+      for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = e.x - q.x, qz = e.z - q.z, qd = Math.hypot(qx, qz); if (qd < 7 && qd > 0.01 && (Math.abs(q.y - e.y) < 3 || W.br.id(e.x, e.z, 3) < 0)) { const k = (7 - qd) / qd * (q.dead ? 1 : 0.5); e.x += qx * k; e.z += qz * k; } }
       e.v += (tgt - e.v) * Math.min(1, dt * (E.wheels ? 1.4 : 0.9)); const yr = st * (E.turn || 0.55) * (Math.abs(e.v) > 0.5 || tgt !== 0 ? 1 : 0);
       e.yaw += yr * dt; e.x = clamp(e.x - Math.sin(e.yaw) * e.v * dt, -PLAY, PLAY); e.z = clamp(e.z - Math.cos(e.yaw) * e.v * dt, -PLAY, PLAY);
-      for (let s = -1; s <= 1; s++) { const cs = K.cs || 1.8, px = e.x - Math.sin(e.yaw) * cs * s, pz = e.z - Math.cos(e.yaw) * cs * s; if (C.solid(px, pz, K.cr || 1.9, SO)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; if (SO[4] > 0) { e.cnx = SO[2]; e.cnz = SO[3]; e.cT = 1.2; } } } // buildings and colliders are solid
+      for (let s = -1; s <= 1; s++) { const cs = K.cs || 1.8, px = e.x - Math.sin(e.yaw) * cs * s, pz = e.z - Math.cos(e.yaw) * cs * s; if (C.solid(px, pz, K.cr || 1.9, SO, e.y)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; if (SO[4] > 0) { e.cnx = SO[2]; e.cnz = SO[3]; e.cT = 1.2; } } } // buildings and colliders are solid
       if (C.treeHit) { // trees: small ones go over, big ones are solid (slide along them like a wall); a nudge away from trunks just ahead
         // pressing against a big tree: after 1.5 s a heavy vehicle fells trees up to 16 m, after 3 s anything (a light one then squeezes through)
         const heavy = E.fell >= 8, tc = e.tcT, lim = heavy ? (tc > 3 || e.stN >= 2 ? 99 : tc > 1.5 || e.stN >= 1 ? 16 : E.fell) : E.fell;
@@ -509,7 +509,7 @@ export function initCombat(C) {
       if (C.bld.rubble(e.x, e.z)) e.v = Math.min(e.v, 4.5);
       e.trL += (e.v + yr * 1.43) * dt; e.trR += (e.v - yr * 1.43) * dt;
       const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw), hl = K.hl, hw = K.hw;
-      const a = hAt(e.x + fx * hl - fz * hw, e.z + fz * hl + fx * hw), b = hAt(e.x + fx * hl + fz * hw, e.z + fz * hl - fx * hw), c = hAt(e.x - fx * hl - fz * hw, e.z - fz * hl + fx * hw), dd = hAt(e.x - fx * hl + fz * hw, e.z - fz * hl - fx * hw), k = Math.min(1, dt * 8);
+      const gA = W.groundAt, y0 = e.y, a = gA(e.x + fx * hl - fz * hw, e.z + fz * hl + fx * hw, y0), b = gA(e.x + fx * hl + fz * hw, e.z + fz * hl - fx * hw, y0), c = gA(e.x - fx * hl - fz * hw, e.z - fz * hl + fx * hw, y0), dd = gA(e.x - fx * hl + fz * hw, e.z - fz * hl - fx * hw, y0), k = Math.min(1, dt * 8); // at its own level: over a bridge deck or under it
       e.y = (a + b + c + dd) / 4 + 0.02; e.pitch += (Math.atan2((a + b - c - dd) / 2, hl * 2) - e.pitch) * k; e.roll += (Math.atan2((a + c - b - dd) / 2, hw * 2) - e.roll) * k;
       // gunnery: lead, an aim error that settles with each shot, ballistic elevation
       e.errT -= dt;
@@ -621,7 +621,7 @@ export function initCombat(C) {
   function mineSlot() { let o = -1, oa = 1e9; for (let i = 0; i < MAXM; i++) { if (!MS[i]) return i; if (MS[i] === 2 && MT[i] < oa) { oa = MT[i]; o = i; } } return o; } // full: reuse the oldest surface mine
   function mineAt(x, z, st, t) {
     const i = mineSlot(); if (i < 0) return -1;
-    MX[i] = x; MZ[i] = z; MY[i] = hAt(x, z); MS[i] = st; MT[i] = st === 3 ? t : ++mineSeq; MA[i] = 1.5; MR[i] = 0; MP[i] = st === 1 ? 1 : 0; MW[i] = rnd() * 6.283; mesh(i); return i;
+    MX[i] = x; MZ[i] = z; MY[i] = st === 1 ? hAt(x, z) : W.groundAt(x, z, 1e5); MS[i] = st; MT[i] = st === 3 ? t : ++mineSeq; MA[i] = 1.5; MR[i] = 0; MP[i] = st === 1 ? 1 : 0; MW[i] = rnd() * 6.283; mesh(i); return i;
   }
   const inField = (x, z, pad) => { for (let f = 0; f < NFLD; f++) { const o = f * 4; if (FLD[o + 3] && Math.hypot(x - FLD[o], z - FLD[o + 1]) < FLD[o + 2] + pad) return true; } return false; };
   // a field across a road: two staggered rows over both track lanes, along about 20 m
@@ -629,7 +629,7 @@ export function initCombat(C) {
     let f = 0; while (f < NFLD && FLD[f * 4 + 3]) f++; if (f >= NFLD) return 0;
     const n = 6 + ((rnd() * 4) | 0); let made = 0;
     for (let k = 0; k < n; k++) { const a = (k - (n - 1) / 2) * 2.8 + sr() * 1.2, c = (k & 1 ? 1 : -1) * (0.8 + rnd() * 2.2), x = cx + dx * a - dz * c, z = cz + dz * a + dx * c;
-      if (C.bld.at(x, hAt(x, z) + 0.5, z, 0.5) >= 0 || C.collAt(x, z)) continue; if (mineAt(x, z, 1, 0) >= 0) made++; }
+      if (C.bld.at(x, hAt(x, z) + 0.5, z, 0.5) >= 0 || C.collAt(x, z) || W.br.id(x, z, 1.5) >= 0) continue; if (mineAt(x, z, 1, 0) >= 0) made++; } // (none buried on or under a bridge)
     const o = f * 4; FLD[o] = cx; FLD[o + 1] = cz; FLD[o + 2] = n * 1.45 + 3; FLD[o + 3] = 1;
     return made;
   }
@@ -656,7 +656,7 @@ export function initCombat(C) {
     const dp = Math.hypot(veh.x - x, veh.z - z); if (dp < 7) hurtPlayer(6 * (1 - dp / 7), 1, false);
   }
   // ground impacts and blasts set off mines nearby (HE clears a lane; the MG can pick off a mine it hits)
-  function mineHit(x, z, r) { for (let i = 0; i < MAXM; i++) { if (MS[i] !== 1 && MS[i] !== 2) continue; if (Math.hypot(MX[i] - x, MZ[i] - z) < (MS[i] === 1 ? r * 0.8 : r)) mineBoom(i, false); } }
+  function mineHit(x, z, r, y) { for (let i = 0; i < MAXM; i++) { if ((MS[i] !== 1 && MS[i] !== 2) || (y !== undefined && Math.abs(MY[i] - y) > 3)) continue; if (Math.hypot(MX[i] - x, MZ[i] - z) < (MS[i] === 1 ? r * 0.8 : r)) mineBoom(i, false); } }
   // rocket-laid mines: a warning, then a cassette bursts over the spot the tank was at and scatters mines on the snow around it
   function strike() { rlT = 4; rlX = veh.x; rlZ = veh.z; C.sfx('whistle', veh.x, veh.y + 40, veh.z, 1); ui.toast('Incoming rockets — remote mining! Move!'); }
   function updateMines(dt) {
@@ -670,7 +670,7 @@ export function initCombat(C) {
         C.sfx('hit', MX[i], MY[i], MZ[i], 0.2); continue; }
       if (MA[i] > 0) { MA[i] -= dt; continue; }
       // pressure fuze: a track rolling over it (on the ground: a tank in the air over a crest does not set it off)
-      if (!veh.dead && !veh.air && veh.y - MY[i] < 0.8 && (Math.abs(veh.v) > 0.2 || Math.abs(veh.yawRate) > 0.05)) { const dx = MX[i] - veh.x, dz = MZ[i] - veh.z;
+      if (!veh.dead && !veh.air && veh.y - MY[i] < 0.8 && MY[i] - veh.y < 2.5 && (Math.abs(veh.v) > 0.2 || Math.abs(veh.yawRate) > 0.05)) { const dx = MX[i] - veh.x, dz = MZ[i] - veh.z;
         if (dx * dx + dz * dz < 20) { const c = Math.cos(veh.yaw), s = Math.sin(veh.yaw); if (Math.abs(c * dx - s * dz) < 1.95 && Math.abs(s * dx + c * dz) < 3.9) { mineBoom(i, true); continue; } } }
       if (MR[i] && todCur[1] < 2) { const d = Math.hypot(MX[i] - cam.x, MZ[i] - cam.z); if (d < 450) glow(MX[i] + Math.cos(MW[i]) * 0.3, MY[i] + 0.8, MZ[i] - Math.sin(MW[i]) * 0.3, 0.12 * (1 + d * 0.012) * (0.75 + 0.25 * Math.sin(R.time * 5 + i)), 9, 1.2, 0.3); } // marked, in the dark: a pulsing red light on the picket
     }
@@ -843,7 +843,7 @@ export function initCombat(C) {
       if (Math.ceil(G.mg / 50) * 50 !== lastMg) hudDirty = true;
     } else hmgT = Math.min(hmgT, 1);
     // smoke clouds
-    for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1) continue; CL[o + 3] += dt; const gh = hAt(CL[o], CL[o + 2]); CL[o + 1] = Math.max(gh + 1.8, CL[o + 1] - 3 * dt);
+    for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1) continue; CL[o + 3] += dt; const gh = W.groundAt(CL[o], CL[o + 2], CL[o + 1] - 1.8); CL[o + 1] = Math.max(gh + 1.8, CL[o + 1] - 3 * dt);
       if (CL[o + 3] > 24) { CL[o + 4] = 0; continue; }
       if (CL[o + 3] < 13 && rnd() < dt * 8) parts.emit(CL[o] + sr() * 7, CL[o + 1] + sr() * 3, CL[o + 2] + sr() * 7, sr() * 0.8, 0.15 + rnd() * 0.3, sr() * 0.8, 9 + rnd() * 5, 3.4 + rnd() * 2.6, 0.5, 5, 0.66, 0.67, 0.7, 0.72); }
     // waves
@@ -865,7 +865,7 @@ export function initCombat(C) {
     G.rep = G.spot ? G.rep + dt : 0; G.spot = false; // how long some crew has held the player in sight
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (e.on) updateEnemy(e, dt, i); }
     // vehicles are solid for each other
-    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz); if (d < 5.6 && d > 0.01) { const k = (5.6 - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
+    for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on) continue; const dx = veh.x - e.x, dz = veh.z - e.z, d = Math.hypot(dx, dz); if (d < 5.6 && d > 0.01 && (Math.abs(veh.y - e.y) < 3 || W.br.id(e.x, e.z, 3) < 0)) { const k = (5.6 - d) / d; veh.x += dx * k; veh.z += dz * k; veh.v *= 0.9; } }
     updateShells(dt); updateMines(dt); updateAir(dt);
     arty.update(dt); // phase 5A
     inf.update(dt); // phase 6B: infantry

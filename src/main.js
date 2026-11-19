@@ -107,7 +107,7 @@ async function main() {
   await tick('Shaping terrain', 0);
   const W = wsel === 'fantasi' ? await genFantasy(tick, Q) : await genWorld(tick, Q, wsel);
   const PLAY = W.PLAY, MW = W.MW;
-  W.br = initBridges(W.brg || [], W.heightAt); W.groundAt = W.br.groundAt; W.br.shade(W.nrm, HN, HALF); // functional bridges (src/bridges.js): deck slabs over the heightfield, walls; the road under a deck is shaded
+  W.br = initBridges(W.brg || [], W.heightAt); W.groundAt = W.br.groundAt; const brUndo = W.br.shade(W.nrm, HN, HALF); // functional bridges (src/bridges.js): deck slabs over the heightfield, walls; the road under a deck is shaded
   await tick('Building scene', 0.95);
 
   // ---------- static textures ----------
@@ -122,7 +122,7 @@ async function main() {
     chain.forEach((d, i) => { const s = HN >> i; device.queue.writeTexture({ texture: t, mipLevel: i }, d, { bytesPerRow: s * 4 }, [s, s]); });
     return t;
   };
-  const normTex = mkMip(W.nrm), matTex = mkMip(W.mat);
+  const normTex = mkMip(W.nrm), matTex = mkMip(W.mat); brUndo(); // the road under a deck is shaded on the GPU only: line of sight and enemy routing read W.nrm's canopy without it
   const tshTex = device.createTexture({ size: [1024, 1024], format: 'rg16float', usage: RA | TB });
   const maskA = device.createTexture({ size: [Q.mask, Q.mask], format: 'rgba8unorm', usage: RA | TB });
   const maskB = device.createTexture({ size: [Q.mask, Q.mask], format: 'rg16float', usage: RA | TB });
@@ -238,10 +238,12 @@ async function main() {
   const collAt = (x, z) => { const C = W.colliders, c = clamp(Math.floor((z + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((x + HALF) / CG), 0, NCG - 1);
     for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = x - C[i], dz = z - C[i + 1]; if (dx * dx + dz * dz < C[i + 2] * C[i + 2]) return true; } return false; };
   // push a circle (r <= 4.5) out of the buildings and the circle colliders; out = [x, z, nx, nz, depth]; returns the contact count
-  const solid = (x, z, r, out) => {
+  const BO = new Float32Array(5);
+  const solid = (x, z, r, out, y) => { // y (optional): the querier's ground level, for bridge walls
     let n = BL.push(x, z, r, out); const C = W.colliders, c = clamp(Math.floor((out[1] + HALF) / CG), 0, NCG - 1) * NCG + clamp(Math.floor((out[0] + HALF) / CG), 0, NCG - 1);
     for (let q = cgStart[c]; q < cgStart[c + 1]; q++) { const i = cgItems[q], dx = out[0] - C[i], dz = out[1] - C[i + 1], rr = C[i + 2] + r, d2 = dx * dx + dz * dz;
       if (d2 < rr * rr && d2 > 1e-4) { const d = Math.sqrt(d2), k = rr - d; out[0] += dx / d * k; out[1] += dz / d * k; n++; if (k > out[4]) { out[2] = dx / d; out[3] = dz / d; out[4] = k; } } }
+    if (y !== undefined) { const m = W.br.push(out[0], out[1], y, r, BO); if (m) { out[0] = BO[0]; out[1] = BO[1]; n += m; if (BO[4] > out[4]) { out[2] = BO[2]; out[3] = BO[3]; out[4] = BO[4]; } } }
     return n;
   };
   const SO = new Float32Array(5);
@@ -601,7 +603,7 @@ async function main() {
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); if (R.hap) R.hap.ev(name, x, y, z, k); };
   const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' });
   R.game = game; R.aimHit = game.aimHit;
-  const SOL = initSoldiers(MAXI, W.heightAt);
+  const SOL = initSoldiers(MAXI, W.groundAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
   let sndOn = true; /* on by default; a stored choice (M or the menu) and ?mute win */ try { const g = localStorage.gsnd; if (g === '1') sndOn = true; else if (g === '0') sndOn = false; } catch (e) { /* ignore */ }
@@ -913,7 +915,7 @@ async function main() {
     cam.sightK += ((cam.mode === 1 && !R.pose ? 1 : 0) - cam.sightK) * Math.min(1, dt * 12);
     cam.fovNow = lerp(1, cam.zoom ? 0.085 : 0.26, cam.sightK);
     emitParticles(dt, BM);
-    const pn = parts.update(dt, W.heightAt, 1.3, 0.5);
+    const pn = parts.update(dt, W.groundAt, 1.3, 0.5); // chunks land on a bridge deck
     audio.update(dt); hap.update(dt);
     if (R.simOnly) return; // logic-only step for scripted tests (window.__sim)
     R.snowAmt += (R.snow - R.snowAmt) * Math.min(1, dt * 0.8);
