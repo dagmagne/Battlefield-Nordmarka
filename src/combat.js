@@ -301,7 +301,7 @@ export function initCombat(C) {
     if (bn < 0) return false;
     e.net = bn; e.path = bp; e.pi = bi; e.dir = bd; e.jn = 1; return true;
   }
-  const okSpot = (x, z, lim = 110) => Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60 && !C.collAt(x, z) && (!R.trees || canAt(x, z) < lim) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2 && W.br.id(x, z, 10) < 0; // (not on or under a bridge)
+  const okSpot = (x, z, lim = 110) => W.inP(x, z, 60) && !C.collAt(x, z) && (!R.trees || canAt(x, z) < lim) && C.bld.at(x, hAt(x, z) + 1.5, z, 6) < 0 && Math.abs(hAt(x + 4, z) - hAt(x - 4, z)) + Math.abs(hAt(x, z + 4) - hAt(x, z - 4)) < 3.2 && W.br.id(x, z, 10) < 0; // (not on or under a bridge)
   const canLim = (e) => ETYPE[e.type].road ? 45 : 110; // wheeled vehicles and BMPs only stop in open ground or thin forest
   // overwatch: a spot r0..r1 from the player around bearing b, scored by height over the player, a clear view and the drive to get there
   function pickSpot(e, b, r0, r1) {
@@ -335,7 +335,7 @@ export function initCombat(C) {
     for (let k = 0; k < (dir ? 420 : 260); k++) {
       const n = rd ? k & 1 : k & 1 ? 0 : net, L = NETS[n], ti = (rnd() * L.length) | 0, t = L[ti]; if (!t || t.n < 30) continue;
       const i = 4 + ((rnd() * (t.n - 8)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
-      if (Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || d < 380 || (rd && R.trees && canAt(x, z) > 90) || W.br.id(x, z, 8) >= 0) continue; // (wheeled ones never start in dense forest)
+      if (!W.inP(x, z, 60) || d < 380 || (rd && R.trees && canAt(x, z) > 90) || W.br.id(x, z, 8) >= 0) continue; // (wheeled ones never start in dense forest)
       let ok = true; for (const q of G.enemies) if (q.on && !q.dead && Math.hypot(q.x - x, q.z - z) < 45) { ok = false; break; } if (!ok) continue;
       let sc;
       if (!dir) sc = (d > 480 && d < 900 ? 2 : 1) + (z < veh.z ? 1 : 0) + rnd(); // prefer 480–900 m away and to the north
@@ -360,7 +360,7 @@ export function initCombat(C) {
   // the goal of each role, refreshed on every route evaluation
   function roleGoal(e) {
     if (e.role === OVW && e.ph === 0) { e.gx = e.ox; e.gz = e.oz; return; }
-    if (e.role === FLK && e.ph === 0) { const b = e.brg + e.side * 0.75, r = 560; e.gx = clamp(veh.x + Math.sin(b) * r, -PLAY + 80, PLAY - 80); e.gz = clamp(veh.z - Math.cos(b) * r, -PLAY + 80, PLAY - 80); return; }
+    if (e.role === FLK && e.ph === 0) { const b = e.brg + e.side * 0.75, r = 560; e.gx = W.cpx(veh.x + Math.sin(b) * r, 80); e.gz = W.cpz(veh.z - Math.cos(b) * r, 80); return; }
     e.gx = veh.x; e.gz = veh.z;
   }
   // off a route or on the leg to a join point, a vehicle picks the heading within ±1 rad of the wanted one with the least canopy 20–45 m ahead (every 0.5 s; wheeled ones weigh the forest most)
@@ -427,7 +427,7 @@ export function initCombat(C) {
   function planWave(w) { // rare event: may allocate
     COV.fill(0);
     for (let n = 0; n < 2; n++) for (const t of NETS[n]) for (let i = 0; i < t.n; i += 5) { const x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
-      if (d > 500 && d < 1000 && Math.abs(x) < PLAY - 60 && Math.abs(z) < PLAY - 60) COV[Math.floor((brgOf(x, z) + 3.1416) / 6.2832 * 36) % 36]++; }
+      if (d > 500 && d < 1000 && W.inP(x, z, 60)) COV[Math.floor((brgOf(x, z) + 3.1416) / 6.2832 * 36) % 36]++; }
     const feas = (b) => { const c = Math.floor((wrap(b) + 3.1416) / 6.2832 * 36); let f = 0; for (let k = -2; k <= 2; k++) f += COV[(c + k + 36) % 36]; return f; };
     let ax = 0, best = -1;
     for (let k = 0; k < 40; k++) { const a = w === 1 && k < 20 ? (rnd() - 0.5) * 1.2 : rnd() * 6.283 - 3.1416; // wave 1 comes from the north if it can
@@ -499,7 +499,7 @@ export function initCombat(C) {
       drive(e, E, d, dt); const tgt = e.tgt, st = e.st;
       for (let j = 0; j < MAXE; j++) { const q = G.enemies[j]; if (q === e || !q.on) continue; const qx = e.x - q.x, qz = e.z - q.z, qd = Math.hypot(qx, qz); if (qd < 7 && qd > 0.01 && (Math.abs(q.y - e.y) < 3 || W.br.id(e.x, e.z, 3) < 0)) { const k = (7 - qd) / qd * (q.dead ? 1 : 0.5); e.x += qx * k; e.z += qz * k; } }
       e.v += (tgt - e.v) * Math.min(1, dt * (E.wheels ? 1.4 : 0.9)); const yr = st * (E.turn || 0.55) * (Math.abs(e.v) > 0.5 || tgt !== 0 ? 1 : 0);
-      e.yaw += yr * dt; e.x = clamp(e.x - Math.sin(e.yaw) * e.v * dt, -PLAY, PLAY); e.z = clamp(e.z - Math.cos(e.yaw) * e.v * dt, -PLAY, PLAY);
+      e.yaw += yr * dt; e.x = W.cpx(e.x - Math.sin(e.yaw) * e.v * dt); e.z = W.cpz(e.z - Math.cos(e.yaw) * e.v * dt);
       for (let s = -1; s <= 1; s++) { const cs = K.cs || 1.8, px = e.x - Math.sin(e.yaw) * cs * s, pz = e.z - Math.cos(e.yaw) * cs * s; if (C.solid(px, pz, K.cr || 1.9, SO, e.y)) { e.x += SO[0] - px; e.z += SO[1] - pz; e.v *= 0.92; if (SO[4] > 0) { e.cnx = SO[2]; e.cnz = SO[3]; e.cT = 1.2; } } } // buildings and colliders are solid
       if (C.treeHit) { // trees: small ones go over, big ones are solid (slide along them like a wall); a nudge away from trunks just ahead
         // pressing against a big tree: after 1.5 s a heavy vehicle fells trees up to 16 m, after 3 s anything (a light one then squeezes through)
@@ -595,7 +595,7 @@ export function initCombat(C) {
 
   // ---------- the large map view (Tab, or a tap on the minimap): the playable area at a glance, the same markers ----------
   const bmap = typeof document !== 'undefined' && document.getElementById('bmap'), bctx = bmap && bmap.getContext ? bmap.getContext('2d') : null;
-  let bm = null, bigOn = false, bigT = 0, bCss = 0, bPx = 0; const BEXT = PLAY + 120; // metres from the centre to the edge of the view
+  let bm = null, bigOn = false, bigT = 0, bCss = 0, bPx = 0; const PB = W.PB, BCX = (PB[0] + PB[2]) / 2, BCZ = (PB[1] + PB[3]) / 2, BEXT = Math.max(PB[2] - PB[0], PB[3] - PB[1]) / 2 + 120; // the big map: centre of the playable box, metres from it to the edge of the view
   G.bigMap = (on) => { // rare event: may allocate (the sharper base map is built on first use)
     if (!bctx) return; bigOn = on === undefined ? !bigOn : !!on; bmap.classList.toggle('show', bigOn); if (!bigOn) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1); bCss = Math.floor(Math.min(innerWidth, innerHeight) * 0.86); bPx = Math.min(1600, Math.round(bCss * dpr));
@@ -606,9 +606,9 @@ export function initCombat(C) {
   G.bigOpen = () => bigOn;
   function drawBig() {
     if (!bm) return; const c = bctx, sc = bCss / (2 * BEXT), cx = bCss / 2;
-    c.setTransform(1, 0, 0, 1, 0, 0); bm.rect(c, -BEXT, -BEXT, 2 * BEXT, bPx, bPx);
+    c.setTransform(1, 0, 0, 1, 0, 0); bm.rect(c, BCX - BEXT, BCZ - BEXT, 2 * BEXT, bPx, bPx);
     c.setTransform(bPx / bCss, 0, 0, bPx / bCss, 0, 0);
-    markers(c, bCss, sc, cx, 0, 0, BEXT, clamp(bCss / 380, 1.2, 2.6)); // markers scale with the view's CSS size
+    markers(c, bCss, sc, cx, BCX, BCZ, BEXT, clamp(bCss / 380, 1.2, 2.6)); // markers scale with the view's CSS size
     c.font = '600 13px system-ui, sans-serif'; c.fillStyle = '#0b1420c8'; c.fillRect(6, bCss - 32, 212, 24); c.fillStyle = '#ffffffd0'; c.fillText('MAP  ·  Tab or tap to close', 14, bCss - 15);
     c.fillStyle = '#ffffffb0'; c.fillRect(12, 14, 500 * sc, 3); c.fillText('500 m', 16 + 500 * sc, 20); // scale bar
   }
@@ -641,7 +641,7 @@ export function initCombat(C) {
     for (let m = 0; m < want; m++) { let best = -1e9, px = 0, pz = 0, ux = 0, uz = 0;
       for (let k = 0; k < 300; k++) { const n = k % 3 ? 1 : 0, L = NETS[n]; if (!L.length) continue; const t = L[(rnd() * L.length) | 0]; if (!t || t.n < 12) continue;
         const i = 3 + ((rnd() * (t.n - 6)) | 0), x = t.pts[i * 2], z = t.pts[i * 2 + 1], d = Math.hypot(x - veh.x, z - veh.z);
-        if (d < 120 || d > 380 || Math.abs(x) > PLAY - 60 || Math.abs(z) > PLAY - 60 || inField(x, z, 60) || Math.abs(wrap(brgOf(x, z) - G.lastAxis)) > 1.2) continue; // only ahead, towards the enemy
+        if (d < 120 || d > 380 || !W.inP(x, z, 60) || inField(x, z, 60) || Math.abs(wrap(brgOf(x, z) - G.lastAxis)) > 1.2) continue; // only ahead, towards the enemy
         const sc = 2 * Math.max(0, 1 - Math.abs(wrap(brgOf(x, z) - G.lastAxis)) / 1.1) + (n ? 1 : 0) + rnd() * 0.6 - Math.abs(d - 230) / 300;
         if (sc > best) { best = sc; px = x; pz = z; const ex = t.pts[i * 2 + 2] - t.pts[i * 2 - 2], ez = t.pts[i * 2 + 3] - t.pts[i * 2 - 1], l = Math.hypot(ex, ez) || 1; ux = ex / l; uz = ez / l; } }
       if (best > -1e9) { const n0 = layField(px, pz, ux, uz); if (n0) { laid += n0; bx = px; bz = pz; } } }

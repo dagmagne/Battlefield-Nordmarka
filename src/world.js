@@ -3,11 +3,13 @@
 // 8 m height grid, water / wetland rasters, lidar tree cover + canopy height, nordic trail polylines, building rectangles.
 // Everything else (terrain detail, trees, snow, houses, landmarks) is generated here.
 // World frame: x = east, z = south, metres; origin 59.9753 N, 10.6800 E.
-import { clamp, lerp, smooth, hash1, hash2 } from './math.js';
+import { clamp, lerp, smooth, hash1, hash2, playBox } from './math.js';
 import DATA from './data/world.bin';
 
 export const WS = 4096, HN = 2048, TEX = WS / HN, HALF = WS / 2;
-const PLAY = 1560, MW = 3200, TREELINE = 900;
+const PLAY = 1560, MW = 3712, TREELINE = 900; // PLAY: the old square, still what the tests stage inside; MW: the snow mask covers the widened box
+// playable box: widened west and south so the whole metro line Holmenkollen - Frognerseteren is inside (the window is +-2048)
+const PBX = playBox([-1850, -1560, 1560, 1750]);
 export const NEAR = 32, NCN = WS / NEAR, FAR = 128, FCN = WS / FAR;
 // landmark geometry (from tools/geo/raw/landmarks.json)
 export const LM = {
@@ -141,7 +143,7 @@ function plowRoads(meta, b, H, H0, mat, polish, buildings, portals, roadNet, map
         for (let i = 0; i < m; i++) { if (dl[i] === dl[i]) { ld = dl[i]; ls = sd[i]; } const w = 1 - (sd[i] - ls) / 30; if (w > 0) { f[i] = ld * w; g[i] = sd[i] - ls; } }
         ls = 1e9; for (let i = m - 1; i >= 0; i--) { if (dl[i] === dl[i]) { ld = dl[i]; ls = sd[i]; } const w = 1 - (ls - sd[i]) / 30; if (w > 0 && ls - sd[i] < g[i]) f[i] = ld * w; }
         for (let i = 0; i < m; i++) y[i] += f[i]; } }
-    if (cls <= 3 || (cls <= 5 && sd[m - 1] > 250)) for (let q0 = 0; q0 < m;) { let q1 = q0; while (q1 < m && dkc[q1] > 100 && Math.abs(pts[q1][0]) < PLAY - 50 && Math.abs(pts[q1][1]) < PLAY - 50) q1++; // runs of road well away from the tunnels, inside the playable area (enemies followed roads out to the edge)
+    if (cls <= 3 || (cls <= 5 && sd[m - 1] > 250)) for (let q0 = 0; q0 < m;) { let q1 = q0; while (q1 < m && dkc[q1] > 100 && PBX.inP(pts[q1][0], pts[q1][1], 50)) q1++; // runs of road well away from the tunnels, inside the playable area (enemies followed roads out to the edge)
       if (q1 - q0 >= 20) { const f = new Float32Array((q1 - q0) * 2); for (let q = q0; q < q1; q++) { f[(q - q0) * 2] = pts[q][0]; f[(q - q0) * 2 + 1] = pts[q][1]; } roadNet.push({ pts: f, n: q1 - q0, hw, cls }); }
       q0 = q1 + 1; }
     for (let q = 0; q < m; q++) {
@@ -446,7 +448,7 @@ export async function genWorld(tick, Q, startAt) {
     for (let i = 8; i < t.n - 6; i += 17) {
       const x = t.pts[i * 2], z = t.pts[i * 2 + 1], tx = t.pts[i * 2 + 2] - x, tz = t.pts[i * 2 + 3] - z, l = Math.hypot(tx, tz) || 1;
       const px = x - tz / l * 5.3, pz = z + tx / l * 5.3;
-      if (Math.hypot(px - cabin.x, pz - cabin.z) < 15 || Math.abs(px) > PLAY + 200 || Math.abs(pz) > PLAY + 200 || W.lakeAt(px, pz) > 0.2 || roadAt(px, pz) > 0.3 || W.brg.some((B) => Math.abs((px - B.c[0]) * B.u[0] + (pz - B.c[1]) * B.u[1]) < B.hl + 11 && Math.abs((pz - B.c[1]) * B.u[0] - (px - B.c[0]) * B.u[1]) < B.hw + 6)) continue;
+      if (Math.hypot(px - cabin.x, pz - cabin.z) < 15 || !PBX.inP(px, pz, -200) || W.lakeAt(px, pz) > 0.2 || roadAt(px, pz) > 0.3 || W.brg.some((B) => Math.abs((px - B.c[0]) * B.u[0] + (pz - B.c[1]) * B.u[1]) < B.hl + 11 && Math.abs((pz - B.c[1]) * B.u[0] - (px - B.c[0]) * B.u[1]) < B.hw + 6)) continue;
       lamps.push({ x: px, z: pz, y: heightAt(px, pz), yaw: Math.atan2(x - px, z - pz) });
     }
   }
@@ -481,7 +483,7 @@ export async function genWorld(tick, Q, startAt) {
       const fc = fz * FCN + fx; farStart[fc] = tc; let fy0 = 1e9, fy1 = -1e9;
       for (let q = 0; q < 16; q++) {
         const cx = fx * 4 + (q & 3), cz = fz * 4 + (q >> 2), nc = cz * NCN + cx, x0 = cx * NEAR - HALF, z0 = cz * NEAR - HALF;
-        const inner = Math.abs(x0 + 16) < PLAY + 130 && Math.abs(z0 + 16) < PLAY + 130, g = inner ? 9 : 5, st = NEAR / g;
+        const inner = PBX.inP(x0 + 16, z0 + 16, -130), g = inner ? 9 : 5, st = NEAR / g;
         tn[0] = tn[1] = tn[2] = 0; let y0 = 1e9, y1 = -1e9;
         for (let b = 0; b < g; b++) for (let a = 0; a < g; a++) {
           const hx = cx * 16 + a, hz = cz * 16 + b, r0 = hash2(hx, hz), x = x0 + (a + 0.15 + 0.7 * r0) * st, z = z0 + (b + 0.15 + 0.7 * hash2(hx + 7919, hz)) * st;
@@ -527,7 +529,7 @@ export async function genWorld(tick, Q, startAt) {
   for (let c = 0; c < 3; c++) edgeBlur(nrm, 4, c, 200); // same for the normals and the canopy the far ground samples
 
   Object.assign(W, {
-    PLAY, MW, TREELINE, name: 'nordmarka',
+    PLAY, MW, TREELINE, name: 'nordmarka', ...PBX,
     mat, nrm, trails, kickers, cabin, lakes, buildings, lamps, pylons: [], signs: [], lm: LM, portals, parks, roadAt, roads: roadNet, mapRoads,
     trees: { data: td.subarray(0, tc * 8), count: tc, nearStart, nearCnt, nearY, farStart, farCnt, farY },
     start: { x: 0, z: 0, yaw: 0 },

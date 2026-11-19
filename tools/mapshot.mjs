@@ -53,8 +53,8 @@ await page.screenshot({ path: `${out}/minimap.png`, clip: box });
 await page.evaluate(() => window.__game.bigMap(true));
 await page.evaluate(() => window.__step(1 / 60, 20));
 await page.screenshot({ path: `${out}/bigmap.png` });
-const b2 = await page.evaluate(() => { const v = window.__veh, b = document.getElementById('bmap').getBoundingClientRect(), s = b.width / (2 * (window.__W.PLAY + 120));
-  const cx = b.x + b.width / 2 + v.x * s, cy = b.y + b.height / 2 + v.z * s, r = 700 * s; return { x: Math.max(0, cx - r), y: Math.max(0, cy - r), width: 2 * r, height: 2 * r }; });
+const b2 = await page.evaluate(() => { const v = window.__veh, b = document.getElementById('bmap').getBoundingClientRect(), P = window.__W.PB, ext = Math.max(P[2] - P[0], P[3] - P[1]) / 2 + 120, s = b.width / (2 * ext);
+  const cx = b.x + b.width / 2 + (v.x - (P[0] + P[2]) / 2) * s, cy = b.y + b.height / 2 + (v.z - (P[1] + P[3]) / 2) * s, r = 700 * s; return { x: Math.max(0, cx - r), y: Math.max(0, cy - r), width: 2 * r, height: 2 * r }; });
 await page.screenshot({ path: `${out}/bigmap-crop.png`, clip: b2 });
 console.log('bigOpen', await page.evaluate(() => window.__game.bigOpen()), 'drawn soldiers', await page.evaluate(() => window.__game.inf.drawn));
 // back on the recon drone (its own view with the OSD): the minimap must clear it

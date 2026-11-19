@@ -1,5 +1,5 @@
 // The original fully procedural, Nordmarka-like fantasy world: heightmap, lakes, creek, trails, trees, set pieces.
-import { clamp, lerp, smooth, hash1, hash2 } from './math.js';
+import { clamp, lerp, smooth, hash1, hash2, playBox } from './math.js';
 import { WS, HN, TEX, HALF, NEAR, NCN, FAR, FCN, pn, fbm } from './world.js';
 const PLAY = 1000, TREELINE = 338;
 
@@ -347,7 +347,7 @@ export async function genFantasy(tick, Q) {
   addSign(C, 0.4, 0, 1); addSign(WP.A, 2.2, 2, 3); addSign(WP.Cc, -1.2, 4, 0); addSign(WP.S, 1.6, 5, 2); addSign(BR0, bridge.yaw + 0.3, 1, 5); addSign(WP.E, 0.2, 3, 4); addSign(WP.B, 3.4, 4, 2);
 
   Object.assign(W, {
-    PLAY, MW: 2048, TREELINE, startI: 14, name: 'fantasy',
+    PLAY, MW: 2048, TREELINE, startI: 14, name: 'fantasy', ...playBox([-PLAY, -PLAY, PLAY, PLAY]),
     mat, nrm, trails, kickers, cabin, dam, bridge, creek, lakes: LAKES, bogs: BOGS, mts: MTS, summits: sum, pylons, lamps, signs, hub: C, wp: WP,
     trees: { data: td.subarray(0, tc * 8), count: tc, nearStart, nearCnt, nearY, farStart, farCnt, farY },
     start: { x: C[0] + 6, z: C[1] - 26 },
