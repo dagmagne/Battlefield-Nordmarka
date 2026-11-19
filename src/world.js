@@ -28,10 +28,20 @@ export const LM = {
   // box [d0, d1, t0, t1, top y, kind 0 building / 1 roof on posts]; range: 30 lanes, targets at t tg, firing line at t fl; mast [x, z, height].
   arena: {
     stands: [
-      { f: 'jump', n: 16, seg: 9, r: [[225, -17.5, -50], [235, -16.5, -54], [245, -18, -56.5], [255, -20, -57.5], [265, -20, -58], [275, -19, -57], [285, -17.5, -55.5], [295, -15.5, -53], [305, -14.5, -49.5], [315, -14, -44.5], [325, -13, -37.5], [335, -12.5, -28.5], [345, -11.5, -19.5], [355, -10.5, -11]] },
-      { f: 'jump', n: 8, seg: 9, r: [[225, 18, 40.3], [235, 18.5, 43], [245, 19, 44.1], [255, 19.5, 44.6], [265, 19, 44.1], [275, 19, 43.5], [285, 18, 42.2], [295, 17.5, 40.4], [305, 16.5, 37.6], [315, 16.5, 34.2], [325, 15.5, 29.5], [335, 13.5, 23.1], [345, 13, 17.7], [355, 11.5, 11.8]] }, // the lower bank south of the outrun (OSM 22 m deep vs 35 m north)
-      { f: 'jump', x: 1, rh: 0.8, lift: 0.3, r: [[146, -23, -27.5], [160, -18.5, -31.5], [170, -18, -33.5], [180, -19, -37], [190, -19, -39.5], [200, -17.5, -44.5], [210, -16, -46], [222, -16.5, -49]] },
-      { f: 'jump', x: 1, rh: 0.8, lift: 0.3, r: [[146, 23, 27.5], [160, 19.5, 31.5], [170, 20, 33.5], [180, 20, 37], [190, 20, 39.5], [200, 19.5, 46.5], [210, 18.5, 48], [222, 18, 48.5]] },
+      // the amphitheatre round Holmenkollbakken's outrun (architect's plan for shape, lidar for size): bowl rings, s = side (-1 north, +1 south),
+      // outlines [d, |t|] from the oblique upper edge (where the wedge stands end; lidar t = 37.5 - 1.4 (d - 220) + 2.5 m walkway) down to the
+      // outrun tail: o = top of the rows (a walkway runs round outside it), i = their foot (outrun wall top, or the south walkway curve), w = foot of the outrun wall (the front wall stands there).
+      // Rows rw deep follow o (concentric), cut by i; ww = rim walkway width. The south side is a big outer bank above a walkway curve
+      // and a steep concrete band below it (lidar: two walls; the plan's two curves).
+      { f: 'jump', bowl: 1, s: -1, rw: 2, ww: 3.5, o: [[212.1, 52], [240, 52.5], [260, 52.5], [280, 52], [290, 51], [300, 49], [310, 44], [320, 38], [330, 30], [340, 22], [350, 14], [356, 10.5]],
+        i: [[237.1, 17], [250, 18.5], [260, 20], [270, 20], [280, 18], [290, 16], [300, 15], [310, 14.5], [320, 14], [330, 13], [340, 12], [350, 11], [356, 10.5]],
+        w: [[235, 16], [245, 15], [255, 16], [265, 16], [275, 15.5], [285, 15], [295, 12.5], [305, 12], [315, 12], [325, 11], [335, 11], [345, 10], [356, 9.5]] },
+      { f: 'jump', bowl: 1, s: 1, rw: 2, ww: 3.5, o: [[212.1, 52], [240, 52], [260, 51.5], [280, 51], [290, 49], [300, 47], [310, 43], [320, 37], [330, 30], [340, 21], [350, 14], [356, 10.5]],
+        i: [[225, 34], [238, 34], [260, 32], [280, 30], [300, 25.5], [310, 21], [322, 15], [330, 13.5], [340, 13.5], [350, 12.5], [356, 10.5]], w: [[322, 13], [335, 12], [345, 11], [356, 10.5]] },
+      { f: 'jump', bowl: 1, s: 1, rw: 1.4, o: [[226.4, 32], [238, 32], [260, 30], [280, 28], [300, 23.5], [310, 19], [318, 16]], i: [[236.1, 18.5], [250, 19], [260, 19.5], [270, 19], [280, 18.5], [290, 17.5], [300, 17], [310, 16], [318, 16]],
+        w: [[235, 17.5], [245, 16.5], [255, 17], [265, 16.5], [275, 17], [285, 16], [295, 15], [305, 14], [318, 14]] },
+      { f: 'jump', x: 1, rh: 0.8, lift: 0.3, r: [[146, -23, -27.5], [160, -18.5, -31.5], [170, -18, -33.5], [180, -19, -37], [190, -19, -39.5], [200, -17.5, -44.5], [211, -16, -46.5], [232, -17, -17.2]] }, // lower end: the oblique line where the bowl begins
+      { f: 'jump', x: 1, rh: 0.8, lift: 0.3, r: [[146, 23, 27.5], [160, 19.5, 31.5], [170, 20, 33.5], [180, 20, 37], [190, 20, 39.5], [200, 19.5, 46.5], [210, 18.5, 48], [232, 17.5, 17.7]] },
       { f: [-588, 1072, -502, 1196], rw: 1.5, lift: 0.3, seg: 12, seat: 1, ads: 8.5, r: [[-8, 6.5, -7.5], [160, 6.5, -7.5]] },
       { f: 'mid', rw: 1.5, lift: 1.4, seg: 12, seat: 1, r: [[160, 14.5, 22], [235, 14.5, 22]] },
       { f: 'mid', rw: 2, lift: 0.2, seg: 12, r: [[215, -12, -24], [315, -12, -24]] },
@@ -49,6 +59,10 @@ export const arenaFrame = (f) => { const q = f === 'jump' ? [...LM.jump.top, ...
 // where a floodlight mast points: the nearer jump's axis, abreast of the mast (d clamped to the landing hill and outrun)
 export const mastAim = (x, z) => { let best = 1e9, a = [x, z]; for (const f of ['jump', 'mid']) { const F = arenaFrame(f), dx = x - F[0], dz = z - F[1], d = clamp(dx * F[2] + dz * F[3], 150, F[4] + 60), t = -dx * F[3] + dz * F[2]; if (Math.abs(t) < best) { best = Math.abs(t); a = [F[0] + F[2] * d, F[1] + F[3] * d]; } } return a; };
 export const standAt = (r, d) => { if (d < r[0][0] || d > r[r.length - 1][0]) return null; let i = 0; while (i < r.length - 2 && d > r[i + 1][0]) i++; const a = r[i], b = r[i + 1], k = (d - a[0]) / (b[0] - a[0] || 1); return [a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]; };
+// a bowl ring's footprint as stand ribs [d, t foot, t top] (signed) for inArena: the foot is outline i, or the oblique upper edge above its first point
+const polyT = (P, d) => { let k = 0; while (k < P.length - 2 && d > P[k + 1][0]) k++; const a = P[k], b = P[k + 1]; return a[1] + (b[1] - a[1]) * clamp((d - a[0]) / (b[0] - a[0] || 1), 0, 1); };
+for (const S of LM.arena.stands) if (S.bowl) { const o = S.o, i = S.i, e = o[o.length - 1][0]; S.r = [];
+  for (let d = o[0][0]; d < e + 1.99; d += 2) { const q = Math.min(d, e), ti = q < i[0][0] ? o[0][1] + (i[0][1] - o[0][1]) * (q - o[0][0]) / (i[0][0] - o[0][0]) : polyT(i, q); S.r.push([q, S.s * ti, S.s * polyT(o, q)]); } }
 
 // ---------- noise ----------
 const P = new Uint8Array(512);

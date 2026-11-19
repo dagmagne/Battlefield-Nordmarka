@@ -104,8 +104,10 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   alb = mix(alb, vec3f(0.93, 0.95, 0.98), saturate(sn));
   spec = mix(spec, 0.03, saturate(sn));
 
-  let tx = vec2i(clamp((wp.xz + G.world.x) * 0.5, vec2f(0.0), vec2f(2047.0)));
-  let hAbove = max(wp.y - textureLoad(heightTex, tx, 0).r, 0.0);
+  // bilinear ground height: the nearest texel jumps 1-2 m per 2 m on a slope, which showed as light and dark squares on stand treads lying just above it
+  let hf = clamp((wp.xz + G.world.x) * 0.5 - 0.5, vec2f(0.0), vec2f(2046.0)); let tx = vec2i(floor(hf)); let hw = hf - floor(hf);
+  let hgt = mix(mix(textureLoad(heightTex, tx, 0).r, textureLoad(heightTex, tx + vec2i(1, 0), 0).r, hw.x), mix(textureLoad(heightTex, tx + vec2i(0, 1), 0).r, textureLoad(heightTex, tx + vec2i(1, 1), 0).r, hw.x), hw.y);
+  let hAbove = max(wp.y - hgt, 0.0);
   let L = G.sunDir.xyz;
   let ndl = saturate(dot(n, L));
   if (isG < 0.5) { let sf = sightFade(wp); if (sf < 0.999 && sf < 0.15 + 0.85 * ihash(vec2i(in.pos.xy))) { discard; } }

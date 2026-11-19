@@ -580,11 +580,72 @@ function standX(b, W, S) {
   const yP = (d, t) => my + kd * (d - md) + ks * (t - ms) + off + h;
   for (let i = 0; i + 1 < r.length; i++) { const A = r[i], B = r[i + 1], ta = Math.abs(A[1]), tb = Math.abs(B[1]);
     nq(b, P(A[0], A[1], G(A[0], A[1]) - 0.6), P(B[0], B[1], G(B[0], B[1]) - 0.6), P(B[0], B[1], yP(B[0], tb)), P(A[0], A[1], yP(A[0], ta)), -sg * X.rx, 0, -sg * X.rz); }
+  for (let i = 0; i + 1 < r.length; i++) { const A = r[i], B = r[i + 1]; // and along the back, which ends in the oblique line above the bowl
+    nq(b, P(A[0], A[2], G(A[0], A[2]) - 0.6), P(B[0], B[2], G(B[0], B[2]) - 0.6), P(B[0], B[2], yP(B[0], Math.abs(B[2]))), P(A[0], A[2], yP(A[0], Math.abs(A[2]))), sg * X.rx, 0, sg * X.rz); }
   { const E = r[r.length - 1], ta = Math.abs(E[1]), tb = Math.abs(E[2]); nq(b, P(E[0], E[1], G(E[0], E[1]) - 0.6), P(E[0], E[2], G(E[0], E[2]) - 0.6), P(E[0], E[2], yP(E[0], tb)), P(E[0], E[1], yP(E[0], ta)), F[2], 0, F[3]); }
   for (let d = d0; d <= d1 + 0.01;) { const q = standAt(r, Math.min(d, d1)), rr = Math.abs(q[1] - q[0]) / 2, p = P(Math.min(d, d1), (q[0] + q[1]) / 2, 0);
     if (rr > 0.5) W.colliders.push(p[0], p[2], rr); d += Math.max(2.5, rr * 0.55); }
 }
+// The amphitheatre round an outrun (LM.arena bowl rings): ribs pair the top outline o with the foot outline i at equal fractions of their
+// length, from the oblique upper edge down to the tail. Rows rw deep are measured in from o along every rib, so they run concentric with
+// the rim and end where i cuts them (the last row on a rib takes up any leftover under 0.4 rw, so there are no slivers). Rows are level
+// (rim height minus k risers, the same on every rib); radial aisles every 24 m of rim; a front wall at the foot of the outrun wall; a walkway
+// S.ww wide with a railing round o; solid circles over the ring.
+const plen = (Q) => { const c = [0]; for (let k = 1; k < Q.length; k++) c.push(c[k - 1] + Math.hypot(Q[k][0] - Q[k - 1][0], Q[k][1] - Q[k - 1][1])); return c; };
+const ptT = (Q, d) => { let k = 0; while (k < Q.length - 2 && d > Q[k + 1][0]) k++; return Q[k][1] + (Q[k + 1][1] - Q[k][1]) * clamp((d - Q[k][0]) / (Q[k + 1][0] - Q[k][0] || 1), 0, 1); }, BRISE = [0.27, 0.27, 0.27]; // |t| of an outline at d; bowl risers
+const pat = (Q, C, f) => { const L = f * C[C.length - 1]; let k = 0; while (k < Q.length - 2 && L > C[k + 1]) k++; const g = clamp((L - C[k]) / (C[k + 1] - C[k] || 1), 0, 1); return [Q[k][0] + (Q[k + 1][0] - Q[k][0]) * g, Q[k][1] + (Q[k + 1][1] - Q[k][1]) * g]; };
+function bowl(b, W, S) {
+  const X = arenaXf(W, S.f), { P, G, F } = X, s = S.s, rw = S.rw, lift = S.lift || 0.25, ww = S.ww || 0, Co = plen(S.o), Ci = plen(S.i), Lo = Co[Co.length - 1], i0 = b.i.length, c0 = W.colliders.length;
+  const us = []; { const n = Math.ceil(Lo / 8.5); for (let k = 0; k <= n; k++) us.push(k / n); for (let a = 24; a < Lo - 10; a += 24) us.push((a - 0.7) / Lo, (a + 0.7) / Lo); us.sort((p, q) => p - q); }
+  const isA = (u) => { for (let a = 24; a < Lo - 10; a += 24) if (Math.abs(u * Lo - a) < 0.71) return true; return false; };
+  const rib = (u) => { const O = pat(S.o, Co, u), I = pat(S.i, Ci, u), l = Math.hypot(I[0] - O[0], I[1] - O[1]); return { u, O, I, l, nd: l > 0.01 ? (I[0] - O[0]) / l : 0, nt: l > 0.01 ? (I[1] - O[1]) / l : 0 }; };
+  let J = 0; const R = us.map(rib); for (const q of R) J = Math.max(J, Math.ceil(q.l / rw));
+  const Q = (q, x, y) => P(q.O[0] + q.nd * x, s * (q.O[1] + q.nt * x), y), Gq = (q, x) => G(q.O[0] + q.nd * x, s * (q.O[1] + q.nt * x));
+  // level rows: tread k is flat at YR - k risers on every rib, so the rows are true contour rings. Each rib's ground is close to a straight
+  // rake (fitted per rib); a row's edges are where that rake crosses its level, so rows follow the bowl's contours, start where the ground
+  // reaches them below the rim and end where they meet the foot line. One riser per ring, from the median rake.
+  const med = (a) => { const b2 = a.slice().sort((p, q) => p - q); return b2[b2.length >> 1]; };
+  let off = 0; for (const q of R) { let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0; for (let x = 0; x <= q.l + 0.01; x += 1) { const g = Gq(q, x); n++; sx += x; sy += g; sxx += x * x; sxy += x * g; }
+    q.kk = Math.min(-0.05, n > 1 ? (n * sxy - sx * sy) / (n * sxx - sx * sx || 1) : -0.05); q.a = (sy - q.kk * sx) / n; for (let x = 0; x <= q.l + 0.01; x += 1) off = Math.max(off, Math.min(0.6, Gq(q, x) - q.a - q.kk * x)); }
+  const YR = Math.max(...R.map((q) => q.a)), H = rw * med(R.map((q) => -q.kk)); J = Math.ceil((YR - Math.min(...R.map((q) => q.a + q.kk * q.l))) / H) + 1;
+  for (const q of R) {
+    const c = q.c = new Float32Array(J + 1), y = q.y = new Float32Array(J); for (let k = 0; k <= J; k++) c[k] = clamp((q.a - (YR - k * H)) / -q.kk, 0, q.l);
+    for (let k = 0; k < J; k++) y[k] = YR - k * H + off + lift;
+    q.kt = 0; while (q.kt < J - 1 && c[q.kt + 1] - c[q.kt] < 0.01) q.kt++; q.kl = q.kt; while (q.kl < J - 1 && c[q.kl + 2] - c[q.kl + 1] > 0.01) q.kl++;
+    const ft = S.w && q.I[0] >= S.w[0][0] ? Math.min(q.I[1], ptT(S.w, q.I[0])) : q.I[1]; q.F = [q.I[0], ft < q.I[1] - 0.5 ? ft - 1 : ft]; // the wall stands at the foot of the outrun wall (w), the rows begin at its top (i)
+    q.gf = G(q.I[0], s * (ft - 1.5)) - 0.6; q.gw = Gq(q, -ww) - 0.5; q.yw = q.a + off + lift;
+  }
+  W.bowlRiser = (W.bowlRiser || []).concat([[+YR.toFixed(2), +H.toFixed(3)]]); // top level and riser per ring (for tests)
+  b.at(0, 0, 0);
+  const wv = (q) => [F[2] * q.nd - F[3] * s * q.nt, F[3] * q.nd + F[2] * s * q.nt]; // the rib's inward direction in the world
+  for (let m = 0; m + 1 < R.length; m++) {
+    const A = R[m], B = R[m + 1], aisle = isA((A.u + B.u) / 2), na = wv(A), nb = wv(B), nx = na[0] + nb[0], nz = na[1] + nb[1], nl = Math.hypot(nx, nz) || 1, fx = nx / nl, fz = nz / nl;
+    for (let k = 0; k < J; k++) {
+      const ea = A.c[k + 1] - A.c[k] > 0.01, eb = B.c[k + 1] - B.c[k] > 0.01; if (!ea && !eb) continue;
+      b.set(aisle ? AISLE : SNOWC, aisle ? MAT.stone : MAT.snow); nq(b, Q(A, A.c[k], A.y[k]), Q(A, A.c[k + 1], A.y[k]), Q(B, B.c[k + 1], B.y[k]), Q(B, B.c[k], B.y[k]), 0, 1, 0); // aisles are cleared concrete stairs
+      if (k + 1 >= J) continue; const fa = A.c[k + 2] - A.c[k + 1] > 0.01, fb = B.c[k + 2] - B.c[k + 1] > 0.01; if (!fa && !fb) continue; // riser down to the next row
+      b.set(aisle ? AISLE : BRISE, MAT.stone); nq(b, Q(A, A.c[k + 1], fa ? A.y[k + 1] - 0.05 : A.y[k]), Q(B, B.c[k + 1], fb ? B.y[k + 1] - 0.05 : B.y[k]), Q(B, B.c[k + 1], B.y[k]), Q(A, A.c[k + 1], A.y[k]), fx, 0, fz);
+    }
+    const FA = (y) => P(A.F[0], s * A.F[1], y), FB = (y) => P(B.F[0], s * B.F[1], y); // front wall at the foot, a coping from it to the first row, hand rail
+    b.set(CONC, MAT.stone); nq(b, FA(A.gf), FB(B.gf), FB(B.y[B.kl]), FA(A.y[A.kl]), fx, 0, fz);
+    b.set(SNOWC, MAT.snow); nq(b, FA(A.y[A.kl]), FB(B.y[B.kl]), Q(B, B.l, B.y[B.kl]), Q(A, A.l, A.y[A.kl]), 0, 1, 0);
+    b.set(DARK, MAT.metal); nq(b, FA(A.y[A.kl] + 0.94), FB(B.y[B.kl] + 0.94), FB(B.y[B.kl] + 1.02), FA(A.y[A.kl] + 1.02), fx, 0, fz);
+    if (ww) { // rim walkway, its outer wall and railing
+      b.set(SNOWC, MAT.snow); nq(b, Q(A, -ww, A.yw), Q(A, 0, A.yw), Q(B, 0, B.yw), Q(B, -ww, B.yw), 0, 1, 0);
+      b.set(BRISE, MAT.stone); nq(b, Q(A, 0, A.yw - 0.05), Q(B, 0, B.yw - 0.05), Q(B, 0, B.y[B.kt]), Q(A, 0, A.y[A.kt]), fx, 0, fz); // up to the top row
+      b.set(CONC, MAT.stone); nq(b, Q(A, -ww, A.gw), Q(B, -ww, B.gw), Q(B, -ww, B.yw), Q(A, -ww, A.yw), -fx, 0, -fz);
+      b.set(DARK, MAT.metal); nq(b, Q(A, -ww, A.yw + 0.98), Q(B, -ww, B.yw + 0.98), Q(B, -ww, B.yw + 1.06), Q(A, -ww, A.yw + 1.06), -fx, 0, -fz);
+    }
+  }
+  { const E = R[0], E1 = R[1], o = P(E.O[0], s * E.O[1], 0), o1 = P(E1.O[0], s * E1.O[1], 0), el = Math.hypot(o[0] - o1[0], o[2] - o1[2]) || 1, ex = (o[0] - o1[0]) / el, ez = (o[2] - o1[2]) / el; // the oblique upper end: stepped profile down to the ground
+    b.set(CONC, MAT.stone); for (let k = 0; k < J; k++) { if (E.c[k + 1] - E.c[k] < 0.01) continue; const bot = Math.min(Gq(E, E.c[k]), Gq(E, E.c[k + 1])) - 0.6; nq(b, Q(E, E.c[k], bot), Q(E, E.c[k + 1], bot), Q(E, E.c[k + 1], E.y[k]), Q(E, E.c[k], E.y[k]), ex, 0, ez); }
+    if (ww) nq(b, Q(E, -ww, E.gw), Q(E, 0, E.gw), Q(E, 0, E.yw), Q(E, -ww, E.yw), ex, 0, ez); }
+  // solid circles from the outer edge of the walkway to the foot of the outrun wall
+  for (let u = 0; u <= 1.0001;) { const q = rib(Math.min(u, 1)), e = S.w && q.I[0] >= S.w[0][0] ? Math.max(0, q.I[1] - ptT(S.w, q.I[0])) : 0, rr = (q.l + ww + e) / 2, p = Q(q, (q.l + e - ww) / 2, 0); if (rr > 0.6) W.colliders.push(p[0], p[2], rr); u += Math.max(2.5, rr * 0.55) / Lo; }
+  W.bowlStat = W.bowlStat || [0, 0]; W.bowlStat[0] += (b.i.length - i0) / 3; W.bowlStat[1] += (W.colliders.length - c0) / 3; // triangles, circles (for tests)
+}
 function stand(b, W, S) {
+  if (S.bowl) return bowl(b, W, S);
   if (S.x) return standX(b, W, S);
   const X = arenaXf(W, S.f), { P, G } = X, r = S.r, d0 = r[0][0], d1 = r[r.length - 1][0], sg = Math.sign(r[0][2] - r[0][1]), lift = S.lift || 0.25, AI = S.ai || 30;
   const ds = []; { const n = Math.ceil((d1 - d0) / (S.seg || 8)); for (let i = 0; i <= n; i++) ds.push(d0 + (d1 - d0) * i / n); for (let a = d0 + AI; a < d1 - 8; a += AI) ds.push(a - 0.7, a + 0.7); ds.sort((p, q) => p - q); }
