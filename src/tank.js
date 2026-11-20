@@ -175,6 +175,7 @@ export function tankParts(out, t, K) { // out: Float32Array(16*8), t: {x,y,z,yaw
   trs(T1, 0, K.ty + t.tl, K.tz, t.turYaw, t.tt, t.tt * 0.6); identity(T2); T2[13] = -K.ty; T2[14] = -K.tz; mul(T3, T1, T2); mul(TM, BM, T3);
   trs(T1, 0, K.gy, K.gz, 0, t.gunPitch, 0); identity(T2); T2[13] = -K.gy; T2[14] = -K.gz + t.recoil; mul(T3, T1, T2); mul(GM, TM, T3);
   out.set(BM, 0); out.set(TM, 16); out.set(GM, 32);
+  trs(T1, t.x, t.y, t.z, t.yaw, t.pitch, t.roll); out.set(T1, 48); // part 3: the running gear of the tracked vehicles stays on the ground while the hull rocks (wheeled ones overwrite it)
   return BM;
 }
 export const gunMat = () => GM, turMat = () => TM;

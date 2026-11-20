@@ -47,6 +47,12 @@ if (only.includes('leo')) {
     await shot(`leo_${vn}`);
   }
   // what the player sees: commander's view and the gunner sight
+  // the mantlet with the gun at full elevation and depression
+  for (const [tag, pit] of [['up', 0.4], ['down', -0.3]]) {
+    await ev(`__aim(${p[2]},${pit},0);__sim(1/60,200)`); console.log('gun', tag, await ev('__veh.gunPitch.toFixed(3)'));
+    await ev(`(()=>{const a=${p[2]}+0.75,fx=-Math.sin(${p[2]}),fz=-Math.cos(${p[2]}),tx=${p[0]}+fx*2.2,tz=${p[1]}+fz*2.2;__look(tx-Math.sin(a)*3.4,2.3,tz-Math.cos(a)*3.4,tx,2.0,tz);})()`);
+    await shot('leo_gun_' + tag);
+  }
   await ev(`__aim(${p[2]}+0.25,-0.06,0)`); await shot('leo_cmd'); await ev(`__aim(${p[2]},0,0)`);
   // on the bare ice of the lake (no soft snow round the tracks), standing and then driving: the links must follow the loop without gaps
   const q = await ev('(()=>{ __tp(L.x+FX*12, L.z+FZ*12, Math.atan2(-FX,-FZ)+0.5); __sim(1/60,40); return [__veh.x,__veh.z,__veh.yaw]; })()');
