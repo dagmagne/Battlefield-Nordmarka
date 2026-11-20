@@ -2,7 +2,7 @@
 // The riders are the infantry model (soldier.js) posed once at load and baked into the vehicle mesh (part 0, rigid with it).
 import { MB, MAT, VS } from './mesh.js';
 import { poly, extX } from './vehutil.js';
-import { buildSoldier, initSoldiers, loft, RIG } from './soldier.js';
+import { buildSoldier, initSoldiers, loft, RIG, RIF_PTS } from './soldier.js';
 
 // ---------- mesh helpers (build time only) ----------
 // a triangle wound to agree with its vertex normals
@@ -141,7 +141,7 @@ function band(b, y0, y1, rx, rz, cz, a0, a1, n) {
 // body shades itself (seat, inner thighs, knees, cuffs, undersides): the object shader has no occlusion for it.
 function bakeRider(b, o) {
   SOL.place(PP, 0, 0, 0, 0, 0, 1, 0, 0);
-  const M = SOL.out, v = SOLM.v, idx = SOLM.i, map = new Int32Array(v.length / VS).fill(-1), fa = [0, 0], up = o.up || 0, rifle = o.rifle;
+  const M = SOL.out, v = SOLM.v, idx = SOLM.i, map = new Int32Array(v.length / VS).fill(-1), fa = [0, 0], up = o.up || 0, arm = o.arm === undefined ? up : o.arm, rifle = o.rifle, vS = cnt(b);
   for (let s = 0; s < 2; s++) { const m = (9 + s) * 16; fa[s] = Math.atan2(M[m + 9], M[m + 5]) + (o.toe || 0); }
   for (let t = 0; t < idx.length; t += 3) {
     const p = v[idx[t] * VS + 12]; if (p === 12 || (p === 11 && rifle < 0)) continue;
@@ -176,7 +176,7 @@ function bakeRider(b, o) {
         }
         map[i] = cnt(b);
         b.v.push(M[m] * x + M[m + 4] * y + M[m + 8] * z + M[m + 12], M[m + 1] * x + M[m + 5] * y + M[m + 9] * z + M[m + 13], M[m + 2] * x + M[m + 6] * y + M[m + 10] * z + M[m + 14],
-          wx, wy, wz, v[q + 6] * f, v[q + 7] * f * (0.5 + 0.5 * fb), v[q + 8] * f * fb, mt, v[q + 10], v[q + 11], p === 11 ? rifle : p >= 1 && p <= 6 ? up : 0, 0);
+          wx, wy, wz, v[q + 6] * f, v[q + 7] * f * (0.5 + 0.5 * fb), v[q + 8] * f * fb, mt, v[q + 10], v[q + 11], p === 11 ? rifle : p === 1 ? up : p >= 2 && p <= 6 ? arm : 0, 0);
       }
       b.i.push(map[i]);
     }
@@ -185,11 +185,23 @@ function bakeRider(b, o) {
   b.m.set(M.subarray(16, 32)); b.set([0.6, 0.59, 0.55], MAT.cloth); // shoulders run into the torso
   for (const sx of [-1, 1]) b.blob(sx * 0.158, 0.38, 0.002, 0.08, 0.06, 0.082, 3, 0, 6);
   if (o.straps) { b.set([0.1, 0.11, 0.09], MAT.gear); for (const sx of [-1, 1]) { b.box(sx * 0.085 - 0.02, 0.235, -0.166, sx * 0.085 + 0.02, 0.43, -0.15, 0, 0); b.box(sx * 0.085 - 0.02, 0.428, -0.166, sx * 0.085 + 0.02, 0.447, 0.13); } b.box(-0.08, 0.3, -0.17, 0.08, 0.33, -0.156); }
-  b.m.set(M.subarray(32, 48)); // goggles: a curved lens in a thin frame under the helmet brim, the strap round the cover
+  if (o.hem) { // a jacket hem and belt round the waist: they turn with the torso and cover the seam to the pelvis (part 0)
+    b.set([0.5, 0.49, 0.455], MAT.cloth); b.blob(0, -0.035, 0.005, 0.178, 0.075, 0.138, 5, 0, 8);
+    b.set([0.09, 0.09, 0.08], MAT.gear); band(b, -0.05, -0.02, 0.181, 0.141, 0.005, 0, Math.PI * 2, 12);
+  }
+  b.part = arm; b.m.set(M.subarray(32, 48)); // goggles: a curved lens in a thin frame under the helmet brim, the strap round the cover
   b.set([0.03, 0.04, 0.06], MAT.paint); band(b, 0.134, 0.152, 0.087, 0.127, 0, -0.95, 0.95, 8); b.set([0.07, 0.09, 0.12], MAT.paint); band(b, 0.152, 0.17, 0.086, 0.125, 0, -0.95, 0.95, 8);
   b.set([0.16, 0.16, 0.14], MAT.gear); band(b, 0.126, 0.134, 0.088, 0.127, 0, -1.0, 1.0, 8); band(b, 0.17, 0.178, 0.088, 0.127, 0, -1.0, 1.0, 8);
   b.set([0.09, 0.09, 0.085], MAT.gear); band(b, 0.176, 0.198, 0.118, 0.136, 0.008, 0.95, Math.PI * 2 - 0.95, 12);
   b.at(0, 0, 0); b.part = p0;
+  if (o.xf) { // move the upper body (every vertex not in part 0): shift, then a turn by xf[3] about the vertical axis at z = xf[4]
+    const X = o.xf, c = Math.cos(X[3]), s = Math.sin(X[3]), V = b.v;
+    for (let q = vS * VS; q < V.length; q += VS) {
+      if (!V[q + 12]) continue;
+      const x = V[q] + X[0], z = V[q + 2] + X[2] - X[4], nx = V[q + 3], nz = V[q + 5];
+      V[q] = x * c + z * s; V[q + 1] += X[1]; V[q + 2] = X[4] - x * s + z * c; V[q + 3] = nx * c + nz * s; V[q + 5] = -nx * s + nz * c;
+    }
+  }
 }
 // the rifle held as in the infantry's low-ready (torso frame), hands on its grips
 // the rifle at the shoulder with the infantry's cheek weld (butt in the right shoulder pocket), then swung by yaw about the butt
@@ -379,7 +391,9 @@ export function buildBuggy() { // light assault buggy: welded tube space frame, 
 }
 
 // ---------- motorcycle team ----------
-export const MOTO = { ty: 1.0, tz: 0.15, gy: 1.35, gz: 0.15, mz: -0.4, hl: 0.9, hw: 0.35, rad: 1.0, hh: 1.3, th: 1.3, tr: 0, bx: 0.42, bz: 1.1, cr: 0.7, cs: 0.5, wr: 0.33, ax: [-0.72, 0.68] };
+// the aim pivots are the pillion's: yaw about his spine (tz), pitch about his shoulders (gy at the bore's height, gz), mz the AK's muzzle;
+// ya = the arcs the upper body is shown in (left from, to; right from, to; rad, left positive): never across the driver's back
+export const MOTO = { ty: 1.0, tz: 0.64, gy: 1.54, gz: 0.59, mz: -0.3, ya: [0.6, 2.6, -1.7, -0.6], hl: 0.9, hw: 0.35, rad: 1.0, hh: 1.3, th: 1.3, tr: 0, bx: 0.42, bz: 1.1, cr: 0.7, cs: 0.5, wr: 0.33, ax: [-0.72, 0.68] };
 // wire-spoked enduro wheel in the x = 0 plane: knobbly tyre of width w and section height hs on a narrow rim
 function motoWheel(b, z, part, w, hs, front) {
   const R = MOTO.wr, y = R, Rt = R - 0.013, rr = Rt - hs, rc = rr + hs * 0.5, T = [];
@@ -405,7 +419,7 @@ function motoWheel(b, z, part, w, hs, front) {
   else { b.set(DK, MAT.metal); b.set([0.06, 0.06, 0.065], MAT.metal); lathe(b, 0, y, z, [[-0.071, 0.05], [-0.071, 0.1], [-0.071, 0.1], [-0.063, 0.1], [-0.063, 0.1], [-0.063, 0.05]], 14); } // sprocket
   b.part = 0;
 }
-export function buildMoto() { // military enduro with a rider and a pillion gunner. Parts 1 and 2 (the aim) are empty: their pivot lies in the rider, so a rifle in them would leave the gunner's hands; he fires 40 degrees off to the right instead
+export function buildMoto() { // military enduro with a rider and a pillion gunner: his pelvis and legs are part 0, his torso part 1 (yaw about MOTO.tz) and his head, arms and AK part 2 (pitch about the shoulders)
   const b = new MB(), FZ = MOTO.ax[0], RZ = MOTO.ax[1], WR = MOTO.wr, rk = 27 * Math.PI / 180, sr = Math.sin(rk), cr = Math.cos(rk);
   const fk = (x, s, off = 0) => [x, WR + s * cr - off * sr, FZ + s * sr + off * cr]; // a point s up the fork from the axle, off behind it
   const FRM = [0.035, 0.037, 0.038], m2 = (P, f) => { for (const sx of [-1, 1]) f(P.map((p) => [p[0] * sx, p[1], p[2]]), sx); };
@@ -488,11 +502,15 @@ export function buildMoto() { // military enduro with a rider and a pillion gunn
     b.set([0.05, 0.05, 0.045], MAT.gear); for (const z of [0.835, 0.945]) b.box(sx * 0.19 - 0.062, 0.6, z - 0.01, sx * 0.19 + 0.062, 0.768, z + 0.01, 0.012, 0);
     snow(b, sx * 0.19, 0.768, 0.89, 0.04, 0.012, 0.09, 5 + sx, 5);
   }
-  // ---- the riders: the driver crouched over the bars, the pillion twisted to the right in the infantry's standing aim (butt in the shoulder, cheek on the stock), firing 40 degrees off the bike's axis past the driver ----
+  // ---- the riders: the driver crouched over the bars; the pillion sits square on the seat and his upper body, in the infantry's standing aim (butt in the shoulder, cheek on the stock), follows the target ----
   pose([0, 0.955, 0.22], [0, -0.17, 0], [0, -0.57, 0], [0, 0.72, 0], [-0.175, 0.455, 0.15], [0.175, 0.455, 0.15], [-0.1, 0.2, -1], [0.1, 0.2, -1], [-0.345, 1.105, -0.343], [0.345, 1.105, -0.343], [-1, 0.0, 0.35], [1, 0.0, 0.35]);
   bakeRider(b, { rifle: -1, toe: 0.12 });
-  pose([0.0, 0.965, 0.64], [-0.35, -0.02, 0], [-1.0, -0.22, -0.07], [0.6, -0.34, -0.32], [-0.17, 0.575, 0.5], [0.17, 0.575, 0.5], [-0.25, 0.2, -1], [0.25, 0.2, -1], null, null, [-0.25, -1, 0.1], [0.9, -0.35, 0.3]);
-  shouldered(-0.7); bakeRider(b, { rifle: 0, pack: 1, toe: 0.1 });
+  // posed aiming straight ahead (the frame of parts 1 and 2 at rest). The bore lies about 13 cm right of his spine: the upper body is shifted
+  // 7 cm left and turned a few degrees about the yaw axis, so that the muzzle is exactly the point the game fires from, (0, gy, mz)
+  pose([0.0, 0.965, 0.64], [0, -0.02, 0], [-0.65, -0.1, 0.05], [0.6, -0.42, -0.42], [-0.17, 0.575, 0.5], [0.17, 0.575, 0.5], [-0.25, 0.2, -1], [0.25, 0.2, -1], null, null, [-0.25, -1, 0.1], [0.9, -0.35, 0.3]);
+  shouldered(0);
+  const sh = -0.07, ex = PP[45] + sh, hy = MOTO.tz - MOTO.mz, Lz = Math.sqrt(hy * hy - ex * ex);
+  bakeRider(b, { rifle: 2, pack: 1, toe: 0.1, up: 1, arm: 2, hem: 1, xf: [sh, MOTO.gy - PP[46], MOTO.tz - Lz - (PP[47] + RIF_PTS.muzzle), Math.atan2(ex, Lz), MOTO.tz] });
   motoWheel(b, FZ, 3, 0.092, 0.07, true); motoWheel(b, RZ, 4, 0.122, 0.088, false);
   return b.build();
 }

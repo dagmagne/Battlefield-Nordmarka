@@ -83,6 +83,16 @@ for (const k of Object.keys(EN)) {
       await ev(`(()=>{const a=${p[2]}+${br},d=${dk * L + 1.2};__look(${p[0]}-Math.sin(a)*d,${hk * H + 0.25},${p[1]}-Math.cos(a)*d,${p[0]},${tk * H},${p[1]});})()`);
       await shot(`${k}_${vn}`);
     }
+    if (k === 'moto') { // the pillion: the player to the right, dead ahead (the upper body stops short of the driver) and behind (the nearer end of an arc)
+      for (const [tg, br] of [['r', -1.2], ['f', 0.05], ['b', 3.0]]) {
+        await ev(`(()=>{ const a=${p[2]}+${br}; __tp(${p[0]}-Math.sin(a)*40, ${p[1]}-Math.cos(a)*40, 0); const e=G.enemies.find((q)=>q.on&&q.type===5); for (let i=0;i<150;i++){ e.known=9; e.see=1; e.v=0; __sim(1/60,1); } })()`);
+        console.log('moto aim', tg, await ev(`(()=>{ const e=G.enemies.find((q)=>q.on&&q.type===5), M=e.d; return [e.turYaw.toFixed(3), e.vy.toFixed(3), e.gunPitch.toFixed(3), 'muzzle', (M[36]*1.54+M[40]*-0.3+M[44]).toFixed(3), (M[37]*1.54+M[41]*-0.3+M[45]).toFixed(3), (M[38]*1.54+M[42]*-0.3+M[46]).toFixed(3)].join(' '); })()`));
+        for (const [vn, vb, dk, hk, tk] of [['fq', 0.65, 1.3, 0.95, 0.5], ['rq', Math.PI - 0.7, 1.3, 0.95, 0.5], ['top', -0.8, 1.2, 2.3, 0.4], ['side', -Math.PI / 2, 1.5, 0.7, 0.5]]) {
+          await ev(`(()=>{const a=${p[2]}+${vb},d=${dk * L + 1.2};__look(${p[0]}-Math.sin(a)*d,${hk * H + 0.25},${p[1]}-Math.cos(a)*d,${p[0]},${tk * H},${p[1]});})()`);
+          await shot(`${k}_aim${tg}_${vn}`);
+        }
+      }
+    }
   }
 }
 if (only.includes('train')) {
