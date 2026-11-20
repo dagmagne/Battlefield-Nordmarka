@@ -66,7 +66,7 @@ for (const k of Object.keys(EN)) {
   }
 }
 if (only.includes('train')) {
-  const T = await ev(`(()=>{ const r=[]; for (const B of __W.bld) if (B.fix && B.boxes && B.boxes.length===3 && B.boxes[0].hd>8) r.push(B.boxes.map((b)=>[b.x,b.z,b.th,b.hd,b.y+0.2])); return r; })()`);
+  const T = await ev(`(()=>{ const r=[]; for (const B of __W.bld) if (B.fix && B.boxes && B.boxes.length===3 && B.boxes[0].hd>8 && Math.abs(B.boxes[0].hw-1.6)<0.01) r.push(B.boxes.map((b)=>[b.x,b.z,b.th,b.hd,b.y+0.2])); return r; })()`);
   console.log('trains', JSON.stringify(T).slice(0, 300)); console.log('railStat', JSON.stringify(await ev('__W.railStat')));
   let n = 0;
   for (const tr of T.slice(0, 2)) {
@@ -75,14 +75,22 @@ if (only.includes('train')) {
     // the nearest platform (to report its height against the car floor, 1.1 m)
     const pl = await ev(`(()=>{ let bd=1e9, r=[0,0,0]; for (const S of __W.rail.st) for (const Q of S.p) { const d=Math.hypot(Q.x-(${mx}),Q.z-(${mz})); if (d<bd) { bd=d; r=[Q.x,Q.z,Q.top]; } } return r; })()`);
     const sg = n === 1 ? 1 : -1, nx = -az * sg, nz = ax * sg; // the open side to look from: the snow bank at Frognerseteren, across the other track at Holmenkollen
-    console.log(`train${n}: platform top ${(pl[2] - ry).toFixed(2)} m above the rail head`);
+    console.log(`train${n}: nearest platform centre top ${(pl[2] - ry).toFixed(2)} m above the rail head at the cab`);
     // [name, eye: along from the nose (+ = ahead of it), sideways (+ = the open side), height above the rail; target: height, along]
-    const V = [['fq', 9, 7, 2.6, 2.0, -3], ['fq2', 9, -7, 2.6, 2.0, -3], ['front', 11, 0.6, 2.3, 2.0, 0], ['side', -6, 14, 2.4, 1.9, -6], ['close', 4, 4.5, 2.0, 2.0, -1.5], ['long', 22, 9, 4.5, 1.8, -20], ['roof', 6, 8, 7.5, 2.5, -8], ['bogie', -1, 5, 1.0, 0.6, -2.8],
+    const V = [['fq', 9, 7, 2.6, 2.0, -3], ['fq2', 13, -3.4, 2.4, 2.0, -3], ['front', 11, 0.6, 2.3, 2.0, 0], ['side', -6, 14, 2.4, 1.9, -6], ['close', 4, 4.5, 2.0, 2.0, -1.5], ['long', 22, 9, 4.5, 1.8, -20], ['roof', 6, 8, 7.5, 2.5, -8], ['bogie', -1, 5, 1.0, 0.6, -2.8],
       ['door', -9.1, 6, 2.3, 2.0, -9.1], ['win', -4, 3.6, 2.5, 2.3, -6.5], ['gang', -15, 6, 2.6, 2.0, -18.4], ['face', 5.5, 2.2, 2.0, 2.0, 0], ['under', -7, 6, 0.9, 0.6, -9.1], ['rear', -68, 7, 2.6, 2.0, -55.5], ['plat', -4, -4.5, 2.9, 1.6, -9.5], ['top', -9, 3, 12, 3, -9.1]];
     for (const [vn, da, ds, eh, th, ta] of V) {
       await ev(`(()=>{ const ex=${cab[0] + ax * da + nx * ds}, ey=${ry + eh}, ez=${cab[1] + az * da + nz * ds}, dx=${cab[0] + ax * ta}-ex, dy=${ry + th}-ey, dz=${cab[1] + az * ta}-ez; __R.chase=null; __R.pose=[ex,ey,ez,Math.atan2(-dx,-dz),Math.atan2(dy,Math.hypot(dx,dz))]; })()`);
       await shot(`train${n}_${vn}`);
     }
   }
+}
+if (only.includes('train') || only.includes('stations')) { // platforms: the fit against the rail head, and look-checks at stations without a train
+  const ST = await ev(`__W.rail.st.map((S)=>({name:S.name,p:S.p.map((Q)=>({x:Q.x,z:Q.z,yaw:Q.yaw,hl:Q.hl,hw:Q.hw,top:Q.top,sl:Q.sl,gap:Q.gap,top0:Q.top0,edge:Q.edge}))}))`);
+  for (const S of ST) console.log('platform', S.name.padEnd(16), S.p.map((Q) => `top ${(Q.top - Q.top0 >= 0 ? '+' : '') + (Q.top - Q.top0).toFixed(2)} slope ${(Q.sl * 100).toFixed(1)}% edge-track ${Q.gap.toFixed(2)} len ${(2 * Q.hl).toFixed(0)}`).join(' | '));
+  for (const S of ST.filter((S) => /Voksenkollen|Skogen|Besserud|Lillevann/.test(S.name)).slice(0, 3)) { const Q = S.p[0], ax = Math.sin(Q.yaw), az = Math.cos(Q.yaw), bx = Math.cos(Q.yaw) * Q.edge, bz = -Math.sin(Q.yaw) * Q.edge;
+    for (const [vn, u, v, eh, tu, tv] of [['a', -Q.hl - 7, Q.hw + 4.5, 2.4, 0, Q.hw - 1], ['b', Q.hl * 0.3, Q.hw + 5, 1.5, -Q.hl * 0.2, Q.hw]]) {
+      await ev(`(()=>{ const ex=${Q.x + ax * u + bx * v}, ey=${Q.top + Q.sl * u + eh}, ez=${Q.z + az * u + bz * v}, dx=${Q.x + ax * tu + bx * tv}-ex, dy=${Q.top + Q.sl * tu + 0.3}-ey, dz=${Q.z + az * tu + bz * tv}-ez; __R.chase=null; __R.pose=[ex,ey,ez,Math.atan2(-dx,-dz),Math.atan2(dy,Math.hypot(dx,dz))]; })()`);
+      await shot(`station_${S.name.replace(/\W/g, '')}_${vn}`); } }
 }
 await browser.close();

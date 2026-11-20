@@ -782,7 +782,7 @@ function arena(b, W, A) {
 }
 // ---- Holmenkollbanen (world.js railWorld, tools/geo/rail.py): bed, rails, third rail, platforms, shelters, lamps, signs, buffer stops, parked MX3000 units ----
 const RUST = [0.15, 0.1, 0.075], HEADC = [0.55, 0.55, 0.57], TRC = [0.1, 0.1, 0.095], TRT = [0.36, 0.33, 0.22], CONP = [0.46, 0.46, 0.45], PAVE = [0.27, 0.27, 0.28], TBLUE = [0.03, 0.12, 0.42];
-const MXW = [0.72, 0.73, 0.745], MXB = [0.025, 0.027, 0.03], STW = [0.14, 0.085, 0.05];
+const MXW = [0.63, 0.625, 0.605], MXB = [0.025, 0.027, 0.03], STW = [0.14, 0.085, 0.05];
 const railAt = (t, s, o) => { s = clamp(s, 0, t.s[t.n - 1]); let a = 0, c = t.n - 1; while (c - a > 1) { const m = (a + c) >> 1; if (t.s[m] > s) c = m; else a = m; } const f = (s - t.s[a]) / (t.s[c] - t.s[a] || 1); o[0] = lerp(t.x[a], t.x[c], f); o[1] = lerp(t.y[a], t.y[c], f); o[2] = lerp(t.z[a], t.z[c], f); return o; };
 // extrude cross-section faces (offset and height of both ends, colour, material, optional segment skip test) along the breakpoints K of track t; uv: offset, distance
 function railStrip(b, t, K, faces) {
@@ -796,14 +796,18 @@ function railStrip(b, t, K, faces) {
   }
 }
 // ---- MX3000 car (Siemens / Porsche Design). Local frame: x across, y above the rail head, z along the car; c 0 / 2 = driving car with the cab at -z / +z, 1 = middle car ----
-const MXD = [0.15, 0.155, 0.165], MXR = [0.46, 0.47, 0.49], MXK = [0.015, 0.02, 0.026], MXL = [0.55, 0.56, 0.58], MXU = [0.11, 0.11, 0.12], MXDZ = [-5.5, 0, 5.5];
-// half cross-section, sole bar to roof centre: a lower side with a little tumblehome, the window band leaning in above the waist (1.95 m), a rounded cant rail and roof
-const MXP = [[1.5, 0.9], [1.57, 1.0], [1.58, 1.1], [1.58, 1.6], [1.58, 1.95], [1.475, 2.95], [1.445, 3.1], [1.38, 3.26], [1.26, 3.4], [1.06, 3.51], [0.76, 3.59], [0.4, 3.635], [0, 3.65]];
-const MXN = MXP.length, MXRING = MXP.concat(MXP.slice(0, -1).reverse().map((p) => [-p[0], p[1]])), mxSeg = (i) => (i < MXN - 1 ? i : 2 * MXN - 3 - i);
-const mxX = (y) => (y <= 1.95 ? 1.58 : 1.58 - (y - 1.95) * 0.105); // half width of the side at height y (floor to cant rail)
+const MXD = [0.15, 0.155, 0.165], MXR = [0.4, 0.41, 0.43], MXL = [0.46, 0.46, 0.45], MXU = [0.11, 0.11, 0.12], MXJ = [0.24, 0.24, 0.25], MXDZ = [-5.5, 0, 5.5];
+// half cross-section, sole bar to roof centre: a little tumblehome under the floor, flat sides leaning in 3 degrees from the floor (1.1 m) to the cant rail, a rounded roof
+// (the roof points are a spline through the hand-set ones, so the shoulder shades smoothly); points on the side at the heights the window band and the cab screen need
+const mxX = (y) => 1.58 - (y - 1.1) * 0.05676; // half width of the side at height y
+const MXP = (() => { const S = [[1.5, 0.9], [1.57, 1.0]], R = [[1.58, 1.1], [1.475, 2.95], [1.445, 3.1], [1.38, 3.26], [1.26, 3.4], [1.06, 3.51], [0.76, 3.59], [0.4, 3.635], [0, 3.65], [-0.4, 3.635]];
+  for (const y of [1.1, 1.52, 1.565, 1.67, 1.97]) S.push([mxX(y), y]);
+  for (let k = 1; k < R.length - 2; k++) { const a = R[k - 1], p = R[k], q = R[k + 1], d = R[k + 2]; S.push(p); if (k > 1) S.push([0, 1].map((i) => (-a[i] + 9 * p[i] + 9 * q[i] - d[i]) / 16)); else S.push([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]); }
+  S.push([0, 3.65]); return S; })();
+const MXN = MXP.length, MXRING = MXP.concat(MXP.slice(0, -1).reverse().map((p) => [-p[0], p[1]])), mxSeg = (i) => (i < MXN - 1 ? i : 2 * MXN - 3 - i), mxMid = (k) => (MXP[k][1] + MXP[k + 1][1]) / 2;
 const mxRoofY = (x) => { x = Math.abs(x); for (let k = MXN - 1; k > 0; k--) if (x <= MXP[k - 1][0]) return lerp(MXP[k][1], MXP[k - 1][1], (x - MXP[k][0]) / (MXP[k - 1][0] - MXP[k][0])); return 3.1; };
-// smooth-shaded grid of nj x ni points [x, y, z]; col(j, i) gives [colour, material] per cell (or null); the normals face away from the point c
-function mxGrid(b, P, nj, ni, c, col) {
+// smooth-shaded grid of nj x ni points [x, y, z]; col(j, i) gives [colour, material] per cell (or null); the normals face away from the point c; uv = (point[ux], height)
+function mxGrid(b, P, nj, ni, c, col, ux = 2) {
   const N = [];
   for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
     const p = P[j * ni + i], a = P[j * ni + Math.max(0, i - 1)], d = P[j * ni + Math.min(ni - 1, i + 1)], e = P[Math.max(0, j - 1) * ni + i], f = P[Math.min(nj - 1, j + 1) * ni + i];
@@ -815,9 +819,9 @@ function mxGrid(b, P, nj, ni, c, col) {
   }
   for (let j = 0; j < nj - 1; j++) for (let i = 0; i < ni - 1; i++) {
     const k = col(j, i); if (!k) continue; b.set(k[0], k[1]);
-    const q = [j * ni + i, j * ni + i + 1, (j + 1) * ni + i + 1, (j + 1) * ni + i], v = q.map((o) => b.vert(P[o][0], P[o][1], P[o][2], N[o][0], N[o][1], N[o][2], P[o][2], P[o][1]));
-    const p0 = P[q[0]], p1 = P[q[1]], p2 = P[q[2]], p3 = P[q[3]], ux = p2[0] - p0[0], uy = p2[1] - p0[1], uz = p2[2] - p0[2], vx = p3[0] - p1[0], vy = p3[1] - p1[1], vz = p3[2] - p1[2];
-    const g = (uy * vz - uz * vy) * (N[q[0]][0] + N[q[2]][0]) + (uz * vx - ux * vz) * (N[q[0]][1] + N[q[2]][1]) + (ux * vy - uy * vx) * (N[q[0]][2] + N[q[2]][2]);
+    const q = [j * ni + i, j * ni + i + 1, (j + 1) * ni + i + 1, (j + 1) * ni + i], v = q.map((o) => b.vert(P[o][0], P[o][1], P[o][2], N[o][0], N[o][1], N[o][2], P[o][ux], P[o][1]));
+    const p0 = P[q[0]], p1 = P[q[1]], p2 = P[q[2]], p3 = P[q[3]], ux2 = p2[0] - p0[0], uy = p2[1] - p0[1], uz = p2[2] - p0[2], vx = p3[0] - p1[0], vy = p3[1] - p1[1], vz = p3[2] - p1[2];
+    const g = (uy * vz - uz * vy) * (N[q[0]][0] + N[q[2]][0]) + (uz * vx - ux2 * vz) * (N[q[0]][1] + N[q[2]][1]) + (ux2 * vy - uy * vx) * (N[q[0]][2] + N[q[2]][2]);
     if (g >= 0) b.i.push(v[0], v[1], v[2], v[0], v[2], v[3]); else b.i.push(v[0], v[2], v[1], v[0], v[3], v[2]);
   }
 }
@@ -826,20 +830,27 @@ function mxQ(b, p0, p1, p2, p3, c, uv) {
   const ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2], vx = p3[0] - p0[0], vy = p3[1] - p0[1], vz = p3[2] - p0[2];
   if ((uy * vz - uz * vy) * (p0[0] - c[0]) + (uz * vx - ux * vz) * (p0[1] - c[1]) + (ux * vy - uy * vx) * (p0[2] - c[2]) >= 0) b.quad(p0, p1, p2, p3, uv); else b.quad(p1, p0, p3, p2, uv && [uv[2], uv[3], uv[0], uv[1], uv[6], uv[7], uv[4], uv[5]]);
 }
-// a panel lying on the car side s between z0..z1 and y0..y1, off metres proud of the skin (split at the waist, where the side starts to lean in); uf: glazing uv (metres along the car * uf, height)
+// a panel lying on the car side s between z0..z1 and y0..y1, off metres proud of the skin; uf: glazing uv (metres along the car * uf, height)
 function mxSide(b, s, z0, z1, y0, y1, off, uf) {
-  if (y0 < 1.95 && y1 > 1.95) { mxSide(b, s, z0, z1, y0, 1.95, off, uf); mxSide(b, s, z0, z1, 1.95, y1, off, uf); return; }
   const xa = s * (mxX(y0) + off), xb = s * (mxX(y1) + off), za = Math.min(z0, z1), zb = Math.max(z0, z1);
   mxQ(b, [xa, y0, za], [xa, y0, zb], [xb, y1, zb], [xb, y1, za], [0, y0, za], uf ? [uf * za, y0, uf * zb, y0, uf * zb, y1, uf * za, y1] : undefined);
 }
-function mxBogie(b, zc, seed) {
-  const ST = [0.2, 0.19, 0.185], FR = [0.15, 0.15, 0.16], YL = [0.5, 0.42, 0.06];
+// bands of revolution about an axle along x through (y, z) on side s: prof = [|x|, r] from the inside outwards (a step in r at one x is a flat face)
+function mxLathe(b, s, y, z, prof, seg) {
+  for (let k = 0; k < prof.length - 1; k++) { const x0 = prof[k][0], r0 = prof[k][1], x1 = prof[k + 1][0], r1 = prof[k + 1][1], dx = x1 - x0, dr = r1 - r0, l = Math.hypot(dx, dr) || 1, na = -dr / l * s, nr = dx / l, base = b.v.length / VS;
+    for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a); b.vert(s * x0, y + c * r0, z + sn * r0, na, c * nr, sn * nr); b.vert(s * x1, y + c * r1, z + sn * r1, na, c * nr, sn * nr); }
+    for (let i = 0; i < seg; i++) { const q = base + i * 2; if (s > 0) b.i.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); else b.i.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); } }
+}
+function mxDisc(b, x, y, z, r, n) { const c = b.vert(x, y, z, 0, 1, 0), q = b.v.length / VS; for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2; b.vert(x + Math.cos(a) * r, y, z + Math.sin(a) * r, 0, 1, 0); } for (let i = 0; i < n; i++) b.i.push(c, q + i + 1, q + i); }
+function mxBogie(b, zc, seed, shoe) {
+  const ST = [0.25, 0.24, 0.235], FR = [0.15, 0.15, 0.16], YL = [0.5, 0.42, 0.06];
   for (const w of [-1, 1]) { const z = zc + w * 1.0;
     b.set([0.1, 0.095, 0.09], MAT.metal); b.cyl(-0.68, 0.42, z, 0.68, 0.42, z, 0.085, 0.085, 6, 0);
     for (const s of [-1, 1]) {
-      b.set(ST, MAT.metal); b.cyl(s * 0.655, 0.42, z, s * 0.8, 0.42, z, 0.435, 0.42, 18); // wheel
-      b.set([0.27, 0.265, 0.26], MAT.metal); b.cyl(s * 0.8, 0.42, z, s * 0.85, 0.42, z, 0.15, 0.12, 8); // hub
-      b.set(FR, MAT.stone); bx2(b, s * 0.93, 0.27, z - 0.17, s * 1.13, 0.58, z + 0.17); b.set([0.3, 0.3, 0.31], MAT.metal); b.cyl(s * 1.13, 0.42, z, s * 1.16, 0.42, z, 0.1, 0.1, 6); // axle box and its cover
+      b.set(ST, MAT.metal); mxLathe(b, s, 0.42, z, [[0.66, 0.455], [0.69, 0.42], [0.8, 0.42], [0.8, 0.355]], 20); // flange lip, tread, rim face
+      b.set([0.075, 0.07, 0.07], MAT.stone); mxLathe(b, s, 0.42, z, [[0.8, 0.355], [0.775, 0.16]], 20); // dished web
+      b.set([0.2, 0.195, 0.19], MAT.metal); mxLathe(b, s, 0.42, z, [[0.775, 0.16], [0.84, 0.12], [0.84, 0]], 6); // hub
+      b.set(FR, MAT.stone); bx2(b, s * 0.93, 0.27, z - 0.17, s * 1.13, 0.58, z + 0.17); b.set([0.3, 0.3, 0.31], MAT.metal); mxLathe(b, s, 0.42, z, [[1.13, 0.1], [1.16, 0.1], [1.16, 0]], 6); // axle box and its cover
       b.set(YL, MAT.metal); b.cyl(s * 1.03, 0.58, z, s * 1.03, 0.73, z, 0.085, 0.085, 6, 0); b.set(FR, MAT.stone); b.cyl(s * 1.03, 0.635, z, s * 1.03, 0.675, z, 0.1, 0.1, 6, 0); // primary spring
       b.cyl(s * 1.14, 0.36, z + w * 0.05, s * 1.14, 0.78, z - w * 0.3, 0.035, 0.03, 5, 0); // damper
     }
@@ -848,117 +859,128 @@ function mxBogie(b, zc, seed) {
     b.set(FR, MAT.stone); bx2(b, s * 0.94, 0.72, zc - 1.22, s * 1.12, 0.84, zc - 0.62); bx2(b, s * 0.94, 0.72, zc + 0.62, s * 1.12, 0.84, zc + 1.22); bx2(b, s * 0.94, 0.42, zc - 0.36, s * 1.12, 0.56, zc + 0.36); // side frame: high over the axle boxes, dropped in the middle
     for (const w of [-1, 1]) extX(b, [[0.84, zc + w * 0.62], [0.72, zc + w * 0.62], [0.42, zc + w * 0.36], [0.56, zc + w * 0.3]], s * 0.94, s * 1.12);
     b.set([0.035, 0.035, 0.04], MAT.metal); b.cyl(s * 0.98, 0.56, zc, s * 0.98, 0.7, zc, 0.27, 0.25, 10, 0); b.cyl(s * 0.98, 0.7, zc, s * 0.98, 0.9, zc, 0.31, 0.3, 10, 0); // air spring
-    // third-rail collector: an insulated beam hung from the frame, the shoe reaching out under the covered rail
-    b.set([0.42, 0.3, 0.12], MAT.wood); bx2(b, s * 1.13, 0.2, zc - 0.42, s * 1.23, 0.32, zc + 0.42);
-    b.set([0.16, 0.15, 0.15], MAT.metal); bx2(b, s * 1.23, 0.2, zc - 0.1, s * 1.44, 0.26, zc + 0.1); bx2(b, s * 1.36, 0.15, zc - 0.2, s * 1.5, 0.2, zc + 0.2);
+    if (s !== shoe) continue;
+    // third-rail collector on the conductor-rail side: an insulated beam under the frame, an arm, the shoe on the rail
+    b.set([0.42, 0.3, 0.12], MAT.wood); bx2(b, s * 1.12, 0.22, zc - 0.42, s * 1.22, 0.42, zc + 0.42);
+    b.set([0.16, 0.15, 0.15], MAT.metal); extX(b, [[0.3, zc - 0.07], [0.3, zc + 0.07], [0.15, zc + 0.07], [0.15, zc - 0.07]], s * 1.22, s * 1.4); bx2(b, s * 1.38, 0.085, zc - 0.2, s * 1.54, 0.15, zc + 0.2);
   }
   b.set(MXU, MAT.stone); b.box(-0.9, 0.5, zc - 0.2, 0.9, 0.72, zc + 0.2); for (const w of [-1, 1]) b.box(-0.55, 0.2, zc + w * 0.72 - 0.3, 0.45, 0.66, zc + w * 0.72 + 0.3); // bolster and motors
-  b.set(SNOWC, MAT.snow); for (let k = 0; k < 2; k++) { const s = hash1(seed + k * 7) > 0.5 ? 1 : -1, z = zc + (hash1(seed + k * 13 + 1) - 0.5) * 2.0; b.blob(s * 1.04, 0.86, z, 0.11, 0.045, 0.2 + 0.2 * hash1(seed + k), seed + k, 0.3, 5); } // snow packed on the frames
+  b.set(SNOWC, MAT.snow); for (let k = 0; k < 2; k++) { const s = hash1(seed + k * 7) > 0.5 ? 1 : -1, z = zc + (k ? 0.92 : -0.92); b.blob(s * 1.03, 0.85, z, 0.1, 0.04, 0.26, seed + k, 0.2, 5); } // snow lying on the frame ends
 }
-function mxCar(b, L, c, seed) {
-  const h = L / 2, C0 = [0, 1.9, 0], uf = c === 0 ? -1 : 1, WHITE = [MXW, MAT.paint], BLK = [MXB, MAT.paint], DRK = [MXD, MAT.paint];
-  const cab = (g) => (c === 0 && g < 0) || (c === 2 && g > 0), zEnd = (g) => g * (h - (cab(g) ? 0.62 : 0.12));
+function mxCar(b, L, c, seed, white, shoe) {
+  const h = L / 2, C0 = [0, 1.9, 0], uf = c === 0 ? -1 : 1, WHITE = [MXW, MAT.coach], BLK = [MXB, MAT.paint], DRK = [MXD, MAT.coach];
+  const cab = (g) => (c === 0 && g < 0) || (c === 2 && g > 0), zEnd = (g) => g * (h - (cab(g) ? 0.75 : 0.1));
   const tg = (s) => b.set([-s * uf > 0 ? 0 : 1, c === 1 ? 0 : 1, 0], MAT.tglass);
   // ---- shell ----
   { const P = []; for (const g of [-1, 1]) for (const p of MXRING) P.push([p[0], p[1], zEnd(g)]);
-    mxGrid(b, P, 2, MXRING.length, C0, (j, i) => { const k = mxSeg(i); return k === 0 ? DRK : k === 4 ? BLK : k < 7 ? WHITE : [MXR, MAT.paint]; }); }
+    mxGrid(b, P, 2, MXRING.length, C0, (j, i) => { const y = mxMid(mxSeg(i)); return y < 1.0 ? DRK : y > 1.97 && y < 2.95 ? BLK : y < 3.1 ? WHITE : [MXR, MAT.coach]; }); }
   b.set(MXU, MAT.stone); b.box(-1.47, 0.84, -h + 0.7, 1.47, 0.95, h - 0.7); // floor pan
-  // ---- sides: windows, doors ----
+  // ---- sides: windows, panel joints, doors ----
   for (const s of [-1, 1]) {
-    const spans = [[MXDZ[0] + 0.8, MXDZ[1] - 0.8], [MXDZ[1] + 0.8, MXDZ[2] - 0.8]];
-    for (const g of [-1, 1]) if (!cab(g)) spans.push(g < 0 ? [-h + 0.5, MXDZ[0] - 0.8] : [MXDZ[2] + 0.8, h - 0.5]);
+    const spans = [[MXDZ[0] + 0.8, MXDZ[1] - 0.8], [MXDZ[1] + 0.8, MXDZ[2] - 0.8]], J = [];
+    for (const g of [-1, 1]) if (!cab(g)) spans.push(g < 0 ? [-h + 0.45, MXDZ[0] - 0.8] : [MXDZ[2] + 0.8, h - 0.45]);
     for (const [za, zb] of spans) { const np = Math.ceil((zb - za) / 2.45), w = (zb - za + 0.07) / np;
-      for (let k = 0; k < np; k++) { const z0 = za + k * w, z1 = z0 + w - 0.07; tg(s); mxSide(b, s, z0, z1, 2.03, 2.89, 0.006, uf);
+      for (let k = 0; k < np; k++) { const z0 = za + k * w, z1 = z0 + w - 0.07; tg(s); mxSide(b, s, z0, z1, 2.03, 2.89, 0.006, uf); if (k) J.push(z0 - 0.035);
         b.set([0.05, 0.05, 0.055], MAT.paint); mxSide(b, s, z0 + 0.05, z1 - 0.05, 2.615, 2.63, 0.009); } } // the hopper vent's frame line
-    b.set([0.33, 0.34, 0.36], MAT.paint); mxSide(b, s, zEnd(-1), zEnd(1), 3.0, 3.03, 0.004); // rain gutter
-    for (const dz of MXDZ) {
-      b.set([0.03, 0.03, 0.034], MAT.paint); mxSide(b, s, dz - 0.75, dz + 0.75, 1.07, 3.04, 0.003); // recess / seals
+    b.set(MXJ, MAT.coach); for (const z of J) mxSide(b, s, z - 0.006, z + 0.006, 1.1, 1.97, 0.003); // panel joints under the window pillars
+    for (const g of [-1, 1]) if (!cab(g)) mxSide(b, s, g * (h - 0.33), g * (h - 0.318), 1.1, 1.97, 0.003);
+    for (const dz of MXDZ) { // flush plug doors: two leaves in a 1.5 cm seam, planar glass, a header strip and a sill 3 cm proud
+      b.set(MXJ, MAT.coach); mxSide(b, s, dz - 0.735, dz + 0.735, 1.085, 3.02, 0.003);
       for (const w of [-1, 1]) {
-        b.set(MXL, MAT.paint); mxSide(b, s, dz + w * 0.012, dz + w * 0.715, 1.105, 3.0, 0.014);
-        tg(s); mxSide(b, s, dz + w * 0.13, dz + w * 0.6, 1.5, 2.87, 0.019, uf);
-        b.set([0.02, 0.02, 0.022], MAT.paint); mxSide(b, s, dz + w * 0.105, dz + w * 0.625, 1.475, 2.895, 0.0165); // window gasket
-        b.set([0.3, 0.31, 0.32], MAT.metal); mxSide(b, s, dz + w * 0.04, dz + w * 0.1, 1.29, 1.41, 0.02); b.set([0.08, 0.5, 0.16], MAT.head); mxSide(b, s, dz + w * 0.052, dz + w * 0.088, 1.33, 1.37, 0.023); // door button
+        b.set(MXL, MAT.coach); mxSide(b, s, dz + w * 0.0075, dz + w * 0.72, 1.1, 3.005, 0.007);
+        b.set([0.03, 0.03, 0.034], MAT.paint); mxSide(b, s, dz + w * 0.11, dz + w * 0.62, 1.48, 2.89, 0.0095); tg(s); mxSide(b, s, dz + w * 0.13, dz + w * 0.6, 1.5, 2.87, 0.012, uf);
+        b.set([0.3, 0.31, 0.32], MAT.metal); mxSide(b, s, dz + w * 0.04, dz + w * 0.1, 1.29, 1.41, 0.011); b.set([0.08, 0.5, 0.16], MAT.head); mxSide(b, s, dz + w * 0.052, dz + w * 0.088, 1.33, 1.37, 0.014); // door button
       }
-      b.set([0.3, 0.31, 0.33], MAT.paint); bx2(b, s * (mxX(3.06) - 0.02), 3.02, dz - 0.82, s * (mxX(3.06) + 0.035), 3.085, dz + 0.82); // door rail cover
-      b.set([0.8, 0.62, 0.05], MAT.paint); bx2(b, s * 1.56, 1.045, dz - 0.73, s * 1.635, 1.1, dz + 0.73); // step edge
-      b.set([0.75, 0.3, 0.03], MAT.head); mxQ(b, [s * (mxX(3.06) + 0.037), 3.035, dz - 0.04], [s * (mxX(3.06) + 0.037), 3.035, dz + 0.04], [s * (mxX(3.06) + 0.037), 3.07, dz + 0.04], [s * (mxX(3.06) + 0.037), 3.07, dz - 0.04], C0); // door-open lamp
+      b.set([0.3, 0.31, 0.33], MAT.coach); mxSide(b, s, dz - 0.8, dz + 0.8, 3.02, 3.055, 0.004); // header
+      b.set([0.75, 0.3, 0.03], MAT.head); mxSide(b, s, dz - 0.04, dz + 0.04, 3.027, 3.048, 0.007); // door-open lamp
+      b.set([0.8, 0.62, 0.05], MAT.coach); bx2(b, s * 1.57, 1.062, dz - 0.72, s * 1.608, 1.099, dz + 0.72); // sill
     }
     for (const g of [-1, 1]) if (cab(g)) {
-      b.set(MXK, MAT.glass); mxSide(b, s, g * (h - 1.66), g * (h - 0.66), 2.03, 2.89, 0.006); // cab side window
-      b.set([0.03, 0.03, 0.034], MAT.paint); mxSide(b, s, g * (h - 2.4), g * (h - 1.78), 1.07, 3.03, 0.003);
-      b.set(MXW, MAT.paint); mxSide(b, s, g * (h - 2.38), g * (h - 1.8), 1.1, 3.0, 0.012); b.set(MXK, MAT.glass); mxSide(b, s, g * (h - 2.29), g * (h - 1.89), 2.03, 2.86, 0.016);
-      b.set([0.3, 0.31, 0.32], MAT.metal); bx2(b, s * 1.59, 1.6, g * (h - 2.31), s * 1.615, 1.78, g * (h - 2.27)); bx2(b, s * 1.5, 0.78, g * (h - 2.38), s * 1.6, 0.84, g * (h - 1.8)); // handle and step
+      b.set([0, 0, 1], MAT.tglass); mxSide(b, s, g * (h - 1.72), g * (h - 0.8), 2.03, 2.89, 0.006, 1); // cab side window
+      b.set(MXJ, MAT.coach); mxSide(b, s, g * (h - 2.395), g * (h - 1.785), 1.085, 3.02, 0.003);
+      b.set(MXW, MAT.coach); mxSide(b, s, g * (h - 2.38), g * (h - 1.8), 1.1, 3.005, 0.007); b.set([0.03, 0.03, 0.034], MAT.paint); mxSide(b, s, g * (h - 2.31), g * (h - 1.87), 2.01, 2.88, 0.0095);
+      b.set([0, 0, 1], MAT.tglass); mxSide(b, s, g * (h - 2.29), g * (h - 1.89), 2.03, 2.86, 0.012, 1);
+      b.set([0.3, 0.31, 0.32], MAT.metal); bx2(b, s * (mxX(1.7) + 0.005), 1.6, g * (h - 2.31), s * (mxX(1.7) + 0.03), 1.78, g * (h - 2.27)); bx2(b, s * 1.5, 0.78, g * (h - 2.38), s * 1.6, 0.84, g * (h - 1.8)); // handle and step
       // T roundel under the cab window
-      const zt = g * (h - 1.2); b.set(TBLUE, MAT.paint); b.cyl(s * 1.575, 1.5, zt, s * 1.59, 1.5, zt, 0.18, 0.18, 16); b.set([0.92, 0.92, 0.9], MAT.paint); bx2(b, s * 1.58, 1.55, zt - 0.1, s * 1.596, 1.605, zt + 0.1); bx2(b, s * 1.58, 1.39, zt - 0.03, s * 1.596, 1.6, zt + 0.03);
+      const zt = g * (h - 1.25), xr = mxX(1.5); b.set(TBLUE, MAT.coach); mxLathe(b, s, 1.5, zt, [[xr - 0.01, 0.18], [xr + 0.008, 0.18], [xr + 0.008, 0]], 24);
+      b.set([0.8, 0.8, 0.78], MAT.coach); bx2(b, s * xr, 1.55, zt - 0.1, s * (xr + 0.013), 1.605, zt + 0.1); bx2(b, s * xr, 1.39, zt - 0.03, s * (xr + 0.013), 1.6, zt + 0.03);
     }
   }
   // ---- ends ----
   for (const g of [-1, 1]) {
-    if (cab(g)) mxCab(b, h, g, c);
+    if (cab(g)) mxCab(b, h, g, white);
     else { const z0 = zEnd(g);
-      b.set(MXD, MAT.paint); poly(b, MXRING.map((p) => [p[0], p[1], z0]), C0);
-      // gangway bellows: a ribbed sleeve to the middle of the gap
-      const R = MXRING.filter((p, i) => i % 2 === 0).map((p) => [p[0] - Math.sign(p[0]) * 0.1 * Math.min(1, Math.abs(p[0]) / 0.8), p[1] > 3 ? p[1] - 0.1 : p[1] + (p[1] < 1 ? 0.12 : 0)]), nr = 6, P = [];
-      for (let k = 0; k < nr; k++) { const f = k & 1 ? 0.06 : 0; for (const p of R) P.push([p[0] * (1 - f * 0.7), 2.1 + (p[1] - 2.1) * (1 - f * 0.7), z0 + g * k * (0.32 / (nr - 1))]); }
-      mxGrid(b, P, nr, R.length, [0, 2.1, z0], () => [[0.075, 0.075, 0.08], MAT.metal]);
-      b.set([0.2, 0.2, 0.21], MAT.metal); b.box(-0.12, 0.6, Math.min(z0, g * (h + 0.2)), 0.12, 0.84, Math.max(z0, g * (h + 0.2))); // the bar coupler between the cars
+      b.set(MXD, MAT.coach); poly(b, MXRING.map((p) => [p[0], p[1], z0]), C0);
+      // gangway bellows: a dark ribbed sleeve to the middle of the gap, set in 7 cm from the skin, from the floor up
+      const R = MXRING.filter((p, i) => p[1] > 1.05 && (p[1] < 3.0 || mxSeg(i) % 2 === 1 || p[0] === 0)).map((p) => { const ny = p[1] > 2.95 ? Math.min(1, (p[1] - 2.95) / 0.5) : 0, l = Math.hypot(1 - ny, ny) || 1; return [p[0] - Math.sign(p[0]) * 0.07 * (1 - ny) / l, p[1] - 0.07 * ny / l]; }), nr = 5, P = [];
+      for (let k = 0; k < nr; k++) { const f = k & 1 ? 0.05 : 0; for (const p of R) P.push([p[0] * (1 - f * 0.7), 2.1 + (p[1] - 2.1) * (1 - f * 0.7), z0 + g * k * (0.3 / (nr - 1))]); }
+      mxGrid(b, P, nr, R.length, [0, 2.1, z0], () => [[0.08, 0.08, 0.085], MAT.coach]);
+      b.set([0.17, 0.17, 0.18], MAT.stone); b.box(-0.12, 0.6, Math.min(z0, g * (h + 0.2)), 0.12, 0.84, Math.max(z0, g * (h + 0.2))); // the bar coupler between the cars
     }
   }
-  // ---- roof: snow blanket, air conditioning, resistor box ----
-  { const za = zEnd(-1) + (cab(-1) ? 0.9 : 0.28), zb = zEnd(1) - (cab(1) ? 0.9 : 0.28), nj = 17, X = [-1.2, -0.95, -0.5, 0, 0.5, 0.95, 1.2], P = [];
-    for (let j = 0; j < nj; j++) for (let i = 0; i < 7; i++) { const bare = hash1(seed + j * 41) > 0.72 || j === 0 || j === nj - 1, ed = i === 0 || i === 6 || bare, x = (i === 0 || i === 6 ? Math.sign(X[i]) * (0.98 + 0.3 * hash1(seed + j * 9 + i)) : X[i]) * (bare ? 0.45 + 0.4 * hash1(seed + j * 23) : 1); // the blanket thins out to bare roof in places
-      P.push([x, mxRoofY(x) + (ed ? -0.012 : 0.03 + 0.07 * hash1(seed + j * 31 + i * 5)), lerp(za, zb, j / (nj - 1)) + (j > 0 && j < nj - 1 ? (hash1(seed + j * 3 + i) - 0.5) * 0.3 : 0)]); }
-    mxGrid(b, P, nj, 7, C0, () => [SNOWC, MAT.snow]);
-    for (const zc of [-4.3, 4.3]) { b.set(MXR, MAT.metal); b.box(-0.82, 3.56, zc - 1.35, 0.82, 3.86, zc + 1.35, 0.1, 0.18); b.set([0.05, 0.05, 0.055], MAT.paint);
+  // ---- roof: a snow blanket with a rounded, drooping edge, air conditioning units and a resistor box under snow caps ----
+  { const za = zEnd(-1) + (cab(-1) ? 0.55 : 0.2), zb = zEnd(1) - (cab(1) ? 0.55 : 0.2), nj = 12, X = [-1.34, -1.25, -1.02, -0.5, 0, 0.5, 1.02, 1.25, 1.34], TH = [-0.012, 0.035, 0.06, 0.07, 0.075, 0.07, 0.06, 0.035, -0.012], P = [], ph = seed * 0.7;
+    for (let j = 0; j < nj; j++) { const z = lerp(za, zb, j / (nj - 1)), e = Math.min(j, nj - 1 - j), ke = e === 0 ? 0 : e === 1 ? 0.6 : 1, kx = (e === 0 ? 0.8 : e === 1 ? 0.95 : 1) * (1 + 0.025 * Math.sin(z * 1.1 + ph)), kt = ke * (0.85 + 0.3 * Math.sin(z * 0.63 + ph * 1.7));
+      for (let i = 0; i < 9; i++) { const x = X[i] * kx; P.push([x, mxRoofY(x) + (TH[i] > 0 ? TH[i] * kt : TH[i]), z]); } }
+    mxGrid(b, P, nj, 9, C0, () => [SNOWC, MAT.snow]);
+    const cap = (x0, x1, z0, z1, y, t, sd) => { const G = []; for (const [fz, kz] of [[0, 0], [0.12, 1], [0.88, 1], [1, 0]]) for (const [fx, kx] of [[0, 0], [0.15, 1], [0.5, 1.15], [0.85, 1], [1, 0]]) G.push([lerp(x0, x1, fx), y + t * kz * kx * (kz && kx ? 0.75 + 0.5 * hash1(sd + fx * 9 + fz * 5) : 1) - (kz && kx ? 0 : 0.01), lerp(z0, z1, fz)]); mxGrid(b, G, 4, 5, [0, y - 1, (z0 + z1) / 2], () => [SNOWC, MAT.snow]); };
+    for (const zc of [-4.3, 4.3]) { b.set(MXR, MAT.coach); b.box(-0.82, 3.56, zc - 1.35, 0.82, 3.86, zc + 1.35, 0.1, 0.18); b.set([0.05, 0.05, 0.055], MAT.paint);
       for (const s of [-1, 1]) for (let k = 0; k < 2; k++) { const y0 = 3.63 + k * 0.08, xg = (y) => s * (0.823 - (y - 3.56) / 3); mxQ(b, [xg(y0), y0, zc - 1.0], [xg(y0), y0, zc + 1.0], [xg(y0 + 0.05), y0 + 0.05, zc + 1.0], [xg(y0 + 0.05), y0 + 0.05, zc - 1.0], C0); } // grilles on the sloping sides
-      b.set([0.1, 0.1, 0.11], MAT.paint); for (const w of [-0.6, 0.6]) b.cyl(0, 3.86, zc + w, 0, 3.875, zc + w, 0.3, 0.3, 8);
-      }
-    b.set(MXR, MAT.metal); b.box(-0.6, 3.6, -0.9, 0.6, 3.78, 0.9, 0.05, 0.05); b.set([0.07, 0.07, 0.075], MAT.metal); for (let k = 0; k < 5; k++) b.box(-0.62, 3.66, -0.78 + k * 0.36, 0.62, 3.75, -0.66 + k * 0.36);
-    b.set([0.2, 0.2, 0.21], MAT.metal); for (const s of [-1, 1]) b.cyl(s * 0.9, 3.585, -2.4, s * 0.9, 3.585, 2.4, 0.03, 0.03, 5, 0); // cable ducts
+      cap(-0.74, 0.74, zc - 1.2, zc + 1.2, 3.86, 0.075, seed + (zc > 0 ? 3 : 11));
+      b.set([0.04, 0.04, 0.045], MAT.void); for (const w of [-0.6, 0.6]) mxDisc(b, 0, 3.972, zc + w, 0.27, 16); } // fan grilles, kept clear
+    b.set(MXR, MAT.coach); b.box(-0.6, 3.6, -0.9, 0.6, 3.78, 0.9, 0.05, 0.05); b.set([0.07, 0.07, 0.075], MAT.coach); for (let k = 0; k < 5; k++) b.box(-0.62, 3.66, -0.78 + k * 0.36, 0.62, 3.75, -0.66 + k * 0.36);
+    cap(-0.56, 0.56, -0.86, 0.86, 3.78, 0.06, seed + 5);
   }
   // ---- underfloor equipment between the bogies ----
   for (const s of [-1, 1]) { let z = -h + 4.75;
-    for (let k = 0; z < h - 5.4; k++) { const r = hash1(seed + k * 17 + (s > 0 ? 3 : 71)), len = 1.0 + 1.5 * r, y0 = 0.3 + 0.2 * hash1(seed + k * 5 + (s > 0 ? 1 : 2)), z1 = Math.min(z + len, h - 4.75), g = 0.1 + 0.1 * hash1(seed + k * 29 + 4);
+    for (let k = 0; z < h - 5.4; k++) { const r = hash1(seed + k * 17 + (s > 0 ? 3 : 71)), len = 1.0 + 1.5 * r, y0 = 0.3 + 0.2 * hash1(seed + k * 5 + (s > 0 ? 1 : 2)), z1 = Math.min(z + len, h - 4.75), g = 0.1 + 0.1 * hash1(seed + k * 29 + 4), xf = s * 1.447, fq = (ya, yb, zq0, zq1) => mxQ(b, [xf, ya, zq0], [xf, ya, zq1], [xf, yb, zq1], [xf, yb, zq0], C0);
       b.set([g * 1.3, g * 1.3, g * 1.38], MAT.stone); bx2(b, s * 0.72, y0, z, s * 1.43, 0.86, z1);
-      b.set([g * 1.45, g * 1.45, g * 1.5], MAT.paint); mxQ(b, [s * 1.438, y0 + 0.06, z + 0.07], [s * 1.438, y0 + 0.06, z1 - 0.07], [s * 1.438, 0.8, z1 - 0.07], [s * 1.438, 0.8, z + 0.07], C0); // hatch
+      b.set([g * 1.45, g * 1.45, g * 1.5], MAT.coach); mxQ(b, [s * 1.438, y0 + 0.06, z + 0.07], [s * 1.438, y0 + 0.06, z1 - 0.07], [s * 1.438, 0.8, z1 - 0.07], [s * 1.438, 0.8, z + 0.07], C0); // hatch
       b.set([0.03, 0.03, 0.032], MAT.paint);
-      if (r > 0.5) for (let q = 0; q < 5; q++) mxQ(b, [s * 1.447, y0 + 0.12 + q * 0.07, z + 0.16], [s * 1.447, y0 + 0.12 + q * 0.07, z1 - 0.16], [s * 1.447, y0 + 0.15 + q * 0.07, z1 - 0.16], [s * 1.447, y0 + 0.15 + q * 0.07, z + 0.16], C0); // louvres
-      else for (const zl of [z + 0.14, z1 - 0.22]) mxQ(b, [s * 1.447, 0.66, zl], [s * 1.447, 0.66, zl + 0.08], [s * 1.447, 0.72, zl + 0.08], [s * 1.447, 0.72, zl], C0); // latches
-      if (hash1(seed + k * 3 + (s > 0 ? 8 : 6)) > 0.6) { b.set(SNOWC, MAT.snow); b.blob(s * 1.38, y0 + 0.02, lerp(z, z1, 0.3 + 0.4 * r), 0.1, 0.05, 0.3 * (z1 - z), seed + k, 0.3, 5); } // ice crust on the lower edge
+      if (r > 0.66) for (let q = 0; q < 5; q++) fq(y0 + 0.12 + q * 0.07, y0 + 0.15 + q * 0.07, z + 0.16, z1 - 0.16); // louvres
+      else if (r > 0.33) for (const zl of [z + 0.14, z1 - 0.22]) fq(0.66, 0.72, zl, zl + 0.08); // latches
+      else { for (let q = 1; q < 4; q++) fq(y0 + 0.08, 0.78, lerp(z, z1, q / 4) - 0.012, lerp(z, z1, q / 4) + 0.012); b.set([0.6, 0.5, 0.08], MAT.coach); fq(0.6, 0.7, z + 0.12, z + 0.26); } // a ribbed cover with a warning plate
       z = z1 + 0.12; }
   }
   b.set([0.2, 0.2, 0.21], MAT.metal); b.cyl(0.25, 0.55, -1.6, 0.25, 0.55, 0.2, 0.17, 0.17, 8); b.cyl(-0.3, 0.55, 0.4, -0.3, 0.55, 1.9, 0.15, 0.15, 8); // air reservoirs
-  mxBogie(b, -h + 3.1, seed + 100); mxBogie(b, h - 3.1, seed + 200);
+  mxBogie(b, -h + 3.1, seed + 100, shoe); mxBogie(b, h - 3.1, seed + 200, shoe);
 }
-// cab end g: a rounded nose (the cross-section shrinking round a corner radius), a raked and bowed face with the black screen wrapping into the window band
-function mxCab(b, h, g, c) {
-  const zb = h - 0.62, WHITE = [MXW, MAT.paint], GLS = [MXK, MAT.glass], DRK = [MXD, MAT.paint], C1 = [0, 1.9, g * (zb - 2)];
-  const nose = (x, y, th) => { const q = 1 - Math.cos(th), sn = Math.sin(th), xp = x * (1 - 0.22 * q), yp = y > 2.1 ? 2.1 + (y - 2.1) * (1 - 0.2 * q) : y; return [xp, yp, g * (zb + 0.42 * sn - (0.13 * Math.max(0, yp - 1.6) + 0.22 * (xp / 1.25) ** 2) * sn * sn)]; };
-  const fz = (x, y, o = 0) => g * (zb + 0.42 - 0.13 * Math.max(0, y - 1.6) - 0.22 * (x / 1.25) ** 2 + o), fp = (x, y, o) => [x, y, fz(x, y, o)];
-  { const NT = 5, P = []; for (let j = 0; j <= NT; j++) for (const p of MXRING) P.push(nose(p[0], p[1], j / NT * Math.PI / 2));
-    mxGrid(b, P, NT + 1, MXRING.length, C1, (j, i) => { const k = mxSeg(i); return k === 0 ? DRK : k === 4 ? GLS : WHITE; }); }
-  { const F = [-1, -0.9, -0.72, -0.48, -0.24, 0, 0.24, 0.48, 0.72, 0.9, 1], P = []; for (const p of MXP) for (const f of F) P.push(nose(f * p[0], p[1], Math.PI / 2));
-    mxGrid(b, P, MXN, F.length, C1, (k, i) => { const ed = i === 0 || i === F.length - 2; return k === 0 ? DRK : k === 4 || (!ed && k >= 3 && k <= 6) ? GLS : WHITE; }); }
+// cab end g: the cross-section shrinks round a 0.4 m plan corner radius into a face with 9 degrees of rake and a slight bow. The face is built row by row from the
+// outline: each row runs outline - screen edge - ... - screen edge - outline, so the edge of the black screen (a rounded trapezoid inside a thin rim) lies on mesh edges;
+// at window-band height the rim is glazed too and the screen runs round the corner into the cab side windows
+function mxCab(b, h, g, white) {
+  const zb = h - 0.75, D = 0.55, WHITE = [MXW, MAT.coach], GLS = [[0, 1, 1], MAT.tglass], GLB = [[0, 0, 1], MAT.tglass], DRK = [MXD, MAT.coach], C1 = [0, 1.9, g * (zb - 2)];
+  const rk = (x, y) => 0.158 * Math.max(0, y - 1.1) + 0.13 * (x / 1.2) ** 2, n2 = (x, y, th) => { const q = 1 - Math.cos(th); return [x * (1 - 0.25 * q), y > 2.1 ? 2.1 + (y - 2.1) * (1 - 0.09 * q) : y]; };
+  const nose = (x, y, th) => { const p = n2(x, y, th); return [p[0], p[1], g * (zb + (D - rk(p[0], p[1])) * Math.sin(th))]; }, fp = (x, y, o = 0) => [x, y, g * (zb + D - rk(x, y) + o)];
+  { const NT = 4, P = []; for (let j = 0; j <= NT; j++) for (const p of MXRING) P.push(nose(p[0], p[1], j / NT * Math.PI / 2));
+    mxGrid(b, P, NT + 1, MXRING.length, C1, (j, i) => { const y = mxMid(mxSeg(i)); return y < 1.0 ? DRK : y > 1.97 && y < 2.95 ? GLB : WHITE; }); }
+  { const O = MXP.map((p) => n2(p[0], p[1], Math.PI / 2)), W = 0.13, F = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1], P = [], xs = O[3][0] - W, kb = MXP.findIndex((p) => p[1] > 1.96);
+    const I = O.map((o, k) => { const y = MXP[k][1]; if (k === MXN - 1) return [0, o[1] - W]; if (y < 1.5) return [o[0] * 0.86, o[1]]; if (y < 1.6) return [xs - (y < 1.54 ? 0.15 : 0.044), o[1]]; if (y < 2.96) return [o[0] - W, o[1]];
+      const a = O[k - 1], c = O[k + 1], tx = c[0] - a[0], ty = c[1] - a[1], l = Math.hypot(tx, ty); return [o[0] - ty / l * W, o[1] + tx / l * W]; }); // (the tangent runs up and inwards: turned left it points into the face)
+    for (let k = 0; k < MXN; k++) { P.push(fp(-O[k][0], O[k][1])); for (const f of F) P.push(fp(f * I[k][0], I[k][1])); P.push(fp(O[k][0], O[k][1])); }
+    mxGrid(b, P, MXN, F.length + 2, C1, (k, i) => { const rim = i === 0 || i === F.length, y = MXP[k][1]; return k === 0 ? DRK : rim ? (k === kb ? GLB : WHITE) : y > 1.5 ? GLS : WHITE; }, 0); }
   // obstacle deflector under the nose
-  { const X = [-1.3, -1.05, -0.6, -0.2, 0.2, 0.6, 1.05, 1.3], P = [];
-    for (const [y, o, k] of [[0.92, -0.02, 1], [0.66, -0.05, 1], [0.44, -0.2, 0.97]]) { P.push([-1.44 * k, y, g * (zb - 0.5)], [-1.42 * k, y, g * (zb + 0.05 + o)]); for (const x of X) P.push([x * k, y, fz(x, 1.0, o)]); P.push([1.42 * k, y, g * (zb + 0.05 + o)], [1.44 * k, y, g * (zb - 0.5)]); }
-    mxGrid(b, P, 3, X.length + 4, C1, () => [[0.1, 0.1, 0.11], MAT.paint]); }
-  // Scharfenberg coupler with its cover
-  b.set([0.17, 0.17, 0.18], MAT.metal); b.cyl(0, 0.72, g * (zb - 0.2), 0, 0.72, g * (h + 0.02), 0.1, 0.1, 8, 0);
-  b.set([0.4, 0.41, 0.43], MAT.paint); extX(b, [[0.55, g * (h - 0.02)], [0.9, g * (h - 0.02)], [0.9, g * (h + 0.2)], [0.84, g * (h + 0.3)], [0.61, g * (h + 0.3)], [0.55, g * (h + 0.2)]], -0.21, 0.21);
-  b.set([0.1, 0.1, 0.11], MAT.metal); b.cyl(0.07, 0.72, g * (h + 0.3), 0.07, 0.72, g * (h + 0.37), 0.07, 0.035, 8); b.cyl(-0.09, 0.72, g * (h + 0.3), -0.09, 0.72, g * (h + 0.31), 0.06, 0.06, 8);
-  // light clusters: two headlights and a tail light in a dark recess each side (the cab at the -z end shows white, the other red)
+  { const X = [-1.14, -0.9, -0.5, -0.17, 0.17, 0.5, 0.9, 1.14], P = [];
+    for (const [y, o, k] of [[0.92, -0.02, 1], [0.66, -0.05, 1], [0.44, -0.2, 0.97]]) { P.push([-1.44 * k, y, g * (zb - 0.5)], [-1.42 * k, y, g * (zb + 0.05 + o)]); for (const x of X) P.push([x * k, y, fp(x, 1.0, o)[2]]); P.push([1.42 * k, y, g * (zb + 0.05 + o)], [1.44 * k, y, g * (zb - 0.5)]); }
+    mxGrid(b, P, 3, X.length + 4, C1, () => [[0.1, 0.1, 0.11], MAT.coach]); }
+  // Scharfenberg coupler: a dark head on a short drawbar, an octagonal face plate with the cone and the funnel, the electrical head beneath
+  { const zh = h + 0.02, CP = [0.17, 0.17, 0.18];
+    b.set(CP, MAT.stone); b.cyl(0, 0.74, g * (zb - 0.1), 0, 0.74, g * zh, 0.085, 0.085, 8, 0); b.cyl(0, 0.74, g * zh, 0, 0.74, g * (zh + 0.2), 0.17, 0.19, 8);
+    b.set([0.2, 0.2, 0.21], MAT.metal); b.cyl(0.075, 0.74, g * (zh + 0.2), 0.075, 0.74, g * (zh + 0.31), 0.06, 0.02, 8);
+    b.set([0.01, 0.01, 0.01], MAT.void); b.cyl(-0.075, 0.74, g * (zh + 0.2), -0.075, 0.74, g * (zh + 0.204), 0.062, 0.062, 8);
+    b.set([0.2, 0.2, 0.21], MAT.stone); bx2(b, -0.15, 0.44, g * (zh + 0.02), 0.15, 0.555, g * (zh + 0.19)); }
+  // light clusters: a recessed dark bezel each side with two headlights and a tail light; the leading end shows white, the trailing end red, unlit lenses are grey
   for (const s of [-1, 1]) {
-    b.set([0.02, 0.02, 0.024], MAT.paint); for (const [xa, xb] of [[0.56, 0.84], [0.84, 1.12]]) mxQ(b, fp(s * xa, 1.19, 0.012), fp(s * xb, 1.19, 0.012), fp(s * xb, 1.47, 0.012), fp(s * xa, 1.47, 0.012), C1);
-    for (const [x, r, red] of [[0.68, 0.075, 0], [0.85, 0.075, 0], [1.02, 0.06, 1]]) { const on = red ? c === 2 : c === 0;
-      b.set(red ? (on ? [0.9, 0.05, 0.03] : [0.22, 0.02, 0.02]) : on ? [1, 0.97, 0.9] : [0.55, 0.56, 0.58], on ? (red ? MAT.beacon : MAT.head) : MAT.glass);
-      b.cyl(s * x, 1.33, fz(s * x, 1.33, 0.0), s * x, 1.33, fz(s * x, 1.33, 0.045), r, r * 0.9, 10); }
+    b.set([0.03, 0.03, 0.034], MAT.coach); for (let k = 0; k < 3; k++) { const xa = s * (0.56 + k * 0.18), xb = s * (0.74 + k * 0.18); mxQ(b, fp(xa, 1.2, 0.01), fp(xb, 1.2, 0.01), fp(xb, 1.44, 0.01), fp(xa, 1.44, 0.01), C1); }
+    for (const [x, r, red] of [[0.65, 0.07, 0], [0.83, 0.07, 0], [1.01, 0.055, 1]]) { const on = red ? !white : white, zq = fp(s * x, 1.32)[2];
+      b.set([0.12, 0.12, 0.13], MAT.metal); b.cyl(s * x, 1.32, zq + g * 0.004, s * x, 1.32, zq + g * 0.034, r + 0.012, r + 0.012, 10, 0);
+      b.set(on ? (red ? [0.9, 0.05, 0.03] : [0.62, 0.6, 0.56]) : red ? [0.16, 0.05, 0.05] : [0.2, 0.21, 0.23], on ? (red ? MAT.beacon : MAT.head) : MAT.glass); b.cyl(s * x, 1.32, zq + g * 0.02, s * x, 1.32, zq + g * 0.03, r, r, 10); }
   }
   // destination display behind the top of the screen
-  { let x = -0.62; for (let k = 0; x < 0.6; k++) { const w = k === 0 ? 0.1 : 0.05 + 0.1 * hash1(k * 7 + 3), x1 = Math.min(x + w, 0.62); b.set([0.7, 0.34, 0.04], MAT.head);
-      mxQ(b, fp(x, 2.87, 0.012), fp(x1, 2.87, 0.012), fp(x1, 2.95, 0.012), fp(x, 2.95, 0.012), C1); x = x1 + (k === 0 ? 0.12 : 0.025 + (hash1(k * 5) > 0.75 ? 0.06 : 0)); } }
-  // wiper
-  b.set([0.05, 0.05, 0.055], MAT.metal); b.cyl(0.1, 1.97, fz(0.1, 1.97, 0.03), -0.42, 2.5, fz(-0.42, 2.5, 0.035), 0.014, 0.012, 5); b.cyl(-0.5, 2.12, fz(-0.5, 2.12, 0.025), -0.34, 2.86, fz(-0.34, 2.86, 0.025), 0.016, 0.016, 4);
+  { let x = -0.6; for (let k = 0; x < 0.58; k++) { const w = k === 0 ? 0.1 : 0.05 + 0.1 * hash1(k * 7 + 3), x1 = Math.min(x + w, 0.6); b.set([0.36, 0.17, 0.02], MAT.head);
+      mxQ(b, fp(x, 3.15, 0.008), fp(x1, 3.15, 0.008), fp(x1, 3.23, 0.008), fp(x, 3.23, 0.008), C1); x = x1 + (k === 0 ? 0.12 : 0.025 + (hash1(k * 5) > 0.75 ? 0.06 : 0)); } }
+  // wiper: a dark arm from the pivot under the screen, the blade parked low
+  b.set([0.03, 0.03, 0.033], MAT.coach); { const a = fp(0.05, 1.5, 0.03), c = fp(-0.5, 1.63, 0.035), d = fp(-0.98, 1.61, 0.03), e = fp(-0.08, 1.66, 0.03); b.cyl(a[0], a[1], a[2], c[0], c[1], c[2], 0.015, 0.015, 4); b.cyl(d[0], d[1], d[2], e[0], e[1], e[2], 0.012, 0.012, 4, 0); }
   // antenna on the cab roof
   b.set([0.12, 0.12, 0.13], MAT.metal); b.cyl(0.45, 3.55, g * (zb - 0.6), 0.45, 3.63, g * (zb - 0.6), 0.09, 0.06, 8); b.cyl(0.45, 3.63, g * (zb - 0.6), 0.45, 3.95, g * (zb - 0.6), 0.012, 0.008, 4);
 }
@@ -969,7 +991,7 @@ function railway(b, W, R) {
   // ---- bed and rails: breakpoints as far apart as the curve allows (8 cm off the measured line, at most 40 m), continuous over the bridge spans ----
   for (const t of R.tr) {
     let side = 1; { const m = t.n >> 1; let bd = 1e9; for (const u of R.tr) if (u !== t) for (let k = 0; k < u.n; k += 2) { const d = Math.hypot(u.x[k] - t.x[m], u.z[k] - t.z[m]); if (d < bd) { bd = d; const a = Math.max(0, m - 1), c = Math.min(t.n - 1, m + 1); side = Math.sign(-(t.z[c] - t.z[a]) * (u.x[k] - t.x[m]) + (t.x[c] - t.x[a]) * (u.z[k] - t.z[m])) || 1; } } } // third rail between the tracks: clear of the side platforms
-    const gap = new Uint8Array(t.n); // (no gaps any more: the spans are metro decks (meta.bridges k 1) or, low over a path, run on an embankment)
+    t.s3 = side; const gap = new Uint8Array(t.n); // (no gaps any more: the spans are metro decks (meta.bridges k 1) or, low over a path, run on an embankment)
     for (let a = 0; a < t.n - 1;) {
       if (gap[a + 1]) { a++; continue; } let e = a + 1; while (e < t.n - 1 && !gap[e + 1]) e++; // run of points a..e clear of bridge spans and their abutments
       const K = [a]; let i = a;
@@ -1000,19 +1022,22 @@ function railway(b, W, R) {
   for (const S of R.st) {
     const big = S.name === 'Frognerseteren' || S.name === 'Holmenkollen';
     S.p.forEach((Q, pi) => {
-      const { x, z, yaw, hl, hw, top, edge } = Q, ax = Math.sin(yaw), az = Math.cos(yaw), bx = Math.cos(yaw), bz = -Math.sin(yaw), ex = edge, oc = -edge;
+      const { x, z, yaw, hl, hw, top, edge } = Q, sl = Q.sl || 0, ax = Math.sin(yaw), az = Math.cos(yaw), bx = Math.cos(yaw), bz = -Math.sin(yaw), ex = edge, oc = -edge;
       let yb = top; for (let u = -1; u <= 1; u += 0.5) for (const v of [-1, 1]) yb = Math.min(yb, W.heightAt(x + ax * u * (hl + 3) + bx * v * hw, z + az * u * (hl + 3) + bz * v * hw)); yb -= 0.6;
-      b.at(x, 0, z, yaw); const T = top;
+      const ybw = yb; yb -= Math.abs(sl) * (hl + 4); // (local heights are sheared by the slope below: the slab bottom stays under the lowest ground)
+      b.at(x, 0, z, yaw); b.m[9] += sl; const T = top; // the top follows the rail head along the platform (world.js platFit): local y is sheared along the platform, uprights stay upright
       b.set(CONP, MAT.stone); b.box(-hw, yb, -hl, hw, T - 0.02, hl);
       b.set(PAVE, MAT.paint); b.quad([-hw, T, hl], [hw, T, hl], [hw, T, -hl], [-hw, T, -hl]);
       b.set([0.8, 0.8, 0.77], MAT.paint); bx2(b, ex * hw, T - 0.25, -hl, ex * (hw - 0.3), T + 0.012, hl); // coping
       b.set([0.85, 0.66, 0.06], MAT.paint); bx2(b, ex * (hw - 0.55), T, -hl, ex * (hw - 0.85), T + 0.014, hl); // tactile warning line
       b.set(SNOWC, MAT.snow); bx2(b, oc * hw, T, -hl, oc * (hw - 0.7), T + 0.12, hl);
       for (const e of [-1, 1]) { b.set(CONP, MAT.stone); // ramps down at both ends
-        const g = W.heightAt(x + ax * e * (hl + 4), z + az * e * (hl + 4)) + 0.05, za = e * hl, zb = e * (hl + 4);
+        const za = e * hl, zb = e * (hl + 4), g = W.heightAt(x + ax * e * (hl + 4), z + az * e * (hl + 4)) + 0.05 - sl * zb;
         b.quad([-hw, T, za], [hw, T, za], [hw, g, zb], [-hw, g, zb]); for (const s of [-1, 1]) b.quad([s * hw, T, za], [s * hw, g, zb], [s * hw, yb, zb], [s * hw, yb, za]);
         b.set([0.2, 0.2, 0.21], MAT.metal); b.cyl(oc * (hw - 0.1), T + 1.0, za, oc * (hw - 0.1), g + 1.0, zb, 0.03, 0.03, 4); }
-      fx(x, T, z, yaw, [box(x, z, yaw, hw, hl + 4, yb, T - yb, 0)]);
+      { const nb = Math.max(1, Math.ceil(Math.abs(sl) * (2 * hl + 8) / 0.3)), hd = (hl + 4) / nb, bxs = []; // solid boxes: stepped along a sloping platform, each within 0.15 m of the top
+        for (let k = 0; k < nb; k++) { const u = -hl - 4 + (2 * k + 1) * hd; bxs.push(box(x + ax * u, z + az * u, yaw, hw, hd, ybw, T + sl * u - ybw, 0)); }
+        fx(x, T, z, yaw, bxs); }
       // shelters: where the OSM shelter stood, else one in the middle; timber at Frognerseteren and Holmenkollen, glass and steel elsewhere
       const SH = Q.sh.length ? Q.sh : [[hl * 0.2, 6]];
       for (const [u, len] of SH) {
@@ -1033,12 +1058,12 @@ function railway(b, W, R) {
       for (const u of Q.lamps) { const lx = oc * (hw - 0.45);
         b.set([0.2, 0.21, 0.22], MAT.metal); b.cyl(lx, T, u, lx, T + 4.6, u, 0.07, 0.05, 6); b.cyl(lx, T + 4.5, u, lx + ex * 1.1, T + 4.6, u, 0.035, 0.035, 4); bx2(b, lx + ex * 0.8, T + 4.45, u - 0.25, lx + ex * 1.3, T + 4.65, u + 0.25);
         b.set([1, 0.95, 0.82], MAT.lamp); b.quad([lx + ex * 0.82, T + 4.44, u - 0.22], [lx + ex * 1.28, T + 4.44, u - 0.22], [lx + ex * 1.28, T + 4.44, u + 0.22], [lx + ex * 0.82, T + 4.44, u + 0.22]);
-        const wx = lx + ex * 1.05; W.railGlow.push(x + bx * wx + ax * u, T + 4.35, z + bz * wx + az * u); }
+        const wx = lx + ex * 1.05; W.railGlow.push(x + bx * wx + ax * u, T + 4.35 + sl * u, z + bz * wx + az * u); }
       // name boards (both ends) and the T sign at the entrance end
       for (const e of [-1, 1]) { const zz = e * hl * 0.55, xs = oc * (hw - 0.3);
         b.set([0.2, 0.21, 0.22], MAT.metal); for (const o of [-1.1, 1.1]) b.cyl(xs, T, zz + o, xs, T + 2.5, zz + o, 0.04, 0.04, 5);
         b.set(TBLUE.map((c, k) => c + (k === 0 ? 0.002 * (pi + 3 * e + S.name.length) : 0)), MAT.sign); b.quad([xs + ex * 0.04, T + 1.9, zz - 1.2], [xs + ex * 0.04, T + 1.9, zz + 1.2], [xs + ex * 0.04, T + 2.45, zz + 1.2], [xs + ex * 0.04, T + 2.45, zz - 1.2], [0, 0, 1, 0, 1, 1, 0, 1]); }
-      if (pi === 0) { const zz = hl + 2.5, xs = oc * (hw + 0.6), gy = W.heightAt(x + ax * zz + bx * xs, z + az * zz + bz * xs);
+      if (pi === 0) { const zz = hl + 2.5, xs = oc * (hw + 0.6), gy = W.heightAt(x + ax * zz + bx * xs, z + az * zz + bz * xs) - sl * zz;
         b.set([0.2, 0.21, 0.22], MAT.metal); b.cyl(xs, gy - 0.3, zz, xs, gy + 3.2, zz, 0.05, 0.05, 6);
         b.set(TBLUE, MAT.paint); b.cyl(xs, gy + 3.2, zz - 0.05, xs, gy + 3.2, zz + 0.05, 0.42, 0.42, 16);
         b.set([0.92, 0.92, 0.9], MAT.paint); for (const s of [-1, 1]) { bx2(b, xs - 0.26, gy + 3.33, zz + s * 0.06, xs + 0.26, gy + 3.45, zz + s * 0.07); bx2(b, xs - 0.06, gy + 2.95, zz + s * 0.06, xs + 0.06, gy + 3.4, zz + s * 0.07); } }
@@ -1053,7 +1078,7 @@ function railway(b, W, R) {
       const L = CL[c], h = L / 2; railAt(t, s0, P0); railAt(t, s0 + L, P1); s0 += L + 0.4;
       const cx = (P0[0] + P1[0]) / 2, cy = (P0[1] + P1[1]) / 2 + 0.19, cz = (P0[2] + P1[2]) / 2, yaw = Math.atan2(P1[0] - P0[0], P1[2] - P0[2]), pitch = -Math.atan2(P1[1] - P0[1], Math.hypot(P1[0] - P0[0], P1[2] - P0[2]));
       b.at(cx, cy, cz, yaw, pitch);
-      mxCar(b, L, c, ti * 977 + c * 131 + 7);
+      mxCar(b, L, c, ti * 977 + c * 131 + 7, (c === 0) === (R.train.findIndex((q) => q[0] === ti && q[1] === sc) % 2 === 0), -(t.s3 || 0)); // one end of each unit shows headlights, the other tail lights; shoes on the conductor-rail side
       boxes.push(box(cx, cz, yaw, 1.6, h, cy - 0.2, 3.85, 0));
     }
     fx(boxes[1].x, boxes[1].y, boxes[1].z, boxes[1].th, boxes);
