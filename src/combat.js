@@ -57,7 +57,7 @@ export function initCombat(C) {
   G.dn = new Int32Array(3); for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; G.dsel = 0; G.rep = 0; G.spot = false;
   let fireWas = false, fireBlock = false, inf = null; // inf: the infantry (src/infantry.js), set at the end of initCombat
   let hmgT = 0, sNext = 0, flNext = 0, clNext = 0, mgT = 0, mapT = 0, hudDirty = true, lastMg = -1, dryT = 0;
-  for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i],
+  for (let i = 0; i < MAXE; i++) G.enemies.push({ on: false, dead: false, type: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, dp: 0, dr: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, vy: 0.6, gunPitch: 0, recoil: 0, v: 0, hp: 0, state: 0, rl: 0, path: -1, pi: 0, dir: 1, burn: 0, burnt: 0, see: 0, losT: 0, los: false, known: 0, trL: 0, trR: 0, ex: 0, ey: 0, ez: 0, errT: 0, shots: 0, burstN: 0, burstT: 0, immob: false, evalT: 0, emT: 0, d: C.eobj[i],
     role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, tax: 0, taz: 0, tcT: 0, fa: 0, faT: 0, cage: false, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
   const AIR = []; for (let i = 0; i < MAXA; i++) AIR.push({ on: false, type: 0, st: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, tp: 0, tr: 0, spin: 0, hp: 0, t: 0, chk: 0, tx: 0, tz: 0, ang: 0, warned: false, seen: false, d: C.aobj ? C.aobj[i] : new Float32Array(132) });
   // infantry (phase 6), read by the soldier renderer: n = slots in use; per soldier 8 floats [x, y, z, yaw, pose, phase, aim, state]
@@ -469,6 +469,16 @@ export function initCombat(C) {
       msg += (k++ ? ' · ' : '') + `${n} from the ${dirName(GS[g * 4 + 1], GS[g * 4 + 2])}, ~${Math.round(GS[g * 4 + 3] / n / 50) * 50} m`; }
     ui.toast(msg + tail);
   }
+  // the yaw to show an upper body at: the nearest point of its two arcs A (left from, to; right from, to) to the aimed yaw, changing side
+  // only when the other is clearly nearer, and swung there quickly the short way round
+  const FD = new Float32Array(3);
+  function visYaw(A, ty, vy, dt) {
+    ty = Math.atan2(Math.sin(ty), Math.cos(ty));
+    const tl = ty < (A[0] + A[1]) / 2 - Math.PI ? ty + Math.PI * 2 : ty, tr = ty > (A[2] + A[3]) / 2 + Math.PI ? ty - Math.PI * 2 : ty;
+    const cl = clamp(tl, A[0], A[1]), cr = clamp(tr, A[2], A[3]), tg = Math.abs(tl - cl) - Math.abs(tr - cr) < (vy > 0 ? 0.3 : -0.3) ? cl : cr;
+    let d = tg - vy; d = Math.atan2(Math.sin(d), Math.cos(d)); vy += clamp(d, -8 * dt, 8 * dt);
+    return Math.atan2(Math.sin(vy), Math.cos(vy));
+  }
   function updateEnemy(e, dt, idx) {
     const E = ETYPE[e.type], K = E.K;
     if (e.spotT > 0) { e.spotT -= dt; e.seen = true; e.lostT = 0; if (!e.dead) { e.lx = e.x; e.lz = e.z; } } else e.lostT += dt; // map contact: fresh while spotted, then the last known position
@@ -530,12 +540,17 @@ export function initCombat(C) {
       if (e.burstN > 0) { e.burstT -= dt; if (e.burstT <= 0) { e.burstT = 0.2; e.burstN--; e.fire = true; } }
       else if (engage && !G.peace && e.rl <= 0 && Math.hypot(dyaw, dpt) < 0.012 && e.see >= (e.shots ? 1 : 1 + d * 0.001)) { e.rl = E.reload * (0.9 + rnd() * 0.3); e.shots++; e.fire = true; e.burstN = E.burst - 1; e.burstT = 0.2; }
     }
-    tankParts(e.d, e, K); if (K.ax) wheelParts(e.d, e, K); e.d[128] = e.trL; e.d[129] = e.trR; e.d[130] = e.burnt; e.d[131] = 1;
-    if (e.fire) { e.fire = false; if (d2p(e) < 2500) e.spotT = Math.max(e.spotT, 8); const M = gunMat(), mx = M[4] * K.gy + M[8] * K.mz + M[12], my = M[5] * K.gy + M[9] * K.mz + M[13], mz = M[6] * K.gy + M[10] * K.mz + M[14], l = -1 / Math.hypot(M[8], M[9], M[10]);
+    if (K.ya) { // an upper body that cannot turn everywhere (the pillion): shots still leave along the aimed yaw, the figure keeps to its arcs
+      if (e.fire) { tankParts(e.d, e, K); const M = gunMat(); FD[0] = M[8]; FD[1] = M[9]; FD[2] = M[10]; }
+      if (!e.dead) e.vy = visYaw(K.ya, e.turYaw, e.vy, dt);
+      tankParts(e.d, e, K, e.vy);
+    } else tankParts(e.d, e, K);
+    if (K.ax) wheelParts(e.d, e, K); e.d[128] = e.trL; e.d[129] = e.trR; e.d[130] = e.burnt; e.d[131] = 1;
+    if (e.fire) { e.fire = false; if (d2p(e) < 2500) e.spotT = Math.max(e.spotT, 8); const M = gunMat(), mx = M[4] * K.gy + M[8] * K.mz + M[12], my = M[5] * K.gy + M[9] * K.mz + M[13], mz = M[6] * K.gy + M[10] * K.mz + M[14], l = -1 / Math.hypot(M[8], M[9], M[10]), q = K.ya ? FD : M, o8 = K.ya ? 0 : 8;
       const E2 = ETYPE[e.type]; C.sfx(E2.sfx, mx, my, mz, 1);
-      const so = fire(1, E2.shell, mx, my, mz, M[8] * l, M[9] * l, M[10] * l, E2.v, E2.spread, E2.shell === 8 ? 10 : E2.shell === 9 ? 2 : 4);
+      const so = fire(1, E2.shell, mx, my, mz, q[o8] * l, q[o8 + 1] * l, q[o8 + 2] * l, E2.v, E2.spread, E2.shell === 8 ? 10 : E2.shell === 9 ? 2 : 4);
       if (E2.shell === 8) { S[so + 9] = idx + 1; ui.toast(`ATGM launch from the ${dirName(e.x - veh.x, e.z - veh.z)}! Smoke or cover breaks its guidance`); } // wire-guided: the launcher steers it while it sees the tank
-      muzzle(mx, my, mz, M[8] * l, M[9] * l, M[10] * l, E2.mz); e.recoil = e.type ? 0.05 : 0.3; e.known = 14; }
+      muzzle(mx, my, mz, q[o8] * l, q[o8 + 1] * l, q[o8 + 2] * l, E2.mz); e.recoil = e.type ? 0.05 : 0.3; e.known = 14; }
   }
 
   // ---------- HUD ----------

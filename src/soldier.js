@@ -23,7 +23,7 @@ const RS = 0.87; // AK-74 built at 1.01 m, scaled to 0.88 m
 export const RIF_PTS = { butt: [0, -0.06 * RS, 0.33 * RS], comb: [0, 0.012 * RS, 0.1 * RS], muzzle: -0.68 * RS };
 
 // loft along local Y: rings [y, rx, rz, ox, oz, col?, mat?]; smooth normals; caps 1 = close bottom, 2 = top, 3 = both
-function loft(b, R, seg, caps = 3) {
+export function loft(b, R, seg, caps = 3) {
   const n = R.length, base = b.v.length / VS, c0 = b.c, m0 = b.mat;
   for (let j = 0; j < n; j++) {
     const r = R[j], p = R[Math.max(0, j - 1)], q = R[Math.min(n - 1, j + 1)], dy = q[0] - p[0] || 1e-6;
@@ -54,8 +54,8 @@ function hexa(b, P) {
 }
 
 // lo = 1: distant LOD (same parts and matrices, ~230 triangles)
-export function buildSoldier(lo = 0) {
-  const b = new MB(), S = lo ? 4 : 9, SL = lo ? 4 : 6, CL = MAT.cloth, GR = MAT.gear, PK = MAT.pack, GV = MAT.glove;
+export function buildSoldier(lo = 0, SL = lo ? 4 : 6) { // SL: segments round the limbs (the riders in bikes.js use rounder ones)
+  const b = new MB(), S = lo ? 4 : 9, CL = MAT.cloth, GR = MAT.gear, PK = MAT.pack, GV = MAT.glove;
   b.at(0, 0, 0);
   // 0 pelvis: tapers into the thighs (no flat seat block), a grey belt
   b.part = 0; b.set(WHITE, CL);
@@ -193,6 +193,8 @@ function kneelLegs(P, yawP) {
   set3(P, 15, 0.22, 0.135, 0.44); set3(P, 21, 0.05, -1, -0.35); // right knee on the snow, toes tucked
 }
 // pose: 0 stand, 1 walk, 2 run, 3 kneel-aim, 4 prone-aim, 5 stand-aim, 7 RPG kneeling
+// for poses built outside this file (the riders in bikes.js): parameter count, the neutral pose, weapon placement and the grip points
+export const RIG = { NP, base, wFromTorso, wAimed, handsOn, RIF_L, RIF_R, RIF_BUTT, AIM: [AIMX, AIMY, AIMZ] };
 function evalPose(P, pose, ph, aim) {
   base(P);
   if (pose === 1 || pose === 2) {
@@ -336,7 +338,11 @@ export function initSoldiers(MAXI, heightAt) { // heightAt(x, z, y): the ground 
     } else if (prv[i] >= 0 && bt[i] < 0.25) {
       evalPose(PA, prv[i], prvPh[i], prvAim[i]); evalPose(PB, pose, ph, aim); const w = sstep(bt[i] / 0.25); blend(PA, PB, w, w, w, w, false);
     } else evalPose(PC, pose, ph, aim);
-    const P = PC, L = P[61], ob = k * IST;
+    place(PC, x, y, z, yaw, k, heat, hsh(i * 5 + 2), hsh(i * 11 + 7));
+  }
+  // solve one pose parameter set P (FK, IK, weapons) at a world position into instance slot k
+  function place(P, x, y, z, yaw, k, heat, s1, s2) {
+    const L = P[61], ob = k * IST;
     // root: world from character space; lying bodies pivot about their middle to follow the slope
     trs(B, x, y, z, yaw, 0, 0);
     if (L > 0.001) {
@@ -367,12 +373,13 @@ export function initSoldiers(MAXI, heightAt) { // heightAt(x, z, y): the ground 
     // weapons
     if (P[60] > 0.5) { mul(W4, Mt, SL); copyTo(ob + 176, W4); getW(M1, P, 48); mul(W4, B, M1); if (L < 0.5) W4[13] += drop; copyTo(ob + 192, W4); }
     else { getW(M1, P, 36); mul(W4, B, M1); if (L < 0.5) W4[13] += drop; copyTo(ob + 176, W4); for (let q = 0; q < 16; q++) out[ob + 192 + q] = 0; }
-    out[ob + 208] = heat; out[ob + 209] = hsh(i * 5 + 2); out[ob + 210] = hsh(i * 11 + 7); out[ob + 211] = 0; // heat, per-soldier tint seeds
+    out[ob + 208] = heat; out[ob + 209] = s1; out[ob + 210] = s2; out[ob + 211] = 0; // heat, per-soldier tint seeds
   }
 
   // per frame: track pose changes for blending, cull by distance and frustum (planes from planesFrom, n planes), pose and pack visible soldiers
   // near LOD first [0, nNear), then the distant LOD [nNear, nNear + nFar)
   S.reset = () => { cur.fill(-1); prv.fill(-1); }; // forget pose history (test staging)
+  S.place = place; // build-time use: the seated riders baked into the buggy and motorcycle meshes (bikes.js)
   S.update = (inf, dt, cx, cy, cz, pl, np) => {
     const d = inf.d, n = Math.min(inf.n, MAXI); let nv = 0;
     for (let i = 0; i < MAXI; i++) {

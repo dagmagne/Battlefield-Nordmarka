@@ -2,7 +2,7 @@ import common from './common.wgsl';
 import terrainW from './terrain.wgsl';
 import skyW from './sky.wgsl';
 import postW from './post.wgsl';
-import objDefW from './objdeform.wgsl';
+import objDefW0 from './objdeform.wgsl';
 import objectW from './object.wgsl';
 import stampW from './stamp.wgsl';
 import treeDefW from './treedeform.wgsl';
@@ -18,7 +18,8 @@ import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
 import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
-import { buildLeopard, buildT72, buildBMP, buildTigr, buildBTR, buildBuggy, buildMoto, buildDrone, buildMine, buildLancet, buildOrlan, tankParts, turMat, gunMat, LEO, TRK } from './tank.js';
+import { buildLeopard, buildT72, buildBMP, buildTigr, buildBTR, buildBuggy, buildMoto, buildDrone, buildMine, buildLancet, buildOrlan, tankParts, turMat, gunMat, LEO, TRK, TRACK_WGSL } from './tank.js';
+const objDefW = TRACK_WGSL + objDefW0; // the track loop tables (gear.js) in front of the deform function that reads them
 import { initCombat, MAXE, MAXG, MAXM, MAXA, MAXI } from './combat.js';
 import { buildSoldier, initSoldiers, IST, WALK_V, RUN_V } from './soldier.js';
 import { buildTrees } from './trees.js';

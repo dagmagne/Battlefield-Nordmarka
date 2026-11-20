@@ -10,6 +10,7 @@ const path = String(opt('path', process.env.GPATH || '')).replace(/^\/+|\/+$/g, 
 export const base = `http://localhost:${port}/${path ? path + '/' : ''}index.html`;
 export function chromeArgs(extra = []) {
   const args = ['--enable-gpu', '--ignore-gpu-blocklist', '--hide-scrollbars', ...extra];
+  if (process.env.GX11) args.push('--ozone-platform=x11', '--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-angle=vulkan'); // Wayland start hangs when the screen is idle (owner away): GX11=1 runs through XWayland
   if (a.includes('--vulkan')) args.push('--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-angle=vulkan');
   return args;
 }

@@ -9,7 +9,7 @@ let chromium; try { ({ chromium } = require('playwright')); } catch (e) { ({ chr
 const a = process.argv.slice(2), opt = (k, d) => { const i = a.indexOf('--' + k); return i < 0 ? d : a[i + 1]; };
 const port = +opt('port', 8080), query = opt('query', 'w=frogner'), waves = +opt('waves', 7), seed = +opt('seed', 0), move = a.includes('--move');
 // --gpu: the installed Chrome on the real GPU (headed) instead of Playwright's headless shell with SwiftShader
-const browser = a.includes('--gpu') ? await chromium.launch({ channel: 'chrome', headless: false, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--window-size=900,600'] })
+const browser = a.includes('--gpu') ? await chromium.launch({ channel: 'chrome', headless: false, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--window-size=900,600', ...(process.env.GX11 ? ['--ozone-platform=x11', '--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-angle=vulkan'] : [])] })
   : await chromium.launch({ args: ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--enable-features=Vulkan,SkiaGraphite', '--use-vulkan=swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 400 } });
 let errs = 0;
