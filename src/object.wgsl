@@ -44,40 +44,60 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   else if (m == 10u) { emis = in.col * (0.35 + 7.5 * night); }
   else if (m == 11u) { emis = in.col * (0.6 + 8.0 * pow(saturate(dot(n, G.l2d.xyz)), 3.0)) * (0.5 + 0.5 * night); }
   else if (m == 12u) { alb = mix(vec3f(0.11, 0.11, 0.12), vec3f(0.27, 0.25, 0.22), fbm3(wp.xz * 0.9 + wp.y * 1.7)); alb *= 0.7 + 0.6 * vn(wp.xz * 7.0 + wp.y * 5.0); snowy = 1.3; }
-  else if (m == 31u) { // metro glazing (uv: metres along the car, height above the rail; col.r: which way u runs, col.g: a cab bulkhead at +u): tinted glass over a ray-cast interior
-    let tu = normalize(cross(vec3f(0.0, 1.0, 0.0), n)); let rv = -v;
-    let ru = dot(rv, tu) * select(1.0, -1.0, in.col.r > 0.5); let rus = select(-1.0, 1.0, ru > 0.0); let rua = max(abs(ru), 1e-4);
-    let rd = max(-dot(rv, n), 0.03); let ry = rv.y;
-    var tb = 2.95 / rd; var hk = 0; // the far wall, then floor or ceiling, an end wall, seat backs, cushions
-    let tf = select((3.28 - uv.y) / max(ry, 1e-4), (1.12 - uv.y) / min(ry, -1e-4), ry < 0.0);
-    if (tf < tb) { tb = tf; hk = select(2, 1, ry < 0.0); }
-    let te = (select(-8.9, select(8.9, 6.45, in.col.g > 0.5), ru > 0.0) - uv.x) * rus / rua;
-    if (te < tb) { tb = te; hk = 3; }
-    let u0 = round(uv.x / 0.82) * 0.82; // seat backs: slabs 0.12 m thick every 0.82 m, 2.2 m high, in two blocks either side of the aisle, none in the vestibules
-    if (abs(uv.x - u0) < 0.06 && uv.y < 2.2 && min(abs(u0), abs(abs(u0) - 5.5)) > 1.0) { tb = 0.0; hk = 4; }
-    for (var i = 0; i < 4; i++) {
-      let uc = u0 + f32(i) * rus * 0.82; let t = (uc - rus * 0.06 - uv.x) * rus / rua;
-      if (t > 0.0 && t < tb) { let yy = uv.y + ry * t; let dd = rd * t; if (yy < 2.2 && (dd < 1.05 || dd > 1.9) && min(abs(uc), abs(abs(uc) - 5.5)) > 1.0) { tb = t; hk = 4; } }
+  else if (m == 31u) { // metro glazing: tinted glass over a ray-cast interior. uv: metres along the car, height above the rail; col.r: which way u runs, col.g: a cab bulkhead at +u.
+    // col.b = 1: cab glass instead (uv: metres across, height): sky reflection with a gradient, a dark desk silhouette in the lower quarter if col.g = 1
+    let amb = ambient(vec3f(0.0, 1.0, 0.0)); let rv = -v;
+    alb = vec3f(0.012, 0.014, 0.017); spec = 0.1; gloss = 200.0; refl = 0.75;
+    if (in.col.b > 0.5) {
+      let rr = reflect(rv, n); let sky = mix(vec3f(0.85, 0.88, 0.95) * amb * 0.6, skyBase(rr), smoothstep(-0.08, 0.04, rr.y));
+      let gy = smoothstep(1.5, 3.4, uv.y); let desk = in.col.g * (1.0 - smoothstep(-0.015, 0.03, uv.y - 1.93 - 0.07 * cos(uv.x * 2.4)));
+      emis = sky * mix(0.04, 0.17, gy) + amb * vec3f(0.05, 0.052, 0.058) * (1.0 - desk) * (1.0 - 0.6 * gy);
+    } else {
+      let tu = normalize(cross(vec3f(0.0, 1.0, 0.0), n));
+      let ru = dot(rv, tu) * select(1.0, -1.0, in.col.r > 0.5); let rus = select(-1.0, 1.0, ru > 0.0); let rua = max(abs(ru), 1e-4);
+      let rd = max(-dot(rv, n), 0.03); let ry = rv.y;
+      var tb = 2.95 / rd; var hk = 0; // the far wall, then floor or ceiling, an end wall, seat backs, cushions
+      let tf = select((3.28 - uv.y) / max(ry, 1e-4), (1.12 - uv.y) / min(ry, -1e-4), ry < 0.0);
+      if (tf < tb) { tb = tf; hk = select(2, 1, ry < 0.0); }
+      let te = (select(-8.9, select(8.9, 6.45, in.col.g > 0.5), ru > 0.0) - uv.x) * rus / rua;
+      if (te < tb) { tb = te; hk = 3; }
+      let u0 = round(uv.x / 0.82) * 0.82; // seat backs: slabs 0.1 m thick every 0.82 m, 1.1 m high, two seats either side of the aisle, none in the vestibules
+      if (abs(uv.x - u0) < 0.05 && uv.y < 2.2 && min(abs(u0), abs(abs(u0) - 5.5)) > 1.0) { tb = 0.0; hk = 4; }
+      for (var i = 0; i < 4; i++) {
+        let uc = u0 + f32(i) * rus * 0.82; let t = (uc - rus * 0.05 - uv.x) * rus / rua;
+        if (t > 0.0 && t < tb) { let yy = uv.y + ry * t; let dd = rd * t; if (yy < 2.2 && (dd < 1.0 || dd > 1.95) && min(abs(uc), abs(abs(uc) - 5.5)) > 1.0) { tb = t; hk = 4; } }
+      }
+      if (ry < 0.0 && uv.y > 1.62) { let t = (1.62 - uv.y) / ry; if (t < tb) { let dd = rd * t; let uu = uv.x + ru * t; if ((dd < 1.0 || dd > 1.95) && min(abs(uu), abs(abs(uu) - 5.5)) > 1.0) { tb = t; hk = 5; } } }
+      { let t = 1.95 / rd; if (t < tb) { let uu = uv.x + ru * t; if (uv.y + ry * t < select(1.62, 2.2, abs(uu - round(uu / 0.82) * 0.82) < 0.05) && min(abs(uu), abs(abs(uu) - 5.5)) > 1.0) { tb = t; hk = 7; } } }
+      let hu = uv.x + ru * tb; let hy = uv.y + ry * tb; let hd = rd * tb; let da = min(abs(hu), abs(abs(hu) - 5.5));
+      let px = 0.0012 * (dist + tb); let fu = px * (1.0 + rua / rd); // a pixel's footprint in metres (no derivatives in this branch): thin features are faded, not point-sampled
+      var ic = vec3f(0.46, 0.47, 0.48); var strip = 0.0; var thru = 0.0;
+      if (hk == 0) { // far side: windows 1.05 m wide between 0.25 m pillars, door windows in the vestibules
+        let wb = saturate((0.525 - abs(fract(hu / 1.3) - 0.5) * 1.3) / fu + 0.5);
+        thru = select(step(2.03, hy) * step(hy, 2.89) * wb, step(abs(da - 0.365), 0.235) * step(1.5, hy) * step(hy, 2.87), da < 0.8);
+        ic = mix(ic, vec3f(0.36, 0.37, 0.38), step(da, 0.75));
+      } else if (hk == 1) { ic = vec3f(0.1, 0.1, 0.11); }
+      else if (hk == 2) { ic = vec3f(0.6); strip = step(abs(abs(hd - 1.475) - 0.75), 0.11); }
+      else if (hk == 3) { ic = vec3f(0.3, 0.31, 0.33); }
+      else if (hk == 4) { ic = vec3f(0.065, 0.095, 0.17) * (1.0 - 0.45 * step(abs(abs(hd - 1.475) - 0.96), 0.025)); }
+      else if (hk == 7) { ic = vec3f(0.04, 0.055, 0.1); }
+      else { ic = vec3f(0.055, 0.08, 0.145); }
+      let lamp = vec3f(1.0, 0.86, 0.68); let li = amb * 0.5 + lamp * (0.04 + 0.45 * night);
+      var ci = ic * li * (0.35 + 0.65 * smoothstep(1.1, 2.9, hy)) + lamp * strip * (0.5 + 2.2 * night);
+      ci = mix(ci, mix(vec3f(0.85, 0.88, 0.95) * amb, skyBase(rv), smoothstep(-0.08, 0.04, ry)) * 0.5, thru);
+      if (ry < 0.0 && uv.y > 2.2) { // seat-back tops: composited with their coverage, they are thin at grazing angles
+        let t = (2.2 - uv.y) / ry; if (t < tb) { let dd = rd * t; let uu = uv.x + ru * t; let fw = 0.0012 * (dist + t) * (1.0 + rua / max(-ry, 0.02));
+          let cov = mix(saturate((0.05 - abs(uu - round(uu / 0.82) * 0.82)) / fw + 0.5), 0.12, saturate(fw / 0.4));
+          if ((dd < 1.0 || dd > 1.95) && min(abs(uu), abs(abs(uu) - 5.5)) > 1.0) { ci = mix(ci, vec3f(0.08, 0.11, 0.19) * li * 0.8, cov); } } }
+      for (var j = 0; j < 2; j++) { // yellow grab poles at the vestibule corners and a handrail along the seat blocks, on the two aisle-side planes
+        let t = select(1.0, 1.95, j == 1) / rd; if (t < tb) { let uu = uv.x + ru * t; let yy = uv.y + ry * t; let fy = 0.0012 * (dist + t) * (1.0 + abs(ry) / rd); let f2 = 0.0012 * (dist + t) * (1.0 + rua / rd);
+          let pole = saturate((0.018 - abs(min(abs(uu), abs(abs(uu) - 5.5)) - 0.98)) / f2 + 0.5) * min(1.0, 0.036 / f2) * step(yy, 3.28) * step(1.12, yy);
+          let rail = saturate((0.015 - abs(yy - 3.02)) / fy + 0.5) * min(1.0, 0.03 / fy);
+          ci = mix(ci, vec3f(0.75, 0.58, 0.05) * li, max(pole, rail)); } }
+      emis = ci * 0.34;
     }
-    if (ry < 0.0 && uv.y > 2.2) { let t = (2.2 - uv.y) / ry; if (t < tb) { let dd = rd * t; let uu = uv.x + ru * t; if (abs(uu - round(uu / 0.82) * 0.82) < 0.06 && (dd < 1.05 || dd > 1.9) && min(abs(uu), abs(abs(uu) - 5.5)) > 1.0) { tb = t; hk = 6; } } }
-    if (ry < 0.0 && uv.y > 1.62) { let t = (1.62 - uv.y) / ry; if (t < tb) { let dd = rd * t; let uu = uv.x + ru * t; if ((dd < 1.05 || dd > 1.9) && min(abs(uu), abs(abs(uu) - 5.5)) > 1.0) { tb = t; hk = 5; } } }
-    { let t = 1.9 / rd; if (t < tb) { let uu = uv.x + ru * t; if (uv.y + ry * t < select(1.62, 2.2, abs(uu - round(uu / 0.82) * 0.82) < 0.06) && min(abs(uu), abs(abs(uu) - 5.5)) > 1.0) { tb = t; hk = 7; } } }
-    let hu = uv.x + ru * tb; let hy = uv.y + ry * tb; let hd = rd * tb; let da = min(abs(hu), abs(abs(hu) - 5.5));
-    var ic = vec3f(0.5, 0.51, 0.53); var strip = 0.0; var thru = 0.0;
-    if (hk == 0) {
-      thru = select(step(2.03, hy) * step(hy, 2.89) * step(abs(fract(hu / 1.95) - 0.5), 0.47), step(abs(da - 0.365), 0.235) * step(1.5, hy) * step(hy, 2.87), da < 0.8);
-      ic = mix(ic, vec3f(0.4, 0.41, 0.43), step(da, 0.75));
-    } else if (hk == 1) { ic = vec3f(0.1, 0.1, 0.11); }
-    else if (hk == 2) { ic = vec3f(0.62); strip = step(abs(abs(hd - 1.475) - 0.75), 0.11); }
-    else if (hk == 3) { ic = vec3f(0.33, 0.34, 0.36); }
-    else if (hk == 4) { ic = mix(vec3f(0.04, 0.055, 0.12), vec3f(0.13, 0.14, 0.17), step(2.04, hy)); }
-    else if (hk == 7) { ic = vec3f(0.03, 0.04, 0.085); }
-    else { ic = vec3f(0.075, 0.095, 0.18); }
-    let amb = ambient(vec3f(0.0, 1.0, 0.0));
-    var ci = ic * (amb * 0.5 + vec3f(1.0, 0.95, 0.86) * (0.04 + 0.45 * night)) * (0.5 + 0.5 * smoothstep(1.1, 2.4, hy)) + vec3f(1.0, 0.96, 0.88) * strip * (0.5 + 2.2 * night);
-    ci = mix(ci, mix(vec3f(0.85, 0.88, 0.95) * amb, skyBase(rv), smoothstep(-0.08, 0.04, ry)) * 0.5, thru);
-    emis = ci * 0.34; alb = vec3f(0.012, 0.014, 0.017); spec = 0.1; gloss = 200.0; refl = 0.75;
   }
+  else if (m == 32u) { spec = 0.05; gloss = 30.0; refl = 0.06; alb *= 1.0 - 0.5 * saturate(dot(n, G.sunDir.xyz)); } // coach paint (the metro cars): satin, and held back where it faces a low sun squarely, so a sunlit side keeps its panel lines instead of clipping to white
   else if (m == 13u) { // sign board: text-ish bars
     let f = uv; let row = floor(f.y * 3.0); let rf = fract(f.y * 3.0);
     let ink = step(0.3, rf) * step(rf, 0.7) * step(0.12, f.x) * step(f.x, 0.5 + 0.35 * ihash(vec2i(i32(row), i32(in.col.r * 91.0)))) * step(0.35, vn(vec2f(f.x * 46.0, row * 9.0 + in.col.g * 50.0)));

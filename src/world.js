@@ -190,20 +190,31 @@ function railWorld(meta, b, H, mat, buildings) {
   const st = [], lamps = [], spill = [];
   for (const [name, cx, cz, P] of M.st) {
     const S = { name, x: cx, z: cz, p: [] };
-    for (const [x, z, yaw, hl, hw, top, edge] of P) {
-      const ax = Math.sin(yaw), az = Math.cos(yaw), bx = Math.cos(yaw), bz = -Math.sin(yaw), L = hl + 3, R = Math.hypot(L, hw) + 2;
+    for (const [x0, z0, yaw, hl, hw0, top0, edge] of P) {
+      const ax = Math.sin(yaw), az = Math.cos(yaw), bx = Math.cos(yaw), bz = -Math.sin(yaw), L = hl + 3;
+      const [top, sl, gap] = platFit(tr, x0, z0, ax, az, bx, bz, hl, hw0, top0, edge); // level boarding: the top follows the rail head of the platform's track,
+      const dw = gap ? clamp(gap - 1.66, -0.6, 0.6) : 0, hw = hw0 + dw / 2, x = x0 + bx * edge * dw / 2, z = z0 + bz * edge * dw / 2, R = Math.hypot(L, hw) + 2; // and the edge stands 8 cm off the car side (1.58 m from the track centre)
       for (let j = Math.max(0, Math.floor(w2t(z - R))); j <= Math.min(HN - 1, Math.ceil(w2t(z + R))); j++) for (let i = Math.max(0, Math.floor(w2t(x - R))); i <= Math.min(HN - 1, Math.ceil(w2t(x + R))); i++) {
-        const dx = (i + 0.5) * TEX - HALF - x, dz = (j + 0.5) * TEX - HALF - z, u = Math.abs(dx * ax + dz * az), v = Math.abs(dx * bx + dz * bz), k = j * HN + i;
-        if (u < L + 1.5 && v < hw + 1.5) mask[k] = 1; if (u < L && v < hw) H[k] = Math.min(H[k], top - 0.3); }
-      const Q = { x, z, yaw, hl, hw, top, edge, lamps: [], sh: [] }, ou = -edge * (hw - 0.45);
+        const dx = (i + 0.5) * TEX - HALF - x, dz = (j + 0.5) * TEX - HALF - z, us = dx * ax + dz * az, u = Math.abs(us), v = Math.abs(dx * bx + dz * bz), k = j * HN + i;
+        if (u < L + 1.5 && v < hw + 1.5) mask[k] = 1; if (u < L && v < hw) H[k] = Math.min(H[k], top + sl * us - 0.3); }
+      const Q = { x, z, yaw, hl, hw, top, sl, gap, top0, edge, lamps: [], sh: [] }, ou = -edge * (hw - 0.45);
       for (let i = buildings.length - 1; i >= 0; i--) { const B = buildings[i], dx = B.x - x, dz = B.z - z, u = dx * ax + dz * az; const v = Math.abs(dx * bx + dz * bz); if ((Math.abs(u) < hl + 2 && v < hw + 2) || (B.gone === 2 && Math.abs(u) < hl + 12 && v < 10)) { B.gone = B.gone || 1; Q.sh.push([u, Math.max(B.w, B.d)]); } } // OSM shelters on the platform: rebuilt there by the station props
       for (let u = -hl + 3; u <= hl - 2.9; u += Math.max(10, (2 * hl - 6) / Math.max(1, Math.round((2 * hl - 6) / 13)))) {
-        const lx = x + ax * u + bx * ou, lz = z + az * u + bz * ou; Q.lamps.push(u); lamps.push({ x: lx, z: lz, y: top }); spill.push({ x: lx + bx * edge * 1.1, z: lz + bz * edge * 1.1, yaw: 0, k: 0.32, off: 0 }); }
+        const lx = x + ax * u + bx * ou, lz = z + az * u + bz * ou; Q.lamps.push(u); lamps.push({ x: lx, z: lz, y: top + sl * u }); spill.push({ x: lx + bx * edge * 1.1, z: lz + bz * edge * 1.1, yaw: 0, k: 0.32, off: 0 }); }
       S.p.push(Q);
     }
     st.push(S);
   }
   return { tr, st, bs: M.bs, cross: M.x, train: M.train, mask, lamps, spill };
+}
+// Platform top as a plane along the platform: the rail head of the track at its edge (ballast top + 0.19 m) + 1.05 m, a few cm under the door sills of the
+// MX3000 (floor 1.1 m). Least squares over the track points 0.8-3.2 m outside the edge; returns [top at the centre, slope along the platform, mean distance edge - track centre].
+function platFit(tr, x, z, ax, az, bx, bz, hl, hw, top0, edge) {
+  let n = 0, su = 0, sy = 0, suu = 0, suy = 0, sv = 0;
+  for (const t of tr) for (let q = 0; q < t.n; q++) { const dx = t.x[q] - x, dz = t.z[q] - z, u = dx * ax + dz * az, v = (dx * bx + dz * bz) * edge - hw; if (Math.abs(u) <= hl + 3 && v > 0.8 && v < 3.2) { n++; su += u; sy += t.y[q]; suu += u * u; suy += u * t.y[q]; sv += v; } }
+  if (n < 3) return [top0, 0, 0];
+  const d = n * suu - su * su, sl = d > 1e-6 ? (n * suy - su * sy) / d : 0;
+  return [(sy - sl * su) / n + 0.19 + 1.05, sl, sv / n];
 }
 function railMask(R, bm, BR) { if (R) for (let k = 0; k < HN * HN; k++) if (R.mask[k]) bm[k] = 1; // no tree trunks on the bed or the platforms, nor on a functional bridge and its ramps
   for (const B of BR) brTex(B, 11, 13, (k) => { bm[k] = 1; }); }
