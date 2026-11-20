@@ -39,7 +39,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     emis = vec3f(1.0, 0.62, 0.26) * mull * glow * (0.06 + night * 2.6);
     alb = mix(vec3f(0.85), vec3f(0.03, 0.04, 0.06), mull); spec = 0.3 * mull; gloss = 200.0; refl = 0.5 * mull;
   }
-  else if (m == 8u) { spec = 0.4; gloss = 30.0; alb = mix(alb, vec3f(0.93), 0.12); }
+  else if (m == 8u) { alb *= 0.75 + 0.5 * vn(wp.xz * 13.0 + wp.y * 9.0); spec = 0.012; gloss = 20.0; } // track links: dark steel, rubber pads, packed snow (vertex colours)
   else if (m == 9u) { alb = vec3f(0.028, 0.028, 0.03); }
   else if (m == 10u) { emis = in.col * (0.35 + 7.5 * night); }
   else if (m == 11u) { emis = in.col * (0.6 + 8.0 * pow(saturate(dot(n, G.l2d.xyz)), 3.0)) * (0.5 + 0.5 * night); }
@@ -83,31 +83,50 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     let ink = step(0.3, rf) * step(rf, 0.7) * step(0.12, f.x) * step(f.x, 0.5 + 0.35 * ihash(vec2i(i32(row), i32(in.col.r * 91.0)))) * step(0.35, vn(vec2f(f.x * 46.0, row * 9.0 + in.col.g * 50.0)));
     alb = mix(alb, vec3f(0.92), ink); snowy = 1.0;
   }
-  else if (m == 14u) { let r = length(uv); alb = mix(vec3f(0.03), in.col, step(r, 0.78)); let a = atan2(uv.y, uv.x); alb *= 0.55 + 0.45 * step(0.3, abs(fract(a * 0.955 + 0.5) - 0.5) * 2.0 + step(r, 0.25)); spec = 0.2; }
+  else if (m == 14u) { // turned wheel of a tracked vehicle (uv = radius fraction times (cos, sin); 3 = plain): matt paint, a ring of bolts, dirt and snow in the dish, a matt black tyre beyond 0.76
+    let r = length(uv); spec = 0.006; gloss = 12.0;
+    alb *= 0.8 + 0.35 * vn(in.lp.yz * 9.0);
+    if (r > 0.76 && r < 1.5) { alb = vec3f(0.011, 0.011, 0.012) * (0.8 + 0.5 * vn(in.lp.yz * 23.0 + in.lp.x * 31.0)); spec = 0.004; }
+    else if (r < 1.5) {
+      var a = 0.0; if (r > 0.001) { a = atan2(uv.y, uv.x); }
+      let bd = length(vec2f(r - 0.31, (fract(a * 1.5915 + 0.5) - 0.5) * 0.628 * r));
+      alb *= 0.45 + 0.55 * smoothstep(0.025, 0.04, bd);
+      let dish = smoothstep(0.36, 0.5, r) * (1.0 - smoothstep(0.68, 0.76, r));
+      alb = mix(alb, vec3f(0.035, 0.033, 0.03), 0.5 * dish * smoothstep(0.3, 0.7, vn(in.lp.yz * 17.0 + 3.0)));
+      alb = mix(alb, vec3f(0.5, 0.52, 0.55), 0.35 * dish * smoothstep(0.5, 0.8, vn(in.lp.yz * 7.0 + in.lp.x * 3.0)));
+    }
+  }
   else if (m == 15u) { alb = mix(vec3f(0.07, 0.07, 0.075), vec3f(0.3, 0.035, 0.03), smoothstep(3.75, 3.9, uv.y)); alb *= 0.8 + 0.2 * step(0.5, fract(uv.x * 23.0)); alb = mix(alb, vec3f(0.92), smoothstep(3.95, 4.12, uv.y) * 0.6); }
   else if (m == 16u) { alb = vec3f(0.04); }
   else if (m == 19u) { alb = vec3f(0.004); spec = 0.0; }
-  else if (m == 20u) { // vehicle paint with whitewash winter camouflage (pattern fixed to the part)
-    let lp = in.lp; let up = saturate(n.y); let side = 1.0 - abs(n.y);
-    let q = vec3f(lp.x * 0.8 - lp.z * 0.6, lp.y, lp.x * 0.6 + lp.z * 0.8) * 0.55; // turned off the lattice axes, or the patch edges run in steps along the hull
-    let fine = vn(vec2f(lp.x * 5.4 + lp.z * 7.2, lp.z * 5.4 - lp.x * 7.2) + lp.y * 7.0);
+  else if (m == 20u) { // dead-matt dusty olive with brushed whitewash (pattern fixed to the part; the green channel shifts it from panel to panel)
+    let lp = in.lp; let up = saturate(n.y); let side = 1.0 - abs(n.y); let pk = in.col.g * 9000.0;
+    alb = mix(alb, vec3f(dot(alb, vec3f(0.3, 0.55, 0.15))), 0.18) * 0.85;
+    alb *= 0.82 + 0.3 * vn(lp.xz * 3.1 + lp.y * 5.3 + pk);
+    alb = mix(alb, vec3f(0.12, 0.115, 0.095), 0.22 * vn(vec2f(lp.x * 1.3 - lp.z * 0.9, lp.y * 2.0 + lp.z * 1.1)));
     let drip = vn(vec2f((lp.x + lp.z) * 17.0, lp.y * 1.3)) * 0.6 + vn(vec2f((lp.x + lp.z) * 5.3 + 3.0, lp.y * 0.7)) * 0.4; // vertical runs on the standing plates
-    alb *= 0.8 + 0.34 * vn(lp.xz * 3.1 + lp.y * 5.3);
-    alb *= 1.0 - 0.13 * side * smoothstep(0.45, 0.8, drip); // rain and exhaust streaks
-    // whitewash brushed on in broad patches: opaque in the middle, thin and streaky towards the edges, worn where it is walked on
-    let w = fbm3(q.xz * 1.7 + q.y * 2.3 + in.col.g * 40.0) + 0.07 * (fine - 0.5) + 0.08 * side * (drip - 0.5);
-    let cov = smoothstep(0.49, 0.58, w); let core = smoothstep(0.54, 0.7, w);
-    let brush = 0.6 + 0.4 * smoothstep(0.25, 0.75, vn(vec2f((lp.x - lp.z) * 14.0 + lp.y * 3.0, lp.y * 6.0 + (lp.x + lp.z) * 5.0)));
-    let wash = cov * mix(0.5 * brush, 0.92, core) * (1.0 - 0.35 * up * smoothstep(0.45, 0.75, vn(lp.xz * 4.3)));
-    alb = mix(alb, vec3f(0.6, 0.62, 0.6) * (0.9 + 0.12 * fine), wash);
+    alb *= 1.0 - 0.13 * side * smoothstep(0.45, 0.8, drip);
+    // whitewash brushed on in broad slanting bands (u across the stroke, v along it): hard-edged, streaky where the brush ran dry,
+    // worn off where the crew walks, along the skirt bottoms and in scuffs
+    let u = lp.x * 0.5 + lp.z * 0.62 + lp.y * 0.9; let v = lp.z * 0.5 - lp.x * 0.62 + lp.y * 0.35;
+    let band = vn(vec2f(u * 0.8 + pk, v * 0.45)) * 0.55 + vn(vec2f(u * 1.9 + 5.0 + pk, v * 0.9 + 2.0)) * 0.3 + vn(vec2f(u * 4.3 - pk, v * 1.7)) * 0.15;
+    let bristle = vn(vec2f(u * 26.0, v * 2.2 + pk));
+    let w = band + 0.07 * (bristle - 0.5) + 0.14 * (vn(lp.xz * 0.9 + lp.y * 0.7 + pk) - 0.5);
+    let cov = smoothstep(0.62, 0.645, w);
+    let streak = 0.7 + 0.3 * smoothstep(0.25, 0.6, bristle + 2.0 * (w - 0.645));
+    var wear = up * smoothstep(0.4, 0.7, vn(lp.xz * 2.7 + 9.0)) * 0.8;
+    wear = max(wear, smoothstep(0.8, 0.48, lp.y) * 0.85);
+    wear = max(wear, smoothstep(0.62, 0.8, vn(vec2f(u * 7.0, v * 5.0) + pk)));
+    let wash = cov * streak * (1.0 - wear) * 0.92;
+    alb = mix(alb, vec3f(0.47, 0.485, 0.47) * (0.9 + 0.12 * bristle), wash);
     // road grime and packed snow thrown up low on the hull, a dusting of fresh snow on the level plates (not on the warm engine deck)
     let low = smoothstep(1.05, 0.25, lp.y);
-    alb = mix(alb, vec3f(0.2, 0.19, 0.17), 0.3 * low * smoothstep(0.35, 0.7, vn(lp.xz * 2.3 + lp.y * 3.0)));
+    alb = mix(alb, vec3f(0.14, 0.13, 0.115), 0.45 * low * smoothstep(0.3, 0.65, vn(lp.xz * 2.3 + lp.y * 3.0)));
     alb = mix(alb, vec3f(0.66, 0.68, 0.7), 0.4 * low * smoothstep(0.4, 0.75, vn(lp.xz * 5.0 + lp.y * 6.0 + 2.0)));
     let cold = 1.0 - smoothstep(1.3, 1.9, lp.z) * smoothstep(1.75, 1.6, lp.y);
-    let dust = smoothstep(0.82, 0.97, n.y) * smoothstep(0.42, 0.72, fbm3(q.xz * 2.3 + 7.0) + 0.08 * (fine - 0.5)) * cold;
-    alb = mix(alb, vec3f(0.9, 0.92, 0.95), 0.7 * dust);
-    spec = mix(0.08, 0.03, max(wash, dust)); gloss = 18.0;
+    let dust = smoothstep(0.82, 0.97, n.y) * smoothstep(0.45, 0.75, vn(vec2f(u * 2.1 + 7.0, v * 1.7)) * 0.7 + 0.3 * vn(vec2f(u * 6.3, v * 5.1))) * cold;
+    alb = mix(alb, vec3f(0.9, 0.92, 0.95), 0.5 * dust);
+    spec = 0.01; gloss = 10.0;
   }
   else if (m == 22u) { // building rubble: broken, sooty, a dusting of snow on the tops
     alb *= 0.55 + 0.9 * fbm3(wp.xz * 1.7 + wp.y * 2.3);

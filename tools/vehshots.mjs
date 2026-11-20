@@ -47,7 +47,21 @@ if (only.includes('leo')) {
     await shot(`leo_${vn}`);
   }
   // what the player sees: commander's view and the gunner sight
-  await ev(`__aim(${p[2]}+0.25,-0.06,0)`); await shot('leo_cmd'); await ev(`__aim(${p[2]}+0.25,-0.02,1)`); await shot('leo_sight'); await ev(`__aim(${p[2]},0,0)`);
+  await ev(`__aim(${p[2]}+0.25,-0.06,0)`); await shot('leo_cmd'); await ev(`__aim(${p[2]},0,0)`);
+  // on the bare ice of the lake (no soft snow round the tracks), standing and then driving: the links must follow the loop without gaps
+  const q = await ev('(()=>{ __tp(L.x+FX*12, L.z+FZ*12, Math.atan2(-FX,-FZ)+0.5); __sim(1/60,40); return [__veh.x,__veh.z,__veh.yaw]; })()');
+  const ICE = [['ice_side', Math.PI / 2, 7.5, 1.3, 1.0, 0], ['ice_gear', 1.3, 3.6, 0.55, 0.5, 2.2], ['ice_sprk', Math.PI - 1.2, 3.6, 0.6, 0.55, -2.6], ['ice_fq', 0.5, 6.5, 1.5, 1.0, 1.5], ['ice_front', 0.05, 6, 1.0, 0.9, 2.5], ['ice_gearL', -1.3, 3.6, 0.55, 0.5, 2.2]];
+  const look = async (c, [vn, br, d, eh, th, sh], tag = '') => {
+    await ev(`(()=>{const yw=__veh.yaw,a=yw+${br},fx=-Math.sin(yw),fz=-Math.cos(yw),tx=__veh.x+fx*${sh},tz=__veh.z+fz*${sh};__look(tx-Math.sin(a)*${d},${eh},tz-Math.cos(a)*${d},tx,${th},tz);})()`);
+    await shot(`leo_${vn}${tag}`);
+  };
+  for (const v of ICE) await look(q, v);
+  for (const [tag, f, n] of [['_fwd1', [1, 0], 100], ['_fwd2', [1, 0], 7], ['_piv', [0, 1], 90], ['_rev', [-1, 0], 120]]) {
+    await ev(`(()=>{ __R.force=[${f}]; __sim(1/60,${n}); __R.force=null; })()`);
+    await look(q, ICE[1], tag); await look(q, ICE[2], tag); if (tag === '_piv') await look(q, ICE[5], tag);
+    console.log('drive', tag, JSON.stringify(await ev('[__veh.v.toFixed(2),__veh.trL.toFixed(2),__veh.trR.toFixed(2)]')));
+  }
+  await ev(`(()=>{ __R.force=[0,0]; __tp(${p[0]}, ${p[1]}, ${p[2]}); __sim(1/60,60); __R.force=null; })()`); // back off the ice, out of the enemy views
 }
 const EN = { t72: [0, 7.4, 2.4], bmp: [1, 6.8, 2.2], tigr: [2, 5.8, 2.7], btr: [3, 7.7, 2.6], buggy: [4, 3.5, 1.9], moto: [5, 2.2, 1.5] };
 for (const k of Object.keys(EN)) {
