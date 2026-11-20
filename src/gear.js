@@ -95,9 +95,9 @@ function cog(b, xa, xb, cy, cz, r0, r1, n) {
 // Per tracked vehicle (0 Leopard, 1 T-72, 2 BMP): n road wheels of radius wr from z0 to z1, idler (front) and sprocket (rear) as [z, y, r],
 // link thickness t (the road wheels stand on the links, so the link's outer face is the ground line).
 export const GEAR = [
-  { n: 7, wr: 0.35, z0: -2.36, z1: 2.56, id: [-3.0, 0.61, 0.25], sp: [3.36, 0.59, 0.3], t: 0.07 },
-  { n: 6, wr: 0.375, z0: -2.4, z1: 2.3, id: [-3.08, 0.6, 0.25], sp: [3.0, 0.57, 0.28], t: 0.05 },
-  { n: 6, wr: 0.3, z0: -2.4, z1: 2.45, id: [-3.0, 0.56, 0.24], sp: [3.0, 0.56, 0.27], t: 0.05 }];
+  { n: 7, wr: 0.35, z0: -2.36, z1: 2.56, id: [-3.0, 0.62, 0.25], sp: [3.33, 0.6, 0.3], t: 0.11 },
+  { n: 6, wr: 0.375, z0: -2.4, z1: 2.3, id: [-3.08, 0.61, 0.25], sp: [3.0, 0.59, 0.28], t: 0.07 },
+  { n: 6, wr: 0.3, z0: -2.4, z1: 2.45, id: [-3.0, 0.57, 0.24], sp: [3.0, 0.57, 0.27], t: 0.07 }];
 // The loop is the convex hull of four circles (first road wheel, last road wheel, sprocket, idler): 4 straight runs and 4 arcs, in the
 // direction the lower run moves when driving forward (to the rear). A segment is { s (start), r (0 = straight), py, pz, oy, oz (straight:
 // start point and outward normal; arc: centre), f0 (arc: start angle; outward = (-cos f, sin f) in (y, z)), len }. The tangent is (o.z, -o.y).
@@ -129,14 +129,15 @@ export function loopAt(lp, s, out) {
 const f6 = (v) => { const t = v.toFixed(6); return t.includes('.') ? t : t + '.0'; };
 export const TRACK_WGSL = `const TRKL=array<f32,${LOOPS.length}>(${LOOPS.map((l) => f6(l.L)).join(',')});const TRKT=array<vec4f,${LOOPS.length * 16}>(${LOOPS.map((l) => l.seg.map((g) => `vec4f(${f6(g.s)},${f6(g.r)},${f6(g.f0)},0.0),vec4f(${f6(g.py)},${f6(g.pz)},${f6(g.oy)},${f6(g.oz)})`).join(',')).join(',')});\n`;
 
-// running gear of a tracked vehicle (type = index into GEAR): animated belts and link bars, dual road wheels, return rollers, swing arms,
+// running gear of a tracked vehicle (type = index into GEAR), all in part 3 (the chassis without the hull's suspension rocking, see tankParts,
+// so the links stay on the ground when the hull squats): animated belts and link bars, dual road wheels, return rollers, swing arms,
 // idler and sprocket. hi: track links with rubber pads and end connectors, rounder wheels (the player's tank)
 export function runningGear(b, type, wc, hi = false) {
   const g = GEAR[type], lp = LOOPS[type], L = lp.L, wr = g.wr, DARK = [0.03, 0.031, 0.034], i0 = b.i.length, Q4 = [0, 0, 0, 0];
   const STL = [0.028, 0.028, 0.03], HUB = [wc[0] * 0.8, wc[1] * 0.8, wc[2] * 0.8], WM = MAT.wheel, RB = MAT.rubber;
   for (const side of [-1, 1]) {
     const cx = side * TRK.x, x0 = cx - TRK.w / 2, x1 = cx + TRK.w / 2;
-    b.part = 0; b.set(DARK, MAT.rubber);
+    b.part = 3; b.set(DARK, MAT.rubber);
     // the belt under the links: sampled at the segment joints and along the arcs
     const P = [];
     for (const q of lp.seg) { const n = q.r > 0 ? Math.max(2, Math.ceil(q.len / (q.r * 0.26))) : 1; for (let k = 0; k < n; k++) { const sv = q.s + q.len * k / n; loopAt(lp, sv + 1e-7, Q4); P.push([Q4[0], Q4[1], Q4[2], Q4[3], sv]); } }
@@ -146,27 +147,27 @@ export function runningGear(b, type, wc, hi = false) {
       const a = b.vert(xa, p[0], p[1], 0, p[2], p[3], 0, p[4]), c = b.vert(xb, p[0], p[1], 0, p[2], p[3], 1, p[4]), d = b.vert(xb, q[0], q[1], 0, q[2], q[3], 1, q[4]), e = b.vert(xa, q[0], q[1], 0, q[2], q[3], 0, q[4]);
       b.i.push(a, c, d, a, d, e);
     }
-    // track links (animated along the loop in the vertex shader): pos = (x, along, outward), uv = (s0, side), last float = vehicle type
-    const NBAR = Math.round(L / (hi ? 0.184 : 0.19)), GUN = [0.026, 0.026, 0.028], PAD = [0.007, 0.007, 0.008], SNOW = [0.07, 0.072, 0.077];
+    // track links (animated along the loop in the vertex shader, each placed rigidly at its own loop position): pos = (x, along, outward),
+    // uv = (loop position, side), part 3, last float = vehicle type
+    const NBAR = Math.round(L / 0.172), hb = L / NBAR * 0.47, GUN = [0.026, 0.026, 0.028], PAD = [0.007, 0.007, 0.008], CON = [0.034, 0.034, 0.036], tb = g.t - 0.02;
     for (let k = 0; k < NBAR; k++) {
       const s0 = k / NBAR * L; let col = GUN;
-      const V = (x, al, out, nx, na, no) => { b.v.push(x, al, out, nx, na, no, col[0], col[1], col[2], MAT.bar, s0, side, 0, type); return b.v.length / 14 - 1; };
+      const V = (x, al, out, nx, na, no) => { b.v.push(x, al, out, nx, na, no, col[0], col[1], col[2], MAT.bar, s0, side, 3, type); return b.v.length / 14 - 1; };
       const Q = (p, q, r, s2, n) => { const a = V(...p, ...n), c = V(...q, ...n), d = V(...r, ...n), e = V(...s2, ...n); b.i.push(a, c, d, a, d, e); };
-      // a block from o0 to o1 outward; ends: 1 / 2 = close the -x / +x end; ct = colour of its outer face
-      const blk = (xa, xb, hw, o0, o1, ends, ct) => {
-        const h2 = hw * 0.85, c0 = col;
-        Q([xa, -hw, o0], [xb, -hw, o0], [xb, -h2, o1], [xa, -h2, o1], [0, -1, 0.3]);
-        Q([xb, hw, o0], [xa, hw, o0], [xa, h2, o1], [xb, h2, o1], [0, 1, 0.3]);
+      // a block from o0 to o1 outward, half length hw at the base and h2 at the top; ends: 1 / 2 = close the -x / +x end; top: draw the outer face
+      const blk = (xa, xb, hw, h2, o0, o1, ends, top) => {
+        Q([xa, -hw, o0], [xb, -hw, o0], [xb, -h2, o1], [xa, -h2, o1], [0, -1, 0.25]);
+        Q([xb, hw, o0], [xa, hw, o0], [xa, h2, o1], [xb, h2, o1], [0, 1, 0.25]);
         if (ends & 1) Q([xa, -hw, o0], [xa, -h2, o1], [xa, h2, o1], [xa, hw, o0], [-1, 0, 0]);
         if (ends & 2) Q([xb, hw, o0], [xb, h2, o1], [xb, -h2, o1], [xb, -hw, o0], [1, 0, 0]);
-        if (ct) col = ct;
-        Q([xa, -h2, o1], [xb, -h2, o1], [xb, h2, o1], [xa, h2, o1], [0, 0, 1]); col = c0;
+        if (top) Q([xa, -h2, o1], [xb, -h2, o1], [xb, h2, o1], [xa, h2, o1], [0, 0, 1]);
       };
-      if (!hi) { blk(x0, x1, 0.074, 0, g.t, 3, null); continue; }
-      // link body with packed snow between the pads, two rubber pads, an end connector on the outer edge
-      blk(x0 + 0.02, x1 - 0.02, 0.078, 0, 0.042, side < 0 ? 2 : 1, SNOW);
-      col = PAD; blk(x0 + 0.08, cx - 0.035, 0.064, 0.042, g.t, 3, null); blk(cx + 0.035, x1 - 0.08, 0.064, 0.042, g.t, 3, null);
-      col = [0.034, 0.034, 0.036]; if (side < 0) blk(x0, x0 + 0.05, 0.05, 0, 0.055, 1, null); else blk(x1 - 0.05, x1, 0.05, 0, 0.055, 2, null);
+      if (!hi) { blk(x0, x1, hb, hb * 0.9, 0, g.t, 3, true); continue; }
+      // link body, two rubber pads standing 2 cm proud over most of the pitch, an end connector on each edge, a guide horn between the wheels
+      blk(x0 + 0.05, x1 - 0.05, hb, hb * 0.94, 0, tb, 0, true);
+      col = PAD; blk(x0 + 0.085, cx - 0.03, hb * 0.82, hb * 0.78, tb, g.t, 1, true); blk(cx + 0.03, x1 - 0.085, hb * 0.82, hb * 0.78, tb, g.t, 2, true);
+      col = CON; blk(x0, x0 + 0.05, 0.052, 0.045, 0.012, tb - 0.012, 1, true); blk(x1 - 0.05, x1, 0.052, 0.045, 0.012, tb - 0.012, 2, true);
+      col = GUN; Q([cx - 0.022, -0.04, 0], [cx + 0.022, -0.04, 0], [cx + 0.022, -0.01, -0.07], [cx - 0.022, -0.01, -0.07], [0, -1, -0.4]); Q([cx + 0.022, 0.04, 0], [cx - 0.022, 0.04, 0], [cx - 0.022, 0.01, -0.07], [cx + 0.022, 0.01, -0.07], [0, 1, -0.4]);
     }
     // dual road wheels: the outer disc is turned (hub cap, bolt flange, shallow dish, rim, rubber tyre), the inner one is plain;
     // a trailing swing arm from the hull side to each hub
@@ -175,7 +176,7 @@ export function runningGear(b, type, wc, hi = false) {
     for (let k = 0; k < g.n; k++) {
       const z = g.z0 + k * (g.z1 - g.z0) / (g.n - 1);
       lathe(b, 0, xo, wy, z, [[0.04, 0, WM, HUB], [0.04, 0.15 * wr], [0.012, 0.23 * wr, WM, wc], [0.0, 0.4 * wr], [-0.022, 0.48 * wr], [-0.022, 0.68 * wr], [0.0, 0.765 * wr, WM, DARK], [0.0, 0.95 * wr], [-0.03, wr], [-0.22, wr]], sg, side, false, false, wr);
-      b.set(DARK, WM); lathe(b, 0, cx - side * 0.28, wy, z, [[0, 0], [0, wr], [0.22, wr]], sg - 4, side, false, false, wr);
+      b.set(DARK, WM); lathe(b, 0, cx - side * 0.28, wy, z, [[0, 0], [0, wr], [0.22, wr]], 12, side, false, false, wr);
       b.set(HUB, MAT.metal); b.at(side * 1.13, wy, z, 0, -0.56); b.box(-0.045, -0.055, -0.03, 0.045, 0.055, 0.4); b.at(0, 0, 0); b.cyl(side * 1.09, wy, z, cx - side * 0.27, wy, z, 0.07, 0.07, 8, 0);
       b.set(wc, WM);
     }
@@ -184,13 +185,13 @@ export function runningGear(b, type, wc, hi = false) {
     for (let k = 0; k < nr; k++) { const u = top.len * (k + 0.5) / nr * 0.8 + top.len * 0.12, y = top.py + top.oz * u - top.oy * 0.09, z = top.pz - top.oy * u - top.oz * 0.09; b.cyl(cx + side * 0.05, y, z, cx + side * 0.27, y, z, 0.09, 0.09, 10); }
     // idler at the front: a steel wheel with a deep dish
     const ri = g.id[2], iy = g.id[1], iz = g.id[0];
-    lathe(b, 0, xo, iy, iz, [[0.04, 0, WM, HUB], [0.04, 0.3 * ri], [0.012, 0.45 * ri, WM, wc], [-0.03, 0.62 * ri], [-0.03, 0.8 * ri], [0.0, 0.9 * ri], [0.0, ri], [-0.22, ri]], sg, side, false, false, ri);
+    lathe(b, 0, xo, iy, iz, [[0.04, 0, WM, HUB], [0.04, 0.3 * ri], [0.012, 0.45 * ri, WM, wc], [-0.03, 0.62 * ri], [-0.03, 0.8 * ri], [0.0, 0.9 * ri], [0.0, ri], [-0.22, ri]], 16, side, false, false, ri);
     b.cyl(cx - side * 0.06, iy, iz, cx - side * 0.28, iy, iz, ri, ri, 12);
     // sprocket at the rear: hub and drum with two toothed rings
     const rs = g.sp[2], sy = g.sp[1], sz = g.sp[0];
-    lathe(b, 0, xo, sy, sz, [[0.05, 0, WM, HUB], [0.05, 0.2 * rs], [0.02, 0.26 * rs, WM, wc], [0.0, 0.42 * rs], [0.0, 0.84 * rs], [-0.03, 0.86 * rs], [-0.03, 0.66 * rs], [-0.5, 0.66 * rs]], sg, side, false, false, rs);
-    b.set(STL, WM); cog(b, xo - side * 0.035, xo - side * 0.075, sy, sz, rs - 0.04, rs + 0.012, 12);
-    if (hi) cog(b, xo - side * 0.47, xo - side * 0.51, sy, sz, rs - 0.04, rs + 0.012, 12); else b.cyl(xo - side * 0.47, sy, sz, xo - side * 0.51, sy, sz, rs - 0.02, rs - 0.02, 12);
+    lathe(b, 0, xo, sy, sz, [[0.05, 0, WM, HUB], [0.05, 0.2 * rs], [0.02, 0.26 * rs, WM, wc], [0.0, 0.42 * rs], [0.0, 0.84 * rs], [-0.03, 0.86 * rs], [-0.03, 0.66 * rs], [-0.5, 0.66 * rs]], 16, side, false, false, rs);
+    b.set(STL, WM); cog(b, xo - side * 0.04, xo - side * 0.065, sy, sz, rs - 0.04, rs, 12);
+    if (hi) cog(b, xo - side * 0.475, xo - side * 0.5, sy, sz, rs - 0.04, rs, 12); else b.cyl(xo - side * 0.47, sy, sz, xo - side * 0.51, sy, sz, rs - 0.02, rs - 0.02, 12);
   }
-  fixWinding(b, i0);
+  b.part = 0; fixWinding(b, i0);
 }

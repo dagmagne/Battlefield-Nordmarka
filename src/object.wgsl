@@ -11,6 +11,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let wp = in.wp;
   let V = G.camPos.xyz - wp; let dist = length(V); let v = V / dist;
   var alb = in.col; var spec = 0.04; var gloss = 24.0; var emis = vec3f(0.0); var snowy = 0.0; var refl = 0.0;
+  let nlp = abs(cross(dpdx(in.lp), dpdy(in.lp))) * vec3f(1.0, 1.13, 0.89); // the face's dominant axis in part space (for the vehicle paint; weighted so a 45 degree chamfer does not flicker between two planes; derivatives must be taken here, in uniform control flow)
   let m = in.mat; let uv = in.uv; let isG = OB.tr.w;
   let night = G.misc.x;
   if (m == 0u) { spec = 0.14; gloss = 70.0; refl = 0.16; }
@@ -39,7 +40,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     emis = vec3f(1.0, 0.62, 0.26) * mull * glow * (0.06 + night * 2.6);
     alb = mix(vec3f(0.85), vec3f(0.03, 0.04, 0.06), mull); spec = 0.3 * mull; gloss = 200.0; refl = 0.5 * mull;
   }
-  else if (m == 8u) { alb *= 0.75 + 0.5 * vn(wp.xz * 13.0 + wp.y * 9.0); spec = 0.012; gloss = 20.0; } // track links: dark steel, rubber pads, packed snow (vertex colours)
+  else if (m == 8u) { alb *= 0.75 + 0.5 * vn(wp.xz * 13.0 + wp.y * 9.0); spec = 0.005; gloss = 20.0; } // track links: dark steel, rubber pads, packed snow (vertex colours)
   else if (m == 9u) { alb = vec3f(0.028, 0.028, 0.03); }
   else if (m == 10u) { emis = in.col * (0.35 + 7.5 * night); }
   else if (m == 11u) { emis = in.col * (0.6 + 8.0 * pow(saturate(dot(n, G.l2d.xyz)), 3.0)) * (0.5 + 0.5 * night); }
@@ -119,33 +120,49 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   else if (m == 15u) { alb = mix(vec3f(0.07, 0.07, 0.075), vec3f(0.3, 0.035, 0.03), smoothstep(3.75, 3.9, uv.y)); alb *= 0.8 + 0.2 * step(0.5, fract(uv.x * 23.0)); alb = mix(alb, vec3f(0.92), smoothstep(3.95, 4.12, uv.y) * 0.6); }
   else if (m == 16u) { alb = vec3f(0.04); }
   else if (m == 19u) { alb = vec3f(0.004); spec = 0.0; }
-  else if (m == 20u) { // dead-matt dusty olive with brushed whitewash (pattern fixed to the part; the green channel shifts it from panel to panel)
-    let lp = in.lp; let up = saturate(n.y); let side = 1.0 - abs(n.y); let pk = in.col.g * 9000.0;
+  else if (m == 20u) { // dead-matt dusty olive with whitewash swabbed on in strokes (fixed to the part; the green channel seeds the strokes per panel group)
+    let lp = in.lp; let up = saturate(n.y); let seed = fract(in.col.g * 9000.0 + 0.37) * 37.0;
+    // each face is painted in its own plane (hard switch on the local normal), so every face gets the same brushed strokes
+    var pp = lp.xz; var side = 0.0;
+    if (nlp.x > nlp.y && nlp.x >= nlp.z) { pp = vec2f(lp.z, lp.y + 11.0); side = 1.0; } else if (nlp.z > nlp.y) { pp = vec2f(lp.x + 23.0, lp.y + 5.0); side = 1.0; }
     alb = mix(alb, vec3f(dot(alb, vec3f(0.3, 0.55, 0.15))), 0.18) * 0.85;
-    alb *= 0.82 + 0.3 * vn(lp.xz * 3.1 + lp.y * 5.3 + pk);
-    alb = mix(alb, vec3f(0.12, 0.115, 0.095), 0.22 * vn(vec2f(lp.x * 1.3 - lp.z * 0.9, lp.y * 2.0 + lp.z * 1.1)));
-    let drip = vn(vec2f((lp.x + lp.z) * 17.0, lp.y * 1.3)) * 0.6 + vn(vec2f((lp.x + lp.z) * 5.3 + 3.0, lp.y * 0.7)) * 0.4; // vertical runs on the standing plates
+    alb *= 0.82 + 0.3 * vn(pp * 3.1 + seed);
+    alb = mix(alb, vec3f(0.12, 0.115, 0.095), 0.22 * vn(pp * 1.3 + 3.0));
+    let drip = vn(vec2f(pp.x * 17.0, pp.y * 1.3)) * 0.6 + vn(vec2f(pp.x * 5.3 + 3.0, pp.y * 0.7)) * 0.4; // vertical runs on the standing plates
     alb *= 1.0 - 0.13 * side * smoothstep(0.45, 0.8, drip);
-    // whitewash brushed on in broad slanting bands (u across the stroke, v along it): hard-edged, streaky where the brush ran dry,
-    // worn off where the crew walks, along the skirt bottoms and in scuffs
-    let u = lp.x * 0.5 + lp.z * 0.62 + lp.y * 0.9; let v = lp.z * 0.5 - lp.x * 0.62 + lp.y * 0.35;
-    let band = vn(vec2f(u * 0.8 + pk, v * 0.45)) * 0.55 + vn(vec2f(u * 1.9 + 5.0 + pk, v * 0.9 + 2.0)) * 0.3 + vn(vec2f(u * 4.3 - pk, v * 1.7)) * 0.15;
-    let bristle = vn(vec2f(u * 26.0, v * 2.2 + pk));
-    let w = band + 0.07 * (bristle - 0.5) + 0.14 * (vn(lp.xz * 0.9 + lp.y * 0.7 + pk) - 0.5);
-    let cov = smoothstep(0.62, 0.645, w);
-    let streak = 0.7 + 0.3 * smoothstep(0.25, 0.6, bristle + 2.0 * (w - 0.645));
-    var wear = up * smoothstep(0.4, 0.7, vn(lp.xz * 2.7 + 9.0)) * 0.8;
-    wear = max(wear, smoothstep(0.8, 0.48, lp.y) * 0.85);
-    wear = max(wear, smoothstep(0.62, 0.8, vn(vec2f(u * 7.0, v * 5.0) + pk)));
-    let wash = cov * streak * (1.0 - wear) * 0.92;
-    alb = mix(alb, vec3f(0.47, 0.485, 0.47) * (0.9 + 0.12 * bristle), wash);
+    // whitewash: two sets of strokes on jittered grids (broad swabs at about 35 degrees, a sparser set crossing them), each a capsule with its
+    // own direction, length and width, a ragged edge and bristle streaks along the stroke; denser at the front than at the sooty rear
+    let cover = mix(0.6, 0.42, smoothstep(-3.0, 3.5, lp.z));
+    var wash = 0.0;
+    for (var st = 0; st < 2; st++) {
+      let cs = select(0.9, 1.25, st == 1); let g = pp / cs + seed + f32(st) * 13.7; let c0 = floor(g - 0.5);
+      for (var k = 0; k < 4; k++) {
+        let cell = c0 + vec2f(f32(k & 1), f32(k >> 1));
+        let h = ihash(vec2i(cell) + vec2i(st * 57, 19)); let h2 = fract(h * 91.7); let h3 = fract(h * 357.3); let h4 = fract(h * 1731.1); let h5 = fract(h * 7919.3);
+        if (h > cover * select(1.25, 0.75, st == 1)) { continue; }
+        let d = (g - cell - 0.5 - (vec2f(h2, h3) - 0.5) * 0.3) * cs;
+        let ang = select(0.6, 2.35, st == 1) + (h4 - 0.5) * 0.75; let dir = vec2f(cos(ang), sin(ang));
+        let al = dot(d, dir); let ac = dot(d, vec2f(-dir.y, dir.x));
+        let hl = cs * (0.38 + 0.28 * h5); let hw = select(0.1 + 0.2 * h2, 0.06 + 0.1 * h2, st == 1);
+        let br = vn(vec2f(ac * 42.0 + h * 50.0, al * 2.4));
+        let e = hw - length(vec2f(max(abs(al) - hl, 0.0), ac)) - 0.035 * (br - 0.5) - 0.03 * (vn(d * 9.0 + h * 20.0) - 0.5);
+        let dry = smoothstep(hl * 0.3, hl * 1.1, abs(al));
+        wash = max(wash, smoothstep(0.0, 0.014, e) * (0.62 + 0.38 * smoothstep(0.3 + 0.3 * dry, 0.55 + 0.3 * dry, br + e * 2.0)));
+      }
+    }
+    var wear = up * smoothstep(0.45, 0.75, vn(lp.xz * 2.7 + 9.0)) * 0.7;        // walked on
+    wear = max(wear, smoothstep(0.85, 0.5, lp.y) * 0.8);                          // skirt bottoms, spray from the tracks
+    wear = max(wear, smoothstep(0.64, 0.8, vn(vec2f(pp.x * 2.3 + pp.y * 1.1, pp.y * 11.0 - pp.x * 3.0) + seed))); // scuffs along the hull
+    wash *= 1.0 - wear;
+    let soot = smoothstep(0.3, 3.2, lp.z);
+    alb = mix(alb, mix(vec3f(0.76, 0.77, 0.75), vec3f(0.6, 0.58, 0.53), soot) * (0.9 + 0.12 * vn(pp * 21.0)), wash * 0.94);
     // road grime and packed snow thrown up low on the hull, a dusting of fresh snow on the level plates (not on the warm engine deck)
     let low = smoothstep(1.05, 0.25, lp.y);
     alb = mix(alb, vec3f(0.14, 0.13, 0.115), 0.45 * low * smoothstep(0.3, 0.65, vn(lp.xz * 2.3 + lp.y * 3.0)));
     alb = mix(alb, vec3f(0.66, 0.68, 0.7), 0.4 * low * smoothstep(0.4, 0.75, vn(lp.xz * 5.0 + lp.y * 6.0 + 2.0)));
     let cold = 1.0 - smoothstep(1.3, 1.9, lp.z) * smoothstep(1.75, 1.6, lp.y);
-    let dust = smoothstep(0.82, 0.97, n.y) * smoothstep(0.45, 0.75, vn(vec2f(u * 2.1 + 7.0, v * 1.7)) * 0.7 + 0.3 * vn(vec2f(u * 6.3, v * 5.1))) * cold;
-    alb = mix(alb, vec3f(0.9, 0.92, 0.95), 0.5 * dust);
+    let dust = smoothstep(0.82, 0.97, n.y) * smoothstep(0.5, 0.78, vn(lp.xz * 1.7 + 7.0) * 0.7 + 0.3 * vn(lp.xz * 5.1)) * cold;
+    alb = mix(alb, vec3f(0.9, 0.92, 0.95), 0.4 * dust);
     spec = 0.01; gloss = 10.0;
   }
   else if (m == 22u) { // building rubble: broken, sooty, a dusting of snow on the tops
@@ -236,6 +253,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   let sun = G.sunCol.rgb * sh;
   let ll = localLights(wp, n, 0.0) + lampLight(wp.xz, hAbove) * (0.5 + 0.5 * saturate(n.y + 0.6));
   var col = alb * (sun * ndl + ambient(n) * select(0.55 + 0.45 * saturate(hAbove * 0.5), 1.0, (m == 2u && n.y > 0.7) || (m == 29u && n.y > 0.3)) + ll) + emis;
+  if (m == 20u || m == 21u || m == 8u || m == 14u) { col += alb * (G.sunCol.rgb * saturate(L.y) * 0.75 + ambient(vec3f(0.0, 1.0, 0.0))) * vec3f(0.9, 0.93, 1.0) * (4.0 * (1.0 - 0.8 * sh * saturate(ndl * 2.0)) * (0.62 - 0.38 * n.y)); } // vehicles: light bounced off the snow fills the shaded sides (far stronger than the sky term alone, which left them black against the snow)
   let Hh = normalize(L + v);
   col += sun * spec * pow(saturate(dot(n, Hh)), gloss) * ndl * 4.0;
   if (refl > 0.0) {

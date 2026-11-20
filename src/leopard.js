@@ -44,12 +44,12 @@ export function buildLeopard() {
   b.part = 0;
   // ---------- hull: lower tub between the tracks, upper hull with the sponsons over them, the nose tapering to an edge ----------
   b.set(tint(DGRN, 9), MAT.camo);
-  extX(b, [[0.5, -3.2], [0.99, -3.76], [0.99, 3.76], [0.62, 3.76], [0.48, 3.42]], -1.08, 1.08); // stops inside the upper hull: no coplanar faces
+  extX(b, [[0.5, -3.1], [0.99, -3.56], [0.99, 3.76], [0.62, 3.76], [0.48, 3.42]], -1.08, 1.08); // stops inside the upper hull: no coplanar faces
   b.set(GRN, MAT.camo);
-  extX(b, [[0.96, -3.66], [0.99, -3.84], [1.1, -3.82], [1.47, -2.3], [1.5, 3.66], [1.44, 3.78], [0.96, 3.78]], -1.78, 1.78);
-  const GA = Math.atan2(0.37, 1.52), Gy = (z) => 1.1 + (z + 3.82) * 0.37 / 1.52, GN = [0, Math.cos(GA), -Math.sin(GA)];
+  extX(b, [[0.98, -3.5], [0.99, -3.62], [1.14, -3.6], [1.47, -2.3], [1.5, 3.66], [1.44, 3.78], [0.98, 3.78]], -1.78, 1.78);
+  const GA = Math.atan2(0.33, 1.3), Gy = (z) => 1.14 + (z + 3.6) * 0.33 / 1.3, GN = [0, Math.cos(GA), -Math.sin(GA)];
   // glacis armour plate, the joint to the roof
-  b.set(tint(GRN, 3), MAT.camo); plate(b, [[-1.66, Gy(-3.74), -3.74], [1.66, Gy(-3.74), -3.74], [1.66, Gy(-2.52), -2.52], [-1.66, Gy(-2.52), -2.52]], GN, 0.022);
+  b.set(tint(GRN, 3), MAT.camo); plate(b, [[-1.66, Gy(-3.54), -3.54], [1.66, Gy(-3.54), -3.54], [1.66, Gy(-2.52), -2.52], [-1.66, Gy(-2.52), -2.52]], GN, 0.022);
   b.set(DGRN, MAT.camo); bx(-1.72, 1.455, -2.36, 0.24, 1.492, -2.27, 0.012); bx(1.08, 1.455, -2.36, 1.72, 1.492, -2.27, 0.012);
   // driver's hatch (right) with three periscopes on the glacis top
   b.set(tint(GRN, 5), MAT.camo); bx(0.28, 1.47, -2.27, 1.04, 1.545, -1.6, 0.02);
@@ -60,7 +60,7 @@ export function buildLeopard() {
   }
   for (const sx of [-1, 1]) {
     // headlight cluster let into the glacis: low housing, main lamp, blackout lamp, guard bar
-    b.at(sx * 1.32, Gy(-3.12), -3.12, 0, -GA);
+    b.at(sx * 1.32, Gy(-3.05), -3.05, 0, -GA);
     b.set(DGRN, MAT.camo); bx(-0.2, 0.0, -0.1, 0.2, 0.1, 0.12, 0.02);
     b.set(BLK, MAT.void); face(b, [[-0.17, 0.012, -0.102], [0.17, 0.012, -0.102], [0.17, 0.088, -0.102], [-0.17, 0.088, -0.102]], [0, 0, -1]);
     b.set(DARK, MAT.metal); b.cyl(-sx * 0.08, 0.05, -0.09, -sx * 0.08, 0.05, -0.112, 0.04, 0.04, 12, 0); b.cyl(sx * 0.08, 0.05, -0.09, sx * 0.08, 0.05, -0.11, 0.03, 0.03, 8, 0);
@@ -70,34 +70,34 @@ export function buildLeopard() {
     b.at(0, 0, 0);
     b.set(DGRN, MAT.camo); b.box(sx * 1.52 - 0.02, Gy(-2.62) - 0.01, -2.68, sx * 1.52 + 0.02, Gy(-2.62) + 0.07, -2.58); // lifting eye
     // rear-view mirror on a stalk at the glacis corner
-    b.set(DARK, MAT.metal); pipe(b, [[sx * 1.62, Gy(-3.3), -3.3], [sx * 1.7, Gy(-3.3) + 0.3, -3.36], [sx * 1.74, Gy(-3.3) + 0.42, -3.36]], 0.012, 5);
-    bx(sx * 1.66, Gy(-3.3) + 0.36, -3.385, sx * 1.84, Gy(-3.3) + 0.5, -3.36, 0.008);
-    b.set(GLASS, MAT.glass); face(b, [[sx * 1.675, Gy(-3.3) + 0.375, -3.357], [sx * 1.825, Gy(-3.3) + 0.375, -3.357], [sx * 1.825, Gy(-3.3) + 0.485, -3.357], [sx * 1.675, Gy(-3.3) + 0.485, -3.357]], [0, 0, 1]);
+    b.set(DARK, MAT.metal); pipe(b, [[sx * 1.62, Gy(-3.3), -3.2], [sx * 1.7, Gy(-3.3) + 0.3, -3.26], [sx * 1.74, Gy(-3.3) + 0.42, -3.26]], 0.012, 5);
+    bx(sx * 1.66, Gy(-3.3) + 0.36, -3.285, sx * 1.84, Gy(-3.3) + 0.5, -3.26, 0.008);
+    b.set(GLASS, MAT.glass); face(b, [[sx * 1.675, Gy(-3.3) + 0.375, -3.257], [sx * 1.825, Gy(-3.3) + 0.375, -3.257], [sx * 1.825, Gy(-3.3) + 0.485, -3.257], [sx * 1.675, Gy(-3.3) + 0.485, -3.257]], [0, 0, 1]);
     // tow shackle on the lower front plate, a short rubber flap under the thin fender end
-    b.set(DGRN, MAT.camo); b.box(sx * 0.72 - 0.035, 0.7, -3.6, sx * 0.72 + 0.035, 0.88, -3.48); b.cyl(sx * 0.72 - 0.06, 0.78, -3.62, sx * 0.72 + 0.06, 0.78, -3.62, 0.03, 0.03, 8);
-    b.set(DARK, MAT.rubber); b.box(sx * 1.43 - 0.32, 0.83, -3.66, sx * 1.43 + 0.32, 0.965, -3.64);
+    b.set(DGRN, MAT.camo); b.box(sx * 0.72 - 0.035, 0.7, -3.44, sx * 0.72 + 0.035, 0.88, -3.3); b.cyl(sx * 0.72 - 0.06, 0.78, -3.46, sx * 0.72 + 0.06, 0.78, -3.46, 0.03, 0.03, 8);
+    b.set(DARK, MAT.rubber); b.box(sx * 1.43 - 0.32, 0.86, -3.5, sx * 1.43 + 0.32, 0.985, -3.48);
     // side skirts: three heavy armour modules at the front, the first cut away so the idler and the rising track show ...
     b.set(tint(GRN, 11), MAT.camo);
-    extX(b, [[0.46, -2.86], [1.0, -3.35], [1.1, -3.72], [1.17, -3.5], [1.17, -2.86]], sx * 1.79, sx * 1.885);
-    b.set(tint(GRN, 17), MAT.camo); bx(sx * 1.79, 0.46, -2.84, sx * 1.885, 1.17, -1.96, 0.018);
-    b.set(tint(GRN, 23), MAT.camo); bx(sx * 1.79, 0.46, -1.94, sx * 1.885, 1.17, -1.06, 0.018);
+    extX(b, [[0.5, -2.86], [1.0, -3.3], [1.1, -3.5], [1.17, -3.38], [1.17, -2.86]], sx * 1.79, sx * 1.885);
+    b.set(tint(GRN, 17), MAT.camo); bx(sx * 1.79, 0.5, -2.84, sx * 1.885, 1.17, -1.96, 0.018);
+    b.set(tint(GRN, 23), MAT.camo); bx(sx * 1.79, 0.5, -1.94, sx * 1.885, 1.17, -1.06, 0.018);
     for (let k = 0; k < 3; k++) { // bolted-on face plates, grab handles
       const z = -3.62 + k * 0.9; b.set(tint(DGRN, 11 + k * 6), MAT.camo);
-      plate(b, k ? [[sx * 1.885, 0.54, z], [sx * 1.885, 0.54, z + 0.72], [sx * 1.885, 1.1, z + 0.72], [sx * 1.885, 1.1, z]] : [[sx * 1.885, 0.64, -2.92], [sx * 1.885, 1.1, -2.92], [sx * 1.885, 1.1, -3.42], [sx * 1.885, 1.02, -3.28]], [sx, 0, 0], 0.012);
-      const hz = k ? z + 0.22 : -3.2; b.set(DARK, MAT.metal); pipe(b, [[sx * 1.897, 0.92, hz], [sx * 1.93, 0.92, hz], [sx * 1.93, 0.92, hz + 0.26], [sx * 1.897, 0.92, hz + 0.26]], 0.011, 4);
+      plate(b, k ? [[sx * 1.885, 0.58, z], [sx * 1.885, 0.58, z + 0.72], [sx * 1.885, 1.1, z + 0.72], [sx * 1.885, 1.1, z]] : [[sx * 1.885, 0.68, -2.92], [sx * 1.885, 1.1, -2.92], [sx * 1.885, 1.1, -3.36], [sx * 1.885, 1.02, -3.26]], [sx, 0, 0], 0.012);
+      const hz = k ? z + 0.22 : -3.19; b.set(DARK, MAT.metal); pipe(b, [[sx * 1.897, 0.92, hz], [sx * 1.93, 0.92, hz], [sx * 1.93, 0.92, hz + 0.26], [sx * 1.897, 0.92, hz + 0.26]], 0.011, 4);
     }
     // ... and four light plates with cut lower corners behind them, hung from a rail
     for (let k = 0; k < 4; k++) {
       const z0 = -1.04 + k * 0.94, z1 = z0 + 0.92; b.set(tint(GRN, 30 + k * 7), MAT.camo);
-      extX(b, [[0.64, z0], [0.5, z0 + 0.16], [0.5, z1 - 0.16], [0.64, z1], [1.13, z1], [1.13, z0]], sx * 1.795, sx * 1.83);
-      box(sx * 1.83, 0.56, z0 + 0.44, sx * 1.842, 1.1, z0 + 0.48);
+      extX(b, [[0.68, z0], [0.54, z0 + 0.16], [0.54, z1 - 0.16], [0.68, z1], [1.13, z1], [1.13, z0]], sx * 1.795, sx * 1.83);
+      box(sx * 1.83, 0.6, z0 + 0.44, sx * 1.842, 1.1, z0 + 0.48);
       b.set(DGRN, MAT.camo); for (const zz of [z0 + 0.14, z1 - 0.2]) box(sx * 1.785, 1.1, zz, sx * 1.86, 1.2, zz + 0.06); // hinge brackets
     }
     b.set(DGRN, MAT.camo); box(sx * 1.785, 1.125, -1.04, sx * 1.85, 1.165, 2.72);
     box(sx * 1.77, 1.455, -2.3, sx * 1.805, 1.49, 3.7); // roof-edge lip
     // thin mud guard over the sprocket (the return run shows under it), thin rubber flap behind the track
-    b.set(tint(GRN, 60), MAT.camo); box(sx * 1.785, 0.98, 2.74, sx * 1.81, 1.165, 3.78);
-    b.set(DARK, MAT.rubber); b.box(sx * 1.43 - 0.32, 0.6, 3.762, sx * 1.43 + 0.32, 0.965, 3.78);
+    b.set(tint(GRN, 60), MAT.camo); box(sx * 1.785, 1.0, 2.74, sx * 1.81, 1.165, 3.78);
+    b.set(DARK, MAT.rubber); b.box(sx * 1.43 - 0.32, 0.64, 3.762, sx * 1.43 + 0.32, 0.985, 3.78);
     // tow cable lying along the roof edge in its clamps, an eye at each end
     b.set(DARK, MAT.metal); pipe(b, [[sx * 1.6, 1.522, -1.9], [sx * 1.68, 1.522, -1.5], [sx * 1.68, 1.525, 1.3], [sx * 1.62, 1.577, 1.74], [sx * 1.62, 1.577, 3.3]], 0.022, 6);
     lathe(b, 1, sx * 1.6, 1.5, -1.97, [[0, 0.03], [0.022, 0.03], [0.022, 0.068], [0, 0.068], [0, 0.03]], 10); lathe(b, 1, sx * 1.62, 1.555, 3.37, [[0, 0.03], [0.022, 0.03], [0.022, 0.068], [0, 0.068], [0, 0.03]], 10);
@@ -142,7 +142,7 @@ export function buildLeopard() {
   // ---------- turret (part 1): welded slab-sided shell, roof falling to the front, undercut bustle, the EMES 15 notch in the right cheek ----------
   b.part = 1;
   b.set(DGRN, MAT.camo); b.cyl(0, 1.5, LEO.tz, 0, 1.61, LEO.tz, 1.15, 1.15, 28, 0);
-  b.set(GRN, MAT.camo);
+  b.set(tint(GRN, 4), MAT.camo);
   const RT = 2.46, RS = 0.075, RA = Math.atan(RS), RY = (z) => (z < -0.9 ? RT + (z + 0.9) * RS : RT), RN = [0, Math.cos(RA), -Math.sin(RA)];
   const ZF = (x) => -2.06 + (x - 0.47) * 0.16 / 0.99; // the cheek front in plan
   const NX0 = 0.7, NX1 = 1.3, NZ = -1.68, NF = 2.17; // the notch: x range, back wall, floor
@@ -217,14 +217,16 @@ export function buildLeopard() {
     }
     // Norwegian flag on the turret side, behind the dischargers
     const wx = (z) => 1.58 - (z - 1.1) * 0.16 / 1.65, fxx = (z) => sx * (wx(z) + 0.006);
-    b.set([1, 1, 1], MAT.flag); const z0 = sx > 0 ? 1.74 : 1.26, z1 = sx > 0 ? 1.26 : 1.74; // hoist towards the front on both sides
-    b.quad([fxx(z1), 2.03, z1], [fxx(z0), 2.03, z0], [fxx(z0), 2.34, z0], [fxx(z1), 2.34, z1], sx > 0 ? [0, 1, 1, 1, 1, 0, 0, 0] : [1, 1, 0, 1, 0, 0, 1, 0]);
+    b.set([1, 1, 1], MAT.flag); const z0 = sx > 0 ? 1.67 : 1.33, z1 = sx > 0 ? 1.33 : 1.67; // hoist towards the front on both sides
+    b.quad([fxx(z1), 2.08, z1], [fxx(z0), 2.08, z0], [fxx(z0), 2.3, z0], [fxx(z1), 2.3, z1], sx > 0 ? [0, 1, 1, 1, 1, 0, 0, 0] : [1, 1, 0, 1, 0, 0, 1, 0]);
     // stowage bin lid on the bustle side with its handle
     const wn = [sx * 0.9953, 0, 0.0965];
     b.set(tint(DGRN, 140 + sx), MAT.camo); plate(b, [[sx * wx(1.92), 1.92, 1.92], [sx * wx(2.7), 1.92, 2.7], [sx * wx(2.7), 2.39, 2.7], [sx * wx(1.92), 2.39, 1.92]], wn, 0.016);
     b.set(DARK, MAT.metal); pipe(b, [[sx * (wx(2.2) + 0.016), 2.15, 2.2], [sx * (wx(2.2) + 0.05), 2.15, 2.2], [sx * (wx(2.4) + 0.05), 2.15, 2.4], [sx * (wx(2.4) + 0.016), 2.15, 2.4]], 0.009, 4);
     // grab rails on the turret side
     for (const [za, zb, y] of [[-1.5, -1.1, 2.02], [-0.75, -0.35, 1.84]]) { const xa = 1.46 + (za + 1.9) * 0.14 + 0.004, xb = 1.46 + (zb + 1.9) * 0.14 + 0.004; pipe(b, [[sx * xa, y, za], [sx * (xa + 0.045), y, za], [sx * (xb + 0.045), y, zb], [sx * xb, y, zb]], 0.01, 4); }
+    b.set(DGRN, MAT.camo); box(sx * 1.6, 1.68, -0.91, sx * 1.612, RT - 0.03, -0.89); box(sx * 1.58, 1.86, 1.09, sx * 1.592, RT - 0.03, 1.11); // weld lines
+    b.set(DARK, MAT.metal);
     // antenna on a sprung base
     b.cyl(sx * 1.28, RT, 2.62, sx * 1.28, RT + 0.07, 2.62, 0.045, 0.04, 8); b.cyl(sx * 1.28, RT + 0.07, 2.62, sx * 1.28, RT + 0.2, 2.62, 0.022, 0.018, 6); b.cyl(sx * 1.28, RT + 0.2, 2.62, sx * 1.28 - sx * 0.05, 4.45, 2.8, 0.009, 0.004, 4);
   }
@@ -234,16 +236,16 @@ export function buildLeopard() {
   for (const y of [1.87, 2.36]) pipe(b, [[-1.37, y, 2.73], [-1.37, y, 3.12], [1.37, y, 3.12], [1.37, y, 2.73]], 0.017, 6);
   for (const x of [-1.37, -0.69, 0, 0.69, 1.37]) b.cyl(x, 1.87, 3.12, x, 2.36, 3.12, 0.014, 0.014, 5, 0);
   b.set(DARK, MAT.metal); b.box(-1.36, 1.86, 2.75, 1.36, 1.872, 3.11);
-  b.set(TARP, MAT.cloth); lathe(b, 0, 0, 2.025, 2.93, [[-1.2, 0], [-1.2, 0.135], [-1.17, 0.148], [-0.5, 0.14], [0.2, 0.15], [0.32, 0.148], [0.35, 0.135], [0.35, 0]], 10);
-  b.set(DARK, MAT.rubber); for (const x of [-0.9, -0.1]) b.cyl(x - 0.015, 2.025, 2.93, x + 0.015, 2.025, 2.93, 0.154, 0.154, 10, 0);
+  b.set(TARP, MAT.cloth); lathe(b, 0, 0, 2.025, 2.93, [[-1.2, 0], [-1.2, 0.135], [-1.17, 0.148], [-0.5, 0.14], [0.2, 0.15], [0.32, 0.148], [0.35, 0.135], [0.35, 0]], 16);
+  b.set(DARK, MAT.rubber); for (const x of [-0.9, -0.1]) b.cyl(x - 0.015, 2.025, 2.93, x + 0.015, 2.025, 2.93, 0.154, 0.154, 16, 0);
   b.set(tint(GRN, 150), MAT.camo); bx(0.55, 1.873, 2.79, 1.25, 2.2, 3.08, 0.015); b.set(DGRN, MAT.camo); b.box(0.54, 2.15, 2.78, 1.26, 2.165, 3.09);
 
   // ---------- gun (part 2): wedge mantlet set back between the cheeks, canvas collar, Rh-120 L/44 with thermal sleeve, fume extractor, muzzle reference mirror ----------
   b.part = 2; const gy = LEO.gy;
-  b.set(tint(GRN, 160), MAT.camo); extX(b, [[gy - 0.33, -1.9], [gy - 0.22, -1.96], [gy + 0.2, -1.96], [gy + 0.3, -1.9], [gy + 0.3, -1.62], [gy - 0.33, -1.62]], -0.4, 0.4);
-  b.set(DGRN, MAT.camo); bx(-0.2, gy - 0.2, -2.03, 0.2, gy + 0.2, -1.94, 0.03);
-  b.cyl(-0.3, gy + 0.1, -1.95, -0.3, gy + 0.1, -1.995, 0.05, 0.045, 10); b.set(BLK, MAT.void); b.cyl(-0.3, gy + 0.1, -1.996, -0.3, gy + 0.1, -1.998, 0.028, 0.028, 8); // coax port, left of the gun
-  b.set(CANVAS, MAT.cloth); lathe(b, 2, 0, gy, 0, [[-2.02, 0.19], [-2.07, 0.185], [-2.14, 0.15], [-2.2, 0.158], [-2.27, 0.125], [-2.32, 0.13], [-2.37, 0.108]], 16, 1, true);
+  b.set(tint(GRN, 160), MAT.camo); extX(b, [[gy - 0.33, -1.9], [gy - 0.13, -2.01], [gy + 0.13, -2.01], [gy + 0.345, -1.94], [gy + 0.345, -1.62], [gy - 0.33, -1.62]], -0.445, 0.445);
+  b.set(DGRN, MAT.camo); bx(-0.17, gy - 0.13, -2.06, 0.17, gy + 0.13, -2.0, 0.025);
+  b.cyl(-0.31, gy + 0.05, -2.0, -0.31, gy + 0.05, -2.04, 0.05, 0.045, 10); b.set(BLK, MAT.void); b.cyl(-0.31, gy + 0.05, -2.041, -0.31, gy + 0.05, -2.043, 0.028, 0.028, 8); // coax port, left of the gun
+  b.set(CANVAS, MAT.cloth); lathe(b, 2, 0, gy, 0, [[-2.05, 0.15], [-2.1, 0.148], [-2.16, 0.128], [-2.22, 0.134], [-2.28, 0.115], [-2.33, 0.118], [-2.38, 0.105]], 16, 1, true);
   b.set(DGRN, MAT.camo);
   const brl = (za, zb, ra, rb, yo = 0) => b.cyl(0, gy + yo, za, 0, gy + yo, zb, ra, rb, 16, 0);
   brl(-2.35, -3.76, 0.098, 0.096);
@@ -251,7 +253,7 @@ export function buildLeopard() {
   brl(-4.62, -6.0, 0.094, 0.088);
   b.set(GRN, MAT.camo); for (const z of [-2.42, -3.12, -3.71, -4.64, -5.12, -5.58]) brl(z, z - 0.045, 0.103, 0.103); // sleeve joints and clamps
   b.set(DARK, MAT.metal); for (const z of [-3.12, -5.12]) b.box(-0.02, gy + 0.095, z - 0.04, 0.02, gy + 0.115, z);
-  b.set([0.07, 0.07, 0.072], MAT.metal); brl(-6.0, -6.03, 0.088, 0.1); brl(-6.03, LEO.mz, 0.1, 0.096); lathe(b, 2, 0, gy, LEO.mz, [[0, 0.096], [0, 0.064], [0.25, 0.062]], 16, 1, false, true);
+  b.set(tint(DGRN, 7), MAT.camo); brl(-6.0, -6.02, 0.088, 0.097); brl(-6.02, LEO.mz, 0.097, 0.096); lathe(b, 2, 0, gy, LEO.mz, [[0, 0.096], [0, 0.064], [0.25, 0.062]], 16, 1, false, true);
   b.set(DARK, MAT.metal); b.box(0.02, gy + 0.09, -6.13, 0.08, gy + 0.15, -6.06); b.set(GLASS, MAT.glass); face(b, [[0.03, gy + 0.1, -6.058], [0.07, gy + 0.1, -6.058], [0.07, gy + 0.14, -6.058], [0.03, gy + 0.14, -6.058]], [0, 0, 1]); // muzzle reference mirror
   b.set(BLK, MAT.void); b.cyl(0, gy, LEO.mz + 0.2, 0, gy, LEO.mz + 0.21, 0.063, 0.063, 12);
   fixWinding(b, i0);
