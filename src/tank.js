@@ -4,8 +4,8 @@ import { MB, MAT } from './mesh.js';
 import { trs, mul, identity } from './math.js';
 
 import { poly, extX, extY, mirror } from './vehutil.js';
-import { TRK, runningGear } from './gear.js';
-export { TRK };
+import { TRK, runningGear, TRACK_WGSL } from './gear.js';
+export { TRK, TRACK_WGSL };
 export * from './leopard.js';
 export * from './wheeled.js';
 export * from './bikes.js';
@@ -15,7 +15,7 @@ export const T72 = { ty: 1.32, tz: -0.35, gy: 1.68, gz: -1.3, mz: -6.15, hl: 2.9
 export function buildT72(cage = false) {
   const b = new MB();
   const GRN = [0.03, 0.04, 0.024], DGRN = [0.022, 0.03, 0.019], DARK = [0.03, 0.031, 0.034], STEEL = [0.16, 0.17, 0.17], BRN = [0.1, 0.065, 0.035];
-  runningGear(b, 6, 0.375, -2.45, 2.5, DGRN);
+  runningGear(b, 1, DGRN);
   b.part = 0; b.set(DGRN, MAT.rus);
   extX(b, [[0.45, -3.15], [0.85, -3.55], [0.91, -3.384], [0.91, 3.29], [0.62, 3.29], [0.45, 3.0]], -1.08, 1.08);
   b.set(GRN, MAT.rus);
@@ -74,7 +74,7 @@ export const BMP = { ty: 1.5, tz: 0.15, gy: 1.76, gz: -0.55, mz: -3.4, hl: 2.8, 
 export function buildBMP() {
   const b = new MB();
   const GRN = [0.034, 0.044, 0.026], DGRN = [0.024, 0.032, 0.02], DARK = [0.03, 0.031, 0.034], STEEL = [0.16, 0.17, 0.17];
-  runningGear(b, 6, 0.3, -2.4, 2.45, DGRN);
+  runningGear(b, 2, DGRN);
   b.part = 0; b.set(DGRN, MAT.rus);
   extX(b, [[0.42, -2.9], [0.91, -3.381], [0.91, 3.29], [0.55, 3.29], [0.42, 3.0]], -1.08, 1.08);
   b.set(GRN, MAT.rus);

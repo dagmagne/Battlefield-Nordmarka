@@ -4,14 +4,18 @@ struct Def { wp: vec3f, n: vec3f, lp: vec3f };
 fn objDeform(pos: vec3f, nrm: vec3f, cm: vec4f, up: vec4f) -> Def {
   var lp = pos; var ln = nrm;
   if (cm.w > 7.5 && cm.w < 8.5) {
-    let A = 2.95; let R = 0.4; let yc = 0.42; let Lr = PI * R; let L = 4.0 * A + 2.0 * Lr;
+    // track link: pos = (x, along, outward) at loop position up.x on the loop of vehicle type up.w. TRKL (loop lengths) and TRKT (two vec4
+    // per segment: start s, radius (0 = straight), start angle | point or centre y z, outward y z) come from gear.js, in front of this file
+    let ty = i32(up.w + 0.5); let L = TRKL[ty];
     var off = OB.tr.x; if (up.y > 0.0) { off = OB.tr.y; }
     var s = up.x + off; s = s - floor(s / L) * L;
-    var c: vec2f; var t: vec2f; var o: vec2f; // (y,z) centre, tangent, outward
-    if (s < 2.0 * A) { c = vec2f(yc - R, s - A); t = vec2f(0.0, 1.0); o = vec2f(-1.0, 0.0); }
-    else if (s < 2.0 * A + Lr) { let a = (s - 2.0 * A) / R; c = vec2f(yc - R * cos(a), A + R * sin(a)); t = vec2f(sin(a), cos(a)); o = vec2f(-cos(a), sin(a)); }
-    else if (s < 4.0 * A + Lr) { c = vec2f(yc + R, A - (s - 2.0 * A - Lr)); t = vec2f(0.0, -1.0); o = vec2f(1.0, 0.0); }
-    else { let a = (s - 4.0 * A - Lr) / R; c = vec2f(yc + R * cos(a), -A - R * sin(a)); t = vec2f(-sin(a), -cos(a)); o = vec2f(cos(a), -sin(a)); }
+    var k = ty * 16;
+    for (var i = 1; i < 8; i++) { if (s >= TRKT[ty * 16 + i * 2].x) { k = ty * 16 + i * 2; } }
+    let A = TRKT[k]; let B = TRKT[k + 1]; let u = s - A.x;
+    var c: vec2f; var o: vec2f;
+    if (A.y > 0.0) { let f = A.z + u / A.y; o = vec2f(-cos(f), sin(f)); c = B.xy + A.y * o; }
+    else { o = B.zw; c = B.xy + vec2f(o.y, -o.x) * u; }
+    let t = vec2f(o.y, -o.x);
     let yz = c + t * pos.y + o * pos.z;
     lp = vec3f(pos.x, yz);
     ln = vec3f(nrm.x, t * nrm.y + o * nrm.z);
