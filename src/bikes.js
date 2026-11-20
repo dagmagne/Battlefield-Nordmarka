@@ -117,7 +117,7 @@ function beam(b, p, q, hw, hh) {
 }
 
 // ---------- riders: the infantry model in a seated pose ----------
-const SOLM = buildSoldier(0), SOL = initSoldiers(1, () => 0), PP = new Float32Array(RIG.NP);
+const SOLM = buildSoldier(0, 8), SOL = initSoldiers(1, () => 0), PP = new Float32Array(RIG.NP);
 const s3 = (k, x, y, z) => { PP[k] = x; PP[k + 1] = y; PP[k + 2] = z; };
 // pose parameters in vehicle space: hip joint centre, pelvis and torso and head angles (yaw, pitch, roll), ankles, knee poles, hands, elbow poles
 function pose(hip, pel, tor, head, ankL, ankR, kneeL, kneeR, handL, handR, elbL, elbR) {
@@ -126,44 +126,75 @@ function pose(hip, pel, tor, head, ankL, ankR, kneeL, kneeR, handL, handR, elbL,
   if (handL) { s3(24, handL[0], handL[1], handL[2]); s3(27, handR[0], handR[1], handR[2]); }
   s3(30, elbL[0], elbL[1], elbL[2]); s3(33, elbR[0], elbR[1], elbR[2]);
 }
-// solve PP and append the soldier: rifle = vehicle part for the AK (-1 none), pack 0 drops the pack (it would sit inside a seat back),
-// toe = extra toe-down angle (the soles are levelled first: the model's ankle is rigid)
-function bakeRider(b, rifle, pack, toe = 0, gog = 1) {
+// an outward-facing band round the vertical axis of the current frame: ellipse rx, rz about (0, cz), from angle a0 to a1 (0 = front, -z)
+function band(b, y0, y1, rx, rz, cz, a0, a1, n) {
+  const k0 = cnt(b);
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + (a1 - a0) * i / n, sn = Math.sin(a), c = Math.cos(a), l = Math.hypot(sn / rx, c / rz);
+    b.vert(rx * sn, y0, cz - rz * c, sn / rx / l, 0, -c / rz / l, i / n, 0); b.vert(rx * sn, y1, cz - rz * c, sn / rx / l, 0, -c / rz / l, i / n, 1);
+  }
+  for (let i = 0; i < n; i++) { const k = k0 + i * 2; tri(b, k, k + 2, k + 1); tri(b, k + 1, k + 2, k + 3); }
+}
+// solve PP and append the soldier. o: rifle = vehicle part for the AK (-1 none), pack 0 drops the pack (it would sit inside a seat back),
+// toe = extra toe-down angle (the soles are levelled first: the model's ankle is rigid), up = vehicle part of the torso, head and arms,
+// straps = harness straps over the shoulders. The overall is toned down to a warm grey-white and darkened where it is worn and where the
+// body shades itself (seat, inner thighs, knees, cuffs, undersides): the object shader has no occlusion for it.
+function bakeRider(b, o) {
   SOL.place(PP, 0, 0, 0, 0, 0, 1, 0, 0);
-  const M = SOL.out, v = SOLM.v, idx = SOLM.i, map = new Int32Array(v.length / VS).fill(-1), fa = [0, 0];
-  for (let s = 0; s < 2; s++) { const m = (9 + s) * 16; fa[s] = Math.atan2(M[m + 9], M[m + 5]) + toe; }
+  const M = SOL.out, v = SOLM.v, idx = SOLM.i, map = new Int32Array(v.length / VS).fill(-1), fa = [0, 0], up = o.up || 0, rifle = o.rifle;
+  for (let s = 0; s < 2; s++) { const m = (9 + s) * 16; fa[s] = Math.atan2(M[m + 9], M[m + 5]) + (o.toe || 0); }
   for (let t = 0; t < idx.length; t += 3) {
     const p = v[idx[t] * VS + 12]; if (p === 12 || (p === 11 && rifle < 0)) continue;
-    if (!pack && p === 1 && (v[idx[t] * VS + 9] === MAT.pack || Math.min(v[idx[t] * VS + 2], v[idx[t + 1] * VS + 2], v[idx[t + 2] * VS + 2]) > 0.145)) continue;
+    if (!o.pack && p === 1 && (v[idx[t] * VS + 9] === MAT.pack || Math.min(v[idx[t] * VS + 2], v[idx[t + 1] * VS + 2], v[idx[t + 2] * VS + 2]) > 0.145)) continue;
     for (let e = 0; e < 3; e++) {
       const i = idx[t + e];
       if (map[i] < 0) {
-        const o = i * VS, m = p * 16; let x = v[o], y = v[o + 1], z = v[o + 2], nx = v[o + 3], ny = v[o + 4], nz = v[o + 5];
+        const q = i * VS, m = p * 16, x0 = v[q], yy = v[q + 1], mt = v[q + 9]; let x = x0, y = yy, z = v[q + 2], nx = v[q + 3], ny = v[q + 4], nz = v[q + 5];
         if ((p === 9 || p === 10) && y < -0.418) { // level the foot about the ankle
           const c = Math.cos(fa[p - 9]), s = Math.sin(fa[p - 9]), y0 = y + 0.42, n0 = ny;
           y = -0.42 + y0 * c - z * s; z = y0 * s + z * c; ny = n0 * c - nz * s; nz = n0 * s + nz * c;
         }
         let wx = M[m] * nx + M[m + 4] * ny + M[m + 8] * nz, wy = M[m + 1] * nx + M[m + 5] * ny + M[m + 9] * nz, wz = M[m + 2] * nx + M[m + 6] * ny + M[m + 10] * nz;
         const l = Math.hypot(wx, wy, wz) || 1; wx /= l; wy /= l; wz /= l;
+        let f = 1, fb = 1;
+        if (mt === MAT.cloth || mt === MAT.gear || mt === MAT.pack) {
+          f = mt === MAT.cloth ? 0.86 : 0.9; if (mt === MAT.cloth) fb = 0.93;
+          if (p === 0) f *= yy < 0 ? 0.7 : 0.88;
+          else if (p === 7 || p === 8) f *= (1 - 0.3 * Math.max(0, (p === 7 ? x0 : -x0) / 0.1)) * (yy < -0.33 ? 0.82 : 1) * (yy > -0.06 ? 0.84 : 1);
+          else if (p === 9 || p === 10) f *= yy < -0.2 ? 0.78 : yy > -0.06 ? 0.82 : 0.94;
+          else if (p === 5 || p === 6) f *= yy < -0.15 ? 0.8 : 0.94;
+          else if (p === 3 || p === 4) f *= yy < -0.24 ? 0.86 : 1;
+          else if (p === 1) f *= (yy < 0.06 ? 0.84 : 1) * (Math.abs(x0) > 0.15 && yy < 0.3 ? 0.88 : 1);
+          if (wy < -0.25) f *= 0.84;
+        }
         map[i] = cnt(b);
         b.v.push(M[m] * x + M[m + 4] * y + M[m + 8] * z + M[m + 12], M[m + 1] * x + M[m + 5] * y + M[m + 9] * z + M[m + 13], M[m + 2] * x + M[m + 6] * y + M[m + 10] * z + M[m + 14],
-          wx, wy, wz, v[o + 6], v[o + 7], v[o + 8], v[o + 9], v[o + 10], v[o + 11], p === 11 ? rifle : 0, 0);
+          wx, wy, wz, v[q + 6] * f, v[q + 7] * f * (0.5 + 0.5 * fb), v[q + 8] * f * fb, mt, v[q + 10], v[q + 11], p === 11 ? rifle : p >= 1 && p <= 6 ? up : 0, 0);
       }
       b.i.push(map[i]);
     }
   }
-  if (gog) { // goggles under the helmet brim, strap round the cover
-    b.m.set(M.subarray(32, 48)); b.set([0.012, 0.014, 0.018], MAT.paint); b.box(-0.05, 0.134, -0.127, 0.05, 0.17, -0.1, 0.008, 0);
-    b.set([0.1, 0.1, 0.09], MAT.gear); b.box(-0.058, 0.128, -0.121, 0.058, 0.176, -0.098, 0.004, 0); for (const sx of [-1, 1]) b.box(sx * 0.07 - 0.014, 0.142, -0.112, sx * 0.07 + 0.014, 0.166, -0.03);
-    b.at(0, 0, 0);
-  }
+  const p0 = b.part; b.part = up;
+  b.m.set(M.subarray(16, 32)); b.set([0.6, 0.59, 0.55], MAT.cloth); // shoulders run into the torso
+  for (const sx of [-1, 1]) b.blob(sx * 0.168, 0.385, 0.002, 0.088, 0.066, 0.088, 3, 0, 5);
+  if (o.straps) { b.set([0.1, 0.11, 0.09], MAT.gear); for (const sx of [-1, 1]) { b.box(sx * 0.085 - 0.02, 0.235, -0.166, sx * 0.085 + 0.02, 0.43, -0.15, 0, 0); b.box(sx * 0.085 - 0.02, 0.428, -0.166, sx * 0.085 + 0.02, 0.447, 0.13); } b.box(-0.08, 0.3, -0.17, 0.08, 0.33, -0.156); }
+  b.m.set(M.subarray(32, 48)); // goggles: a curved lens in a thin frame under the helmet brim, the strap round the cover
+  b.set([0.045, 0.06, 0.085], MAT.paint); band(b, 0.134, 0.17, 0.086, 0.124, 0, -0.95, 0.95, 8);
+  b.set([0.16, 0.16, 0.14], MAT.gear); band(b, 0.126, 0.134, 0.088, 0.127, 0, -1.0, 1.0, 8); band(b, 0.17, 0.178, 0.088, 0.127, 0, -1.0, 1.0, 8);
+  b.set([0.09, 0.09, 0.085], MAT.gear); band(b, 0.176, 0.198, 0.118, 0.136, 0.008, 0.95, Math.PI * 2 - 0.95, 12);
+  b.at(0, 0, 0); b.part = p0;
 }
 // the rifle held as in the infantry's low-ready (torso frame), hands on its grips
 function lowReady(x, y, z, yaw, pitch, roll) { RIG.wFromTorso(PP, 36, x, y, z, yaw, pitch, roll); RIG.handsOn(PP, 36, RIG.RIF_L[0], RIG.RIF_L[1], RIG.RIF_L[2], RIG.RIF_R[0], RIG.RIF_R[1], RIG.RIF_R[2]); }
-// the rifle at the shoulder, pointing straight ahead
-function shouldered() { RIG.wAimed(PP, 36, 0, 0.05, RIG.RIF_BUTT[0], RIG.RIF_BUTT[1], RIG.RIF_BUTT[2], RIG.AIM[0], RIG.AIM[1], RIG.AIM[2]); RIG.handsOn(PP, 36, RIG.RIF_L[0], RIG.RIF_L[1], RIG.RIF_L[2], RIG.RIF_R[0], RIG.RIF_R[1], RIG.RIF_R[2]); }
 
 const DK = [0.03, 0.031, 0.034], STEEL = [0.2, 0.2, 0.21], ALU = [0.21, 0.21, 0.215], BLK = [0.02, 0.02, 0.022], OLV = [0.065, 0.08, 0.048], OLD = [0.045, 0.055, 0.036], CANV = [0.2, 0.2, 0.15], LENS = [1, 0.95, 0.82];
+const SNOW = [0.93, 0.95, 0.98];
+const snow = (b, x, y, z, rx, ry, rz, seed, seg = 6) => { b.set(SNOW, MAT.snow); b.blob(x, y, z, rx, ry, rz, seed, 0.16, seg); }; // a pillow of settled snow
+// a lamp facing -z: dark shell, grey lens in a rim, a small bright core
+function lamp(b, x, y, z, r, core) {
+  b.set(DK, MAT.metal); b.cyl(x, y, z + r * 0.9, x, y, z, r * 0.75, r * 1.08, 10); b.set([0.3, 0.31, 0.3], MAT.metal); b.cyl(x, y, z, x, y, z - 0.004, r * 0.9, r * 0.9, 10);
+  if (core) { b.set(LENS, MAT.head); b.cyl(x, y, z - 0.004, x, y, z - 0.007, r * 0.36, r * 0.36, 7); }
+}
 // stowage: a rolled or stuffed canvas bundle along x, a jerry can, an ammunition box
 function roll(b, x0, x1, y, z, r, col = CANV) { b.set(col, MAT.pack); lathe(b, 0, y, z, [[x0, 0], [x0 + 0.02, r * 0.8], [x0 + 0.06, r], [x1 - 0.06, r], [x1 - 0.02, r * 0.8], [x1, 0]], 9); b.set(BLK, MAT.gear); for (const k of [0.28, 0.72]) { const x = x0 + (x1 - x0) * k; lathe(b, 0, y, z, [[x - 0.012, r + 0.004], [x + 0.012, r + 0.004]], 9); } }
 function jerry(b, x, y, z, yaw) { // 20 l can: 0.165 x 0.47 x 0.345, origin at the middle of its base
@@ -175,22 +206,23 @@ function ammoBox(b, x, y, z, yaw) { b.at(x, y, z, yaw); b.set(OLD, MAT.rus); b.b
 // ---------- assault buggy ----------
 export const BUGGY = { ty: 1.55, tz: 0.45, gy: 1.78, gz: 0.45, mz: -0.55, hl: 1.45, hw: 0.82, rad: 1.6, hh: 1.45, th: 1.95, tr: 0.25, bx: 0.95, bz: 1.75, cr: 1.0, cs: 0.8, wr: 0.38, ax: [-1.15, 1.15] };
 // wide off-road wheel on an axle across x, centred at (x, r, z); sx = the outer side
-function buggyWheel(b, x, y, z, sx, part) {
-  b.part = part; b.set(BLK, MAT.rubber);
-  lathe(b, x, y, z, [[-0.125, 0.212], [-0.145, 0.27], [-0.13, 0.345], [-0.08, 0.366], [0.08, 0.366], [0.13, 0.345], [0.145, 0.27], [0.125, 0.212]], 16, sx);
-  for (let k = 0; k < 16; k++) { // staggered paddle lugs that wrap over the shoulders
-    const a = k * Math.PI / 8, sd = k & 1 ? 1 : -1; b.at(x, y + Math.cos(a) * 0.362, z + Math.sin(a) * 0.362, 0, a);
-    knob(b, sd > 0 ? -0.025 : -0.135, 0, -0.03, sd > 0 ? 0.135 : 0.025, 0.018, 0.03, 0.006); knob(b, sd * 0.14 - 0.012, -0.06, -0.026, sd * 0.14 + 0.012, 0.004, 0.026, 0.004);
+function buggyWheel(b, x, y, z, sx, part, w) {
+  const h = w / 2; b.part = part; b.set(BLK, MAT.rubber);
+  lathe(b, x, y, z, [[-h + 0.018, 0.212], [-h, 0.26], [-h + 0.006, 0.315], [-h + 0.03, 0.35], [-h + 0.06, 0.364], [h - 0.06, 0.364], [h - 0.03, 0.35], [h - 0.006, 0.315], [h, 0.26], [h - 0.018, 0.212]], 14, sx);
+  for (let k = 0; k < 32; k++) { // two staggered rows of blocks, every other one carried over the shoulder
+    const a = k * Math.PI / 16, sd = k & 1 ? 1 : -1; b.at(x, y + Math.cos(a) * 0.361, z + Math.sin(a) * 0.361, 0, a);
+    knob(b, sd > 0 ? -0.012 : -h + 0.022, 0, -0.017, sd > 0 ? h - 0.022 : 0.012, 0.018, 0.017, 0.004);
+    if (!(k & 6)) knob(b, sd * (h - 0.014) - 0.011, -0.05, -0.014, sd * (h - 0.014) + 0.011, -0.006, 0.014, 0.003);
   }
   b.at(0, 0, 0); b.set([0.075, 0.085, 0.06], MAT.rus);
-  lathe(b, x, y, z, [[0.125, 0.212], [0.138, 0.205], [0.138, 0.185], [0.105, 0.172], [0.05, 0.1], [0.05, 0.1], [0.07, 0.085], [0.07, 0.0]], 16, sx); // rim: lip, dish, hub face
-  b.set(DK, MAT.metal); lathe(b, x, y, z, [[-0.1, 0], [-0.1, 0.12], [-0.125, 0.212]], 12, sx); // the inner side
-  lathe(b, x, y, z, [[0.07, 0.03], [0.095, 0.028], [0.095, 0]], 8, sx); // hub cap
-  for (let k = 0; k < 5; k++) { const a = k * Math.PI * 0.4; b.cyl(x + sx * 0.07, y + Math.cos(a) * 0.058, z + Math.sin(a) * 0.058, x + sx * 0.085, y + Math.cos(a) * 0.058, z + Math.sin(a) * 0.058, 0.011, 0.011, 4); } // wheel nuts
+  lathe(b, x, y, z, [[h - 0.018, 0.212], [h - 0.006, 0.205], [h - 0.006, 0.185], [h - 0.04, 0.172], [h - 0.095, 0.1], [h - 0.095, 0.1], [h - 0.075, 0.085], [h - 0.075, 0.0]], 14, sx); // rim: lip, dish, hub face
+  b.set(DK, MAT.metal); lathe(b, x, y, z, [[-h + 0.04, 0], [-h + 0.04, 0.12], [-h + 0.018, 0.212]], 12, sx); // the inner side
+  lathe(b, x, y, z, [[h - 0.075, 0.03], [h - 0.05, 0.028], [h - 0.05, 0]], 8, sx); // hub cap
+  for (let k = 0; k < 5; k++) { const a = k * Math.PI * 0.4; b.cyl(x + sx * (h - 0.075), y + Math.cos(a) * 0.058, z + Math.sin(a) * 0.058, x + sx * (h - 0.06), y + Math.cos(a) * 0.058, z + Math.sin(a) * 0.058, 0.011, 0.011, 4); } // wheel nuts
   b.part = 0;
 }
 // PKM: bore along z at height y, muzzle at z = zm (1.17 m long); ammunition box and belt
-function pkm(b, y, zm) {
+function pkm(b, y, zm, stock = 1) {
   const z0 = zm + 0.61; // front of the receiver
   b.set(DK, MAT.metal);
   b.cyl(0, y, zm, 0, y, zm + 0.075, 0.017, 0.013, 7); b.cyl(0, y, zm + 0.075, 0, y, z0, 0.011, 0.015, 7, 0); // flash hider, barrel
@@ -203,7 +235,8 @@ function pkm(b, y, zm) {
   b.box(-0.005, y - 0.105, z0 + 0.19, 0.005, y - 0.097, z0 + 0.27); // trigger guard
   b.set([0.05, 0.035, 0.025], MAT.paint);
   b.at(0, y - 0.062, z0 + 0.275, 0, 0.3); b.box(-0.015, -0.1, -0.02, 0.015, 0, 0.022); b.at(0, 0, 0); // pistol grip
-  b.box(-0.017, y - 0.002, z0 + 0.3, 0.017, y + 0.024, z0 + 0.54); beam(b, [0, y - 0.045, z0 + 0.3], [0, y - 0.1, z0 + 0.54], 0.015, 0.011); b.box(-0.019, y - 0.115, z0 + 0.535, 0.019, y + 0.026, z0 + 0.56); // skeleton stock, butt plate
+  if (stock) { b.box(-0.017, y - 0.002, z0 + 0.3, 0.017, y + 0.024, z0 + 0.54); beam(b, [0, y - 0.045, z0 + 0.3], [0, y - 0.1, z0 + 0.54], 0.015, 0.011); b.box(-0.019, y - 0.115, z0 + 0.535, 0.019, y + 0.026, z0 + 0.56); } // skeleton stock, butt plate
+  else { b.set(DK, MAT.metal); b.box(-0.026, y - 0.06, z0 + 0.3, 0.026, y + 0.028, z0 + 0.315); } // pintle gun: the stock taken off, a plate on the receiver
   b.set(OLD, MAT.rus); b.box(-0.05, y - 0.215, z0 + 0.02, 0.045, y - 0.064, z0 + 0.2); b.box(-0.053, y - 0.085, z0 + 0.016, 0.048, y - 0.07, z0 + 0.204); // 100-round box under the receiver
   b.set([0.42, 0.3, 0.1], MAT.metal); for (let k = 0; k < 5; k++) b.cyl(0.034 + (k > 2 ? (k - 2) * 0.008 : 0), y - 0.06 + k * 0.02, z0 + 0.075, 0.034 + (k > 2 ? (k - 2) * 0.008 : 0), y - 0.06 + k * 0.02, z0 + 0.135, 0.0075, 0.006, 4); // belt up into the feed tray
 }
@@ -219,10 +252,10 @@ function bucketSeat(b, x, y, z, rec) {
   b.set([0.27, 0.28, 0.25], MAT.gear); for (const sx of [-1, 1]) { b.box(sx * 0.075 - 0.022, 0.5, -0.012, sx * 0.075 + 0.022, 0.8, 0.0); b.box(sx * 0.075 - 0.022, 0.795, -0.012, sx * 0.075 + 0.022, 0.807, 0.075); } // harness straps over the top
   b.at(0, 0, 0);
 }
-export function buildBuggy() { // light assault buggy: welded tube space frame, rear engine, two crew, PKM on the main hoop
+export function buildBuggy() { // light assault buggy: welded tube space frame, rear engine, driver and passenger, a gunner standing in a ring behind them at the PKM (his torso, head and arms are part 1: he twists at the waist with the gun)
   const b = new MB(), FR = [0.05, 0.06, 0.042], R = 0.026, WR = BUGGY.wr, FZ = BUGGY.ax[0], RZ = BUGGY.ax[1];
   b.part = 0;
-  const fr = (P, r = R, rad = 0.09) => pipe(b, P, r, 6, rad), m2 = (P, f) => { for (const sx of [-1, 1]) f(P.map((p) => [p[0] * sx, p[1], p[2]]), sx); };
+  const fr = (P, r = R, rad = 0.09) => pipe(b, P, r, 5, rad), m2 = (P, f) => { for (const sx of [-1, 1]) f(P.map((p) => [p[0] * sx, p[1], p[2]]), sx); };
   // ---- space frame ----
   b.set(FR, MAT.rus);
   m2([[0.25, 0.44, -1.47], [0.52, 0.36, -0.7], [0.52, 0.36, 0.95], [0.4, 0.46, 1.5]], (P) => fr(P)); // lower rails
@@ -233,8 +266,9 @@ export function buildBuggy() { // light assault buggy: welded tube space frame, 
   m2([[0.53, 0.8, -0.72], [0.545, 0.62, 0.45]], (P) => fr(P, 0.022)); // door bars
   m2([[0.52, 0.36, -0.52], [0.76, 0.4, -0.4], [0.76, 0.4, 0.36], [0.52, 0.36, 0.5]], (P) => fr(P, 0.024, 0.1)); // nerf bars
   m2([[0.46, 1.5, 0.45], [0.5, 0.36, 0.95]], (P) => fr(P, 0.02)); // diagonal braces down to the rear of the floor
-  for (const [x, y, z, r] of [[0.25, 0.44, -1.47, R], [0.25, 0.64, -1.47, R], [0.52, 0.36, -0.7, R], [0.52, 0.8, -0.72, R], [0.46, 1.5, -0.22, R], [0.46, 1.5, 0.45, 0.03], [0.52, 0.36, 0.45, R], [0.52, 0.36, 0.95, R], [0.4, 0.46, 1.5, R], [0.4, 0.82, 1.5, R], [0.46, 1.5, 0.1, 0.02]]) tube(b, [[-x, y, z], [x, y, z]], r, 6, 0); // cross tubes
-  tube(b, [[-0.46, 1.5, -0.22], [0.46, 1.5, 0.45]], 0.018, 5, 0); tube(b, [[-0.5, 1.02, 0.47], [0.52, 0.4, 0.47]], 0.02, 5, 0); // roof and hoop diagonals
+  for (const [x, y, z, r] of [[0.25, 0.44, -1.47, R], [0.25, 0.64, -1.47, R], [0.52, 0.36, -0.7, R], [0.52, 0.8, -0.72, R], [0.46, 1.5, -0.22, R], [0.52, 0.36, 0.45, R], [0.52, 0.36, 0.95, R], [0.4, 0.46, 1.5, R], [0.4, 0.82, 1.5, R], [0.46, 1.5, 0.1, 0.02]]) tube(b, [[-x, y, z], [x, y, z]], r, 6, 0); // cross tubes
+  { const ring = []; for (let k = 0; k <= 16; k++) { const a = k * Math.PI / 8; ring.push([Math.sin(a) * 0.34, 1.5, 0.45 + Math.cos(a) * 0.34]); } tube(b, ring, 0.026, 6, 0); } // the gunner's ring in the main hoop
+  for (const sx of [-1, 1]) { tube(b, [[sx * 0.46, 1.5, 0.45], [sx * 0.34, 1.5, 0.45]], 0.03, 6, 0); tube(b, [[sx * 0.46, 1.5, 0.12], [sx * 0.22, 1.5, 0.2]], 0.02, 5, 0); tube(b, [[sx * 0.445, 1.34, 0.7], [sx * 0.22, 1.5, 0.7]], 0.02, 5, 0); }
   // ---- panels ----
   b.set(OLV, MAT.rus);
   b.box(-0.52, 0.325, -0.7, 0.52, 0.345, 0.95); // floor pan
@@ -246,19 +280,20 @@ export function buildBuggy() { // light assault buggy: welded tube space frame, 
   }
   poly(b, [[-0.25, 0.44, -1.5], [0.25, 0.44, -1.5], [0.25, 0.64, -1.5], [-0.25, 0.64, -1.5]], [0, 0.5, 0]); // nose plate
   b.box(-0.44, 1.527, -0.2, 0.44, 1.541, 0.1); // roof sheet over the crew
-  b.set(DK, MAT.metal); b.box(-0.5, 0.345, -0.71, 0.5, 0.8, -0.69); b.box(-0.5, 0.345, 0.5, 0.5, 0.8, 0.52); // firewalls
+  b.set(DK, MAT.metal); b.box(-0.47, 0.345, -0.775, 0.47, 0.78, -0.755); b.box(-0.5, 0.345, 0.74, 0.5, 0.8, 0.76); // firewalls
   // ---- nose: bumper, lamps, tow hook, a rolled tarpaulin on the hood ----
   b.set(FR, MAT.rus); fr([[-0.25, 0.44, -1.47], [-0.3, 0.46, -1.62], [0.3, 0.46, -1.62], [0.25, 0.44, -1.47]], 0.024, 0.08); fr([[-0.25, 0.64, -1.47], [-0.2, 0.62, -1.62], [0.2, 0.62, -1.62], [0.25, 0.64, -1.47]], 0.02, 0.07);
-  for (const sx of [-1, 1]) {
-    b.set(DK, MAT.metal); b.cyl(sx * 0.15, 0.54, -1.5, sx * 0.15, 0.54, -1.56, 0.075, 0.08, 10); b.set(LENS, MAT.head); b.cyl(sx * 0.15, 0.54, -1.56, sx * 0.15, 0.54, -1.565, 0.068, 0.068, 10);
-  }
-  roll(b, -0.3, 0.3, 0.8, -1.22, 0.085);
-  b.set(DK, MAT.metal); b.at(0.33, 0.76, -1.0, 0.33, 0.21); b.cyl(0, 0, -0.3, 0, 0, 0.3, 0.013, 0.013, 5); b.box(-0.07, -0.008, -0.5, 0.07, 0.008, -0.3, 0, 0.0); b.at(0, 0, 0); // shovel on the hood
+  for (const sx of [-1, 1]) lamp(b, sx * 0.15, 0.54, -1.56, 0.075, 1);
+  roll(b, -0.3, 0.3, 0.8, -1.22, 0.085); snow(b, 0, 0.875, -1.21, 0.24, 0.022, 0.06, 5);
+  b.at(0.3, 0.765, -1.0, 0.36, 0.21); b.set([0.3, 0.19, 0.09], MAT.wood); b.cyl(0, 0.01, -0.12, 0, 0.01, 0.34, 0.016, 0.016, 6); // shovel strapped to the hood: wooden handle, steel blade
+  b.set([0.3, 0.3, 0.31], MAT.metal); b.box(-0.085, 0, -0.34, 0.085, 0.014, -0.12, 0.0, 0.0); b.box(-0.05, 0.0, -0.4, 0.05, 0.012, -0.34); b.box(-0.02, 0.0, -0.13, 0.02, 0.03, -0.08);
+  b.set(BLK, MAT.gear); b.box(-0.035, -0.002, 0.1, 0.035, 0.032, 0.13); b.box(-0.095, -0.002, -0.24, 0.095, 0.018, -0.21); b.at(0, 0, 0);
+  snow(b, -0.18, 0.745, -0.98, 0.19, 0.03, 0.17, 7, 10); snow(b, 0.03, 0.685, -1.37, 0.16, 0.025, 0.07, 9, 9);
   // ---- front suspension: double wishbones, coil-overs, tie rods ----
   for (const sx of [-1, 1]) {
     b.set(DK, MAT.metal);
     for (const z of [FZ + 0.17, FZ - 0.17]) { tube(b, [[sx * 0.3, 0.42, z], [sx * 0.71, 0.3, FZ]], 0.018, 5, 0); tube(b, [[sx * 0.33, 0.62, z * 0.92 + FZ * 0.08], [sx * 0.69, 0.5, FZ]], 0.015, 5, 0); }
-    tube(b, [[sx * 0.72, 0.27, FZ], [sx * 0.69, 0.53, FZ]], 0.028, 6); tube(b, [[sx * 0.7, WR, FZ], [sx * 0.78, WR, FZ]], 0.035, 6); // upright, stub axle
+    tube(b, [[sx * 0.72, 0.27, FZ], [sx * 0.69, 0.53, FZ]], 0.028, 6); tube(b, [[sx * 0.7, WR, FZ], [sx * 0.87, WR, FZ]], 0.035, 6); // upright, stub axle
     tube(b, [[sx * 0.2, 0.5, FZ + 0.2], [sx * 0.7, 0.42, FZ + 0.12]], 0.011, 4, 0); // tie rod
     const s0 = [sx * 0.6, 0.34, FZ], s1 = [sx * 0.38, 0.74, FZ + 0.04], sp = [], sr = [];
     for (let k = 0; k <= 8; k++) { const t = 0.12 + 0.6 * k / 8; sp.push([s0[0] + (s1[0] - s0[0]) * t, s0[1] + (s1[1] - s0[1]) * t, s0[2] + (s1[2] - s0[2]) * t]); sr.push(k & 1 ? 0.04 : 0.03); }
@@ -267,33 +302,38 @@ export function buildBuggy() { // light assault buggy: welded tube space frame, 
   b.set(DK, MAT.metal); b.box(-0.2, 0.47, FZ + 0.16, 0.2, 0.53, FZ + 0.24); // steering rack
   // ---- cockpit: dash, steering, pedals, levers, seats ----
   b.set(DK, MAT.metal); b.box(-0.5, 0.7, -0.74, 0.5, 0.84, -0.66, 0, 0.01); b.set([0.12, 0.13, 0.12], MAT.glass); for (const x of [-0.42, -0.19]) b.cyl(x, 0.78, -0.66, x, 0.78, -0.655, 0.035, 0.035, 8);
-  b.set(DK, MAT.metal); b.cyl(-0.3, 0.76, -0.68, -0.3, 0.955, -0.3, 0.016, 0.016, 6);
+  b.set(DK, MAT.metal); b.cyl(-0.32, 0.77, -0.69, -0.32, 0.955, -0.355, 0.016, 0.016, 6);
   { const v0 = cnt(b), ring = []; for (let k = 0; k <= 14; k++) { const a = k * Math.PI / 7; ring.push([Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0]); }
     b.set(BLK, MAT.rubber); tube(b, ring, 0.014, 5, 0); b.set(DK, MAT.metal); for (let k = 0; k < 3; k++) { const a = Math.PI / 2 + k * Math.PI * 2 / 3; tube(b, [[0, 0, 0.03], [Math.cos(a) * 0.165, Math.sin(a) * 0.165, 0]], 0.009, 4, 0); } b.cyl(0, 0, 0.04, 0, 0, 0.0, 0.035, 0.03, 8);
-    b.at(-0.3, 0.97, -0.275, 0, -0.47); xform(b, v0, b.m); b.at(0, 0, 0); } // steering wheel
-  for (const x of [-0.4, -0.3, -0.2]) { b.at(x, 0.4, -0.62, 0, 0.6); b.box(-0.03, 0, -0.008, 0.03, 0.1, 0.008); b.at(0, 0, 0); } // pedals
+    b.at(-0.32, 0.97, -0.33, 0, -0.5); xform(b, v0, b.m); b.at(0, 0, 0); } // steering wheel
+  for (const x of [-0.42, -0.32, -0.22]) { b.at(x, 0.4, -0.72, 0, 0.6); b.box(-0.03, 0, -0.008, 0.03, 0.1, 0.008); b.at(0, 0, 0); } // pedals
   b.cyl(0, 0.345, -0.1, 0.0, 0.62, -0.18, 0.011, 0.011, 5); b.set(BLK, MAT.rubber); b.cyl(0, 0.62, -0.18, 0, 0.67, -0.195, 0.022, 0.018, 6); b.set(DK, MAT.metal); b.box(-0.03, 0.345, 0.0, 0.03, 0.42, 0.25); b.cyl(0.0, 0.42, 0.2, 0, 0.56, 0.05, 0.012, 0.012, 5); // gear lever, tunnel, hand brake
-  bucketSeat(b, -0.3, 0.345, 0.14, 0.2); bucketSeat(b, 0.3, 0.345, 0.14, 0.2);
-  // ---- crew: driver on the left with his hands on the wheel, passenger with his AK ----
-  pose([-0.3, 0.565, 0.14], [0, 0.2, 0], [0, 0.0, 0], [0, -0.14, 0], [-0.4, 0.46, -0.56], [-0.21, 0.46, -0.56], [-0.5, 1, -0.5], [0.3, 1, -0.5], [-0.455, 1.005, -0.295], [-0.145, 1.005, -0.295], [-1, -0.8, 0.3], [1, -0.8, 0.3]);
-  bakeRider(b, -1, 0, 0.5);
-  pose([0.3, 0.565, 0.14], [0, 0.2, 0], [0.06, 0.0, 0], [0.12, -0.14, 0], [0.2, 0.46, -0.52], [0.4, 0.46, -0.5], [-0.3, 1, -0.5], [0.5, 1, -0.5], null, null, [-0.6, -0.7, 0.4], [0.8, -0.6, 0.4]);
-  lowReady(0.03, 0.19, -0.22, 0.75, -0.42, 0.3); bakeRider(b, 0, 0, 0.35);
-  // ---- fuel tank and stowage behind the seats ----
-  b.set(OLD, MAT.rus); b.box(-0.44, 0.36, 0.54, 0.44, 0.72, 0.72, 0.02, 0.02); b.set(DK, MAT.metal); b.cyl(-0.3, 0.72, 0.63, -0.3, 0.76, 0.63, 0.04, 0.04, 8); for (const x of [-0.15, 0.15]) b.box(x - 0.015, 0.355, 0.535, x + 0.015, 0.725, 0.725);
+  bucketSeat(b, -0.32, 0.345, -0.02, 0.3); bucketSeat(b, 0.32, 0.345, -0.02, 0.3);
+  // ---- crew: driver on the left with his hands on the wheel, passenger with his AK upright between his knees ----
+  pose([-0.32, 0.565, -0.02], [0, 0.3, 0], [0, 0.0, 0], [0, -0.24, 0], [-0.42, 0.47, -0.66], [-0.23, 0.47, -0.66], [-0.6, 1, -0.4], [0.3, 1, -0.4], [-0.47, 1.0, -0.345], [-0.17, 1.0, -0.345], [-1, -0.5, 0.2], [1, -0.5, 0.2]);
+  bakeRider(b, { rifle: -1, toe: 0.5, straps: 1 });
+  pose([0.32, 0.565, -0.02], [0, 0.3, 0], [0.0, 0.0, 0], [0.1, -0.24, 0], [0.2, 0.47, -0.62], [0.44, 0.47, -0.6], [-0.4, 1, -0.4], [0.6, 1, -0.4], null, null, [-0.8, -0.6, 0.3], [0.9, -0.5, 0.3]);
+  lowReady(0.01, 0.06, -0.3, -0.12, 0.95, 0.0); bakeRider(b, { rifle: 0, toe: 0.35, straps: 1 });
+  // ---- the gunner: he stands on the floor behind the seats, leaning on a webbing sling, his legs fixed and his upper body turning with the mount ----
+  pose([0, 1.16, 0.5], [0, 0.0, 0], [0, -0.1, 0], [0, 0.12, 0], [-0.17, 0.43, 0.6], [0.17, 0.43, 0.62], [-0.3, 0.1, -1], [0.3, 0.1, -1], [-0.075, 1.63, 0.19], [0.012, 1.672, 0.338], [-1, -0.2, 0.3], [1, -0.35, 0.4]);
+  bakeRider(b, { rifle: -1, up: 1 });
+  b.set([0.22, 0.23, 0.19], MAT.gear); b.box(-0.52, 1.0, 0.615, 0.52, 1.09, 0.625);
+  // ---- fuel tank and stowage over the gearbox ----
+  b.set(OLD, MAT.rus); b.box(-0.44, 0.6, 0.78, 0.44, 0.9, 0.98, 0.02, 0.02); b.set(DK, MAT.metal); b.cyl(-0.3, 0.9, 0.88, -0.3, 0.94, 0.88, 0.04, 0.04, 8); for (const x of [-0.15, 0.15]) b.box(x - 0.015, 0.595, 0.775, x + 0.015, 0.905, 0.985);
   jerry(b, -0.645, 0.46, 0.6, 0); jerry(b, 0.645, 0.46, 0.6, 0);
-  b.set(DK, MAT.metal); for (const sx of [-1, 1]) { b.box(sx * 0.645 - 0.1, 0.44, 0.42, sx * 0.645 + 0.1, 0.46, 0.78); b.box(sx * 0.74 - 0.006, 0.46, 0.44, sx * 0.74 + 0.006, 0.7, 0.47); b.box(sx * 0.74 - 0.006, 0.46, 0.73, sx * 0.74 + 0.006, 0.7, 0.76); b.box(sx * 0.645 - 0.1, 0.69, 0.585, sx * 0.645 + 0.1, 0.705, 0.615); } // can trays and straps
-  roll(b, -0.42, 0.42, 0.82, 0.62, 0.095, [0.24, 0.24, 0.19]); ammoBox(b, 0.2, 0.915, 0.62, Math.PI / 2); ammoBox(b, -0.2, 0.915, 0.62, Math.PI / 2);
+  b.set(DK, MAT.metal); for (const sx of [-1, 1]) { b.box(sx * 0.645 - 0.1, 0.44, 0.42, sx * 0.645 + 0.1, 0.46, 0.78); b.box(sx * 0.74 - 0.006, 0.46, 0.44, sx * 0.74 + 0.006, 0.7, 0.47); b.box(sx * 0.74 - 0.006, 0.46, 0.73, sx * 0.74 + 0.006, 0.7, 0.76); b.box(sx * 0.645 - 0.1, 0.69, 0.585, sx * 0.645 + 0.1, 0.705, 0.615); snow(b, sx * 0.645, 0.905, 0.6, 0.07, 0.014, 0.14, 11 + sx, 5); } // can trays and straps
+  roll(b, -0.4, 0.4, 0.985, 0.88, 0.085, [0.24, 0.24, 0.19]); snow(b, 0, 1.06, 0.88, 0.3, 0.02, 0.06, 13); ammoBox(b, 0.4, 0.345, 0.58, 0); ammoBox(b, -0.4, 0.345, 0.58, 0);
   // ---- engine and transaxle (air-cooled flat four behind the rear axle) ----
   b.set(ALU, MAT.metal); b.cyl(0, 0.46, 0.74, 0, 0.46, 1.05, 0.085, 0.12, 8); b.cyl(0, 0.46, 1.05, 0, 0.46, 1.2, 0.17, 0.17, 10); // gearbox, bell housing
   b.set(STEEL, MAT.metal); b.box(-0.2, 0.36, 1.2, 0.2, 0.6, 1.5, 0.02, 0.01); // crankcase
   for (const sx of [-1, 1]) { b.set(ALU, MAT.metal); b.box(sx * 0.29 - 0.09, 0.4, 1.22, sx * 0.29 + 0.09, 0.56, 1.48); b.set(DK, MAT.metal); for (let k = 0; k < 5; k++) b.box(sx * 0.3 - 0.105, 0.385, 1.235 + k * 0.055, sx * 0.3 + 0.105, 0.575, 1.25 + k * 0.055); b.box(sx * 0.4 - 0.02, 0.41, 1.22, sx * 0.4 + 0.02, 0.55, 1.48, 0.0, 0.02); } // heads, fins, rocker covers
-  b.set(OLD, MAT.rus); b.cyl(0, 0.84, 1.26, 0, 0.84, 1.4, 0.2, 0.2, 12); b.box(-0.2, 0.56, 1.26, 0.2, 0.84, 1.4); // fan shroud
+  b.set([0.13, 0.15, 0.11], MAT.rus); b.cyl(0, 0.84, 1.26, 0, 0.84, 1.4, 0.2, 0.2, 12); b.box(-0.2, 0.56, 1.26, 0.2, 0.84, 1.4); // fan shroud
   b.set(DK, MAT.metal); b.cyl(0, 0.84, 1.4, 0, 0.84, 1.43, 0.08, 0.08, 10); b.cyl(0, 0.5, 1.5, 0, 0.5, 1.53, 0.075, 0.075, 10); b.box(-0.012, 0.5, 1.435, 0.012, 0.84, 1.445); b.cyl(0, 0.84, 1.26, 0, 0.84, 1.255, 0.15, 0.15, 12); // pulleys, belt, fan intake
   for (const sx of [-1, 1]) { b.set(STEEL, MAT.metal); b.cyl(sx * 0.16, 0.66, 1.33, sx * 0.3, 0.66, 1.33, 0.03, 0.03, 6); b.set([0.1, 0.1, 0.09], MAT.paint); b.cyl(sx * 0.3, 0.6, 1.33, sx * 0.3, 0.9, 1.33, 0.065, 0.065, 9); b.set(DK, MAT.metal); b.cyl(sx * 0.3, 0.9, 1.33, sx * 0.3, 0.92, 1.33, 0.07, 0.05, 9); } // carburettor stubs, air filters
   b.set([0.11, 0.075, 0.055], MAT.metal);
-  for (const sx of [-1, 1]) { pipe(b, [[sx * 0.33, 0.42, 1.28], [sx * 0.33, 0.33, 1.3], [sx * 0.3, 0.33, 1.6]], 0.02, 5, 0.05, 0); pipe(b, [[sx * 0.33, 0.42, 1.43], [sx * 0.33, 0.33, 1.45], [sx * 0.3, 0.33, 1.6]], 0.02, 5, 0.05, 0); pipe(b, [[sx * 0.2, 0.4, 1.63], [sx * 0.2, 0.4, 1.72], [sx * 0.24, 0.62, 1.8]], 0.024, 6, 0.05); } // headers, tail pipes
-  b.cyl(-0.36, 0.38, 1.63, 0.36, 0.38, 1.63, 0.075, 0.075, 10); // silencer across the tail
+  for (const sx of [-1, 1]) { pipe(b, [[sx * 0.33, 0.42, 1.28], [sx * 0.33, 0.33, 1.3], [sx * 0.3, 0.33, 1.6]], 0.02, 5, 0.05, 0); pipe(b, [[sx * 0.33, 0.42, 1.43], [sx * 0.33, 0.33, 1.45], [sx * 0.3, 0.33, 1.6]], 0.02, 5, 0.05, 0); b.cyl(sx * 0.22, 0.385, 1.66, sx * 0.23, 0.4, 1.83, 0.03, 0.026, 7); } // headers, short stingers
+  lathe(b, 0, 0.38, 1.63, [[-0.38, 0], [-0.38, 0.06], [-0.35, 0.08], [0.35, 0.08], [0.38, 0.06], [0.38, 0]], 10); // one silencer across the tail
+  b.set(DK, MAT.metal); b.box(-0.4, 0.285, 0.95, 0.4, 0.3, 1.56); b.at(0, 0.3, 1.56, 0, -0.5); b.box(-0.4, -0.015, 0, 0.4, 0, 0.16); b.at(0, 0, 0); // skid plate under the engine
   b.set(FR, MAT.rus); fr([[-0.4, 0.46, 1.5], [-0.42, 0.5, 1.74], [0.42, 0.5, 1.74], [0.4, 0.46, 1.5]], 0.022, 0.08); // rear bumper round the silencer
   b.set([0.5, 0.04, 0.03], MAT.paint); for (const sx of [-1, 1]) b.box(sx * 0.4 - 0.035, 0.72, 1.5, sx * 0.4 + 0.035, 0.78, 1.53); // tail lamps
   // ---- rear suspension: trailing arms, drive shafts, coil-overs ----
@@ -306,20 +346,19 @@ export function buildBuggy() { // light assault buggy: welded tube space frame, 
   }
   // ---- spare wheel lying on the rear stays, light bar, aerial ----
   b.set(FR, MAT.rus); for (const t of [0.36, 0.8]) tube(b, [[-0.46 + 0.06 * t, 1.5 - 0.68 * t, 0.45 + 1.05 * t], [0.46 - 0.06 * t, 1.5 - 0.68 * t, 0.45 + 1.05 * t]], 0.02, 5, 0);
-  { const v0 = cnt(b); buggyWheel(b, 0, 0, 0, 1, 0); b.at(0, 1.245, 1.19, 0, 0.575, Math.PI / 2); xform(b, v0, b.m); b.at(0, 0, 0);
-    b.set(BLK, MAT.gear); for (const sx of [-1, 1]) beam(b, [sx * 0.2, 1.54, 0.87], [sx * 0.2, 1.13, 1.5], 0.02, 0.004); }
+  { const v0 = cnt(b); buggyWheel(b, 0, 0, 0, 1, 0, 0.225); snow(b, 0.045, 0.02, 0.0, 0.035, 0.15, 0.15, 21, 8); b.at(0, 1.2, 1.26, 0, 0.575, Math.PI / 2); xform(b, v0, b.m); b.at(0, 0, 0);
+    b.set(BLK, MAT.gear); for (const sx of [-1, 1]) beam(b, [sx * 0.2, 1.47, 0.96], [sx * 0.2, 1.07, 1.57], 0.02, 0.004); }
   b.set(DK, MAT.metal); b.box(-0.4, 1.555, -0.27, 0.4, 1.575, -0.21);
-  for (const x of [-0.3, -0.1, 0.1, 0.3]) { b.set(DK, MAT.metal); b.cyl(x, 1.63, -0.2, x, 1.63, -0.27, 0.05, 0.058, 9); b.set([0.5, 0.5, 0.46], MAT.glass); b.cyl(x, 1.63, -0.27, x, 1.63, -0.275, 0.05, 0.05, 9); b.set(DK, MAT.metal); b.box(x - 0.008, 1.57, -0.25, x + 0.008, 1.6, -0.22); }
-  b.set(DK, MAT.metal); b.cyl(0.46, 1.52, 0.52, 0.46, 1.62, 0.52, 0.018, 0.014, 6); b.cyl(0.46, 1.62, 0.52, 0.47, 3.1, 0.6, 0.006, 0.003, 4);
-  b.set(FR, MAT.rus); b.box(-0.09, 1.505, 0.37, 0.09, 1.54, 0.53); // gun mount plate on the hoop
-  for (const z of BUGGY.ax) for (const sx of [-1, 1]) buggyWheel(b, sx * 0.86, WR, z, sx, z < 0 ? 3 : 4);
-  // ---- PKM on a pintle: 1 = socket, post and yoke, 2 = cradle and gun ----
-  b.part = 1; const tz = BUGGY.tz, gy = BUGGY.gy;
-  b.set(DK, MAT.metal); b.cyl(0, 1.54, tz, 0, 1.58, tz, 0.05, 0.042, 10); b.cyl(0, 1.58, tz, 0, 1.675, tz, 0.024, 0.024, 8); b.box(-0.085, 1.665, tz - 0.022, 0.085, 1.69, tz + 0.022);
-  for (const sx of [-1, 1]) b.box(sx * 0.074 - 0.011, 1.69, tz - 0.02, sx * 0.074 + 0.011, gy + 0.025, tz + 0.02);
-  b.part = 2; b.set(DK, MAT.metal); b.cyl(-0.09, gy, BUGGY.gz, 0.09, gy, BUGGY.gz, 0.012, 0.012, 6); // trunnion pin
-  for (const sx of [-1, 1]) { b.box(sx * 0.05 - 0.006, gy - 0.02, BUGGY.mz + 0.66, sx * 0.05 + 0.006, gy + 0.012, BUGGY.gz + 0.03); b.box(sx * 0.04 - 0.012, gy - 0.07, BUGGY.mz + 0.63, sx * 0.04 + 0.012, gy - 0.05, BUGGY.mz + 0.7); } // cradle arms along the receiver
-  pkm(b, gy, BUGGY.mz);
+  for (const x of [-0.3, -0.1, 0.1, 0.3]) { lamp(b, x, 1.63, -0.27, 0.05, 0); b.box(x - 0.008, 1.57, -0.25, x + 0.008, 1.6, -0.22); snow(b, x, 1.683, -0.235, 0.04, 0.012, 0.035, 30 + x * 10, 5); }
+  b.set(OLV, MAT.rus); snow(b, 0.05, 1.54, -0.04, 0.34, 0.025, 0.13, 17, 10);
+  b.set(DK, MAT.metal); b.cyl(0.4, 0.84, 1.5, 0.4, 0.96, 1.5, 0.022, 0.016, 6); tube(b, [[0.4, 0.96, 1.5], [0.41, 1.9, 1.56], [0.43, 2.85, 1.66]], [0.011, 0.008, 0.005], 5); // aerial, about 2 m
+  for (const sx of [-1, 1]) { snow(b, sx * 0.76, 0.428, -0.02, 0.03, 0.014, 0.3, 40 + sx, 5); }
+  for (const z of BUGGY.ax) for (const sx of [-1, 1]) { const w = z < 0 ? 0.17 : 0.225; buggyWheel(b, sx * (1.0 - w / 2), WR, z, sx, z < 0 ? 3 : 4, w); }
+  // ---- PKM on the ring: 1 = the carriage on the ring with its arm and yoke (and the gunner's upper body), 2 = the gun ----
+  b.part = 1; const gy = BUGGY.gy;
+  b.set(DK, MAT.metal); b.box(-0.07, 1.468, 0.075, 0.07, 1.54, 0.15); b.box(-0.05, 1.54, 0.09, 0.05, 1.56, 0.14);
+  pipe(b, [[0, 1.55, 0.115], [0, 1.64, 0.04], [0, 1.7, 0.04]], 0.02, 6, 0.04); b.box(-0.045, 1.695, 0.02, 0.045, 1.715, 0.06); for (const sx of [-1, 1]) b.box(sx * 0.04 - 0.007, 1.715, 0.025, sx * 0.04 + 0.007, gy - 0.02, 0.055);
+  b.part = 2; pkm(b, gy, BUGGY.mz, 0);
   return b.build();
 }
 
@@ -331,11 +370,9 @@ function motoWheel(b, z, part, w, hs, front) {
   b.part = part; b.set(BLK, MAT.rubber);
   for (let k = 0; k <= 6; k++) { const t = -2.15 + 4.3 * k / 6; T.push([Math.sin(t) * w * 0.5, rc + Math.cos(t) * hs * 0.5]); }
   lathe(b, 0, y, z, T, 18);
-  const nk = 14;
-  for (let k = 0; k < nk * 2; k++) { // knobs: a centre row and staggered shoulder rows
-    const a = k * Math.PI / nk; b.at(0, y + Math.cos(a) * (Rt - 0.004), z + Math.sin(a) * (Rt - 0.004), 0, a);
-    if (k & 1) { for (const sx of [-1, 1]) knob(b, sx * w * 0.34 - 0.013, -0.02, -0.016, sx * w * 0.34 + 0.013, 0.004, 0.016, 0.003); }
-    else knob(b, -w * 0.2, 0, -0.018, w * 0.2, 0.017, 0.018, 0.003);
+  for (let k = 0; k < 44; k++) { // knobs: two staggered rows of small blocks
+    const a = k * Math.PI / 22, sx = k & 1 ? 1 : -1; b.at(0, y + Math.cos(a) * (Rt - 0.004), z + Math.sin(a) * (Rt - 0.004), 0, a);
+    knob(b, sx * w * 0.2 - w * 0.17, 0, -0.011, sx * w * 0.2 + w * 0.17, 0.016, 0.011, 0.003);
   }
   b.at(0, 0, 0); const wr = w * 0.36, lip = rr + hs * 0.2;
   b.set([0.16, 0.16, 0.165], MAT.metal); lathe(b, 0, y, z, [[wr, lip], [wr, rr - 0.012], [wr, rr - 0.012], [-wr, rr - 0.012], [-wr, rr - 0.012], [-wr, lip]], 18); // rim
@@ -349,19 +386,19 @@ function motoWheel(b, z, part, w, hs, front) {
   }
   b.set([0.07, 0.07, 0.075], MAT.metal);
   if (front) lathe(b, 0, y, z, [[-0.056, 0.045], [-0.056, 0.108], [-0.056, 0.108], [-0.051, 0.108], [-0.051, 0.108], [-0.051, 0.045]], 12); // brake disc
-  else { b.set(DK, MAT.metal); lathe(b, 0, y, z, [[-0.068, 0.03], [-0.068, 0.1], [-0.068, 0.1], [-0.062, 0.1], [-0.062, 0.1], [-0.062, 0.03]], 12); } // sprocket
+  else { b.set(DK, MAT.metal); b.set([0.33, 0.33, 0.34], MAT.metal); lathe(b, 0, y, z, [[-0.071, 0.05], [-0.071, 0.115], [-0.071, 0.115], [-0.063, 0.115], [-0.063, 0.115], [-0.063, 0.05]], 14); } // sprocket
   b.part = 0;
 }
-export function buildMoto() { // military enduro with a rider and a pillion gunner. Parts 1 and 2 (the aim) are empty: their pivot lies in the rider, so a rifle in them would leave the gunner's hands whenever he aims off the bike's axis
+export function buildMoto() { // military enduro with a rider and a pillion gunner. Parts 1 and 2 (the aim) are empty: their pivot lies in the rider, so a rifle in them would leave the gunner's hands; he fires 40 degrees off to the right instead
   const b = new MB(), FZ = MOTO.ax[0], RZ = MOTO.ax[1], WR = MOTO.wr, rk = 27 * Math.PI / 180, sr = Math.sin(rk), cr = Math.cos(rk);
   const fk = (x, s, off = 0) => [x, WR + s * cr - off * sr, FZ + s * sr + off * cr]; // a point s up the fork from the axle, off behind it
   const FRM = [0.035, 0.037, 0.038], m2 = (P, f) => { for (const sx of [-1, 1]) f(P.map((p) => [p[0] * sx, p[1], p[2]]), sx); };
   b.part = 0;
   // ---- front end: telescopic fork with gaiters, triple clamps, axle, high mudguard, headlamp with a guard ----
   for (const sx of [-1, 1]) {
-    b.set(FRM, MAT.metal); tube(b, [fk(sx * 0.1, -0.035), fk(sx * 0.1, 0.27)], 0.026, 7); b.box(sx * 0.1 - 0.02, WR - 0.03, FZ - 0.03, sx * 0.1 + 0.02, WR + 0.03, FZ + 0.03);
+    b.set(FRM, MAT.metal); tube(b, [fk(sx * 0.1, -0.035), fk(sx * 0.1, 0.27)], 0.031, 7); b.box(sx * 0.1 - 0.02, WR - 0.03, FZ - 0.03, sx * 0.1 + 0.02, WR + 0.03, FZ + 0.03);
     b.set([0.5, 0.5, 0.52], MAT.metal); tube(b, [fk(sx * 0.1, 0.27), fk(sx * 0.1, 0.73)], 0.018, 6);
-    b.set(BLK, MAT.rubber); const gp = [], gr = []; for (let k = 0; k <= 6; k++) { gp.push(fk(sx * 0.1, 0.27 + k * 0.034)); gr.push(k & 1 ? 0.033 : 0.025); } tube(b, gp, gr, 6, 0);
+    b.set(BLK, MAT.rubber); const gp = [], gr = []; for (let k = 0; k <= 8; k++) { gp.push(fk(sx * 0.1, 0.26 + k * 0.031)); gr.push(k & 1 ? 0.036 : 0.027); } tube(b, gp, gr, 6, 0);
   }
   b.set(STEEL, MAT.metal); tube(b, [[-0.125, WR, FZ], [0.125, WR, FZ]], 0.011, 5);
   b.set(FRM, MAT.metal); for (const s of [0.52, 0.705]) { b.at(0, WR + s * cr, FZ + s * sr, 0, rk); b.box(-0.128, -0.016, -0.034, 0.128, 0.016, 0.075, 0.0, 0.0); b.at(0, 0, 0); }
@@ -370,7 +407,7 @@ export function buildMoto() { // military enduro with a rider and a pillion gunn
   b.set(OLV, MAT.rus); plate(b, [[0.78, -1.1], [0.8, -1.0], [0.808, -0.86], [0.8, -0.72], [0.78, -0.58], [0.745, -0.47], [0.69, -0.4]], 0.07, 0.008, 0.02);
   b.set(FRM, MAT.metal); for (const sx of [-1, 1]) tube(b, [[sx * 0.065, 0.79, -0.6], fk(sx * 0.1, 0.5)], 0.007, 4, 0); // mudguard stays
   b.set(OLD, MAT.rus);
-  { const v0 = cnt(b); lathe(b, 0, 0, 0, [[0.02, 0], [0.04, 0.06], [0.09, 0.086], [0.14, 0.09], [0.14, 0.09], [0.15, 0.082]], 12); b.set(LENS, MAT.head); lathe(b, 0, 0, 0, [[0.15, 0.082], [0.156, 0.05], [0.158, 0]], 12);
+  { const v0 = cnt(b); lathe(b, 0, 0, 0, [[0.02, 0], [0.04, 0.06], [0.09, 0.086], [0.14, 0.09], [0.14, 0.09], [0.15, 0.082]], 12); b.set([0.3, 0.31, 0.3], MAT.metal); lathe(b, 0, 0, 0, [[0.15, 0.082], [0.156, 0.05], [0.158, 0.03]], 12); b.set(LENS, MAT.head); lathe(b, 0, 0, 0, [[0.158, 0.03], [0.16, 0]], 8);
     b.set(DK, MAT.metal); lathe(b, 0, 0, 0, [[0.175, 0.097], [0.185, 0.097], [0.185, 0.097], [0.185, 0.085]], 12); for (const o of [-0.045, 0, 0.045]) { b.box(0.176, o - 0.004, -0.09, 0.184, o + 0.004, 0.09); } for (const o of [-0.09, 0.09]) b.box(0.13, -0.004, o - 0.004, 0.185, 0.004, o + 0.004);
     b.at(0, 0.875, -0.455, Math.PI / 2, 0, 0); xform(b, v0, b.m); b.at(0, 0, 0); } // headlamp shell, lens, stone guard (built along x, turned to face forward)
   b.set(DK, MAT.metal); b.cyl(0, 0.985, -0.43, 0, 1.02, -0.415, 0.045, 0.045, 9); for (const sx of [-1, 1]) b.box(sx * 0.1 - 0.012, 0.85, -0.5, sx * 0.1 + 0.012, 0.9, -0.44); // speedometer, lamp brackets
@@ -390,15 +427,15 @@ export function buildMoto() { // military enduro with a rider and a pillion gunn
   tube(b, [[-0.12, 0.85, 1.04], [0.12, 0.85, 1.04]], 0.015, 5, 0); tube(b, [[-0.115, 0.845, 0.84], [0.115, 0.845, 0.84]], 0.012, 5, 0); tube(b, [[-0.09, 0.3, -0.24], [0.09, 0.3, -0.24]], 0.014, 5, 0);
   b.set(DK, MAT.metal); b.box(-0.1, 0.262, -0.25, 0.1, 0.272, 0.08); // sump guard
   // ---- single-cylinder engine: finned barrel and head, crankcase with covers, gearbox, carburettor, air box ----
-  b.set(ALU, MAT.metal);
+  b.set([0.1, 0.1, 0.105], MAT.metal);
   lathe(b, 0, 0.41, -0.07, [[-0.1, 0], [-0.1, 0.1], [-0.085, 0.118], [0.085, 0.118], [0.1, 0.1], [0.1, 0]], 12); b.box(-0.095, 0.3, -0.03, 0.095, 0.5, 0.2, 0.0, 0.02);
-  b.set([0.19, 0.19, 0.2], MAT.metal); lathe(b, 0, 0.41, -0.07, [[0.1, 0.1], [0.135, 0.092], [0.14, 0.08], [0.14, 0]], 12); lathe(b, 0, 0.42, 0.1, [[0.095, 0.075], [0.125, 0.07], [0.128, 0]], 10); lathe(b, 0, 0.41, -0.07, [[-0.14, 0], [-0.14, 0.07], [-0.13, 0.085], [-0.1, 0.09]], 12);
+  b.set([0.075, 0.075, 0.08], MAT.metal); lathe(b, 0, 0.41, -0.07, [[0.1, 0.1], [0.135, 0.092], [0.14, 0.08], [0.14, 0]], 12); lathe(b, 0, 0.42, 0.1, [[0.095, 0.075], [0.125, 0.07], [0.128, 0]], 10); lathe(b, 0, 0.41, -0.07, [[-0.14, 0], [-0.14, 0.07], [-0.13, 0.085], [-0.1, 0.09]], 12);
   b.at(0, 0.41, -0.07, 0, -0.17);
-  b.set(ALU, MAT.metal); b.box(-0.062, 0.1, -0.062, 0.062, 0.25, 0.062); b.box(-0.075, 0.25, -0.08, 0.075, 0.315, 0.08); b.box(-0.055, 0.315, -0.065, 0.055, 0.345, 0.065, 0.012, 0.012);
-  b.set([0.15, 0.15, 0.155], MAT.metal); for (let k = 0; k < 6; k++) b.box(-0.092, 0.118 + k * 0.022, -0.092, 0.092, 0.126 + k * 0.022, 0.092); for (let k = 0; k < 3; k++) b.box(-0.09, 0.258 + k * 0.02, -0.095, 0.09, 0.265 + k * 0.02, 0.095);
+  b.set([0.13, 0.13, 0.135], MAT.metal); b.box(-0.062, 0.1, -0.062, 0.062, 0.25, 0.062); b.box(-0.075, 0.25, -0.08, 0.075, 0.315, 0.08); b.box(-0.055, 0.315, -0.065, 0.055, 0.345, 0.065, 0.012, 0.012);
+  b.set([0.09, 0.09, 0.095], MAT.metal); for (let k = 0; k < 6; k++) b.box(-0.092, 0.118 + k * 0.022, -0.092, 0.092, 0.126 + k * 0.022, 0.092); for (let k = 0; k < 3; k++) b.box(-0.09, 0.258 + k * 0.02, -0.095, 0.09, 0.265 + k * 0.02, 0.095);
   b.at(0, 0, 0);
   b.set(STEEL, MAT.metal); b.cyl(0, 0.665, -0.03, 0, 0.68, 0.09, 0.03, 0.034, 7); b.set(DK, MAT.metal); b.box(-0.075, 0.56, 0.08, 0.075, 0.76, 0.22);
-  b.set(OLV, MAT.rus); for (const sx of [-1, 1]) extX(b, [[0.81, 0.05], [0.81, 0.42], [0.67, 0.36], [0.56, 0.12]], sx > 0 ? 0.1 : -0.112, sx > 0 ? 0.112 : -0.1); // side panels
+  b.set(OLV, MAT.rus); for (const sx of [-1, 1]) extX(b, [[0.8, 0.09], [0.8, 0.33], [0.63, 0.15]], sx > 0 ? 0.1 : -0.11, sx > 0 ? 0.11 : -0.1); // small side covers
   // ---- fuel tank, seat ----
   b.at(0, 0.845, 0.075, 0, -Math.PI / 2); b.set(OLV, MAT.rus);
   loft(b, [[0, 0.06, 0.03, 0, -0.03], [0.04, 0.105, 0.065, 0, -0.01], [0.14, 0.135, 0.092, 0, 0.012], [0.27, 0.138, 0.1, 0, 0.03], [0.36, 0.115, 0.088, 0, 0.035], [0.415, 0.07, 0.06, 0, 0.032], [0.43, 0.03, 0.03, 0, 0.03]], 10);
@@ -408,33 +445,38 @@ export function buildMoto() { // military enduro with a rider and a pillion gunn
   b.at(0, 0, 0);
   // ---- exhaust: header round the right of the barrel, high silencer under the seat with a heat shield ----
   b.set([0.13, 0.085, 0.06], MAT.metal); pipe(b, [[0.02, 0.67, -0.2], [0.07, 0.67, -0.29], [0.14, 0.58, -0.25], [0.155, 0.6, -0.02], [0.16, 0.7, 0.2], [0.165, 0.745, 0.36]], 0.02, 6, 0.06, 0);
-  b.set(DK, MAT.metal); tube(b, [[0.165, 0.73, 0.3], [0.166, 0.745, 0.36], [0.172, 0.8, 0.82], [0.173, 0.805, 0.86]], [0.025, 0.047, 0.047, 0.03], 9); b.cyl(0.173, 0.805, 0.86, 0.174, 0.81, 0.9, 0.016, 0.016, 6);
-  b.set(STEEL, MAT.metal); for (const sx of [0]) { b.at(0.218 + sx, 0.775, 0.58, 0, 0.115); b.box(-0.004, -0.035, -0.19, 0.004, 0.035, 0.19); b.at(0, 0, 0); }
+  b.set([0.17, 0.165, 0.16], MAT.metal); tube(b, [[0.165, 0.735, 0.34], [0.167, 0.755, 0.43], [0.172, 0.805, 0.9], [0.173, 0.81, 0.94]], [0.022, 0.046, 0.046, 0.028], 9); b.set(DK, MAT.metal); b.cyl(0.173, 0.81, 0.94, 0.174, 0.815, 0.99, 0.017, 0.017, 6);
+  for (const z of [0.46, 0.88]) lathe(b, 0.17, 0.758 + (z - 0.43) * 0.106, z, [[-0.01, 0.05], [0.01, 0.05]], 9);
+  b.set([0.06, 0.06, 0.065], MAT.metal); b.at(0.222, 0.782, 0.66, 0, 0.106); b.box(-0.004, -0.03, -0.17, 0.004, 0.03, 0.17); b.set([0.2, 0.2, 0.2], MAT.metal); for (let k = 0; k < 5; k++) b.box(0.004, -0.018, -0.14 + k * 0.06, 0.006, 0.018, -0.1 + k * 0.06); b.at(0, 0, 0);
   // ---- swing arm, twin shocks, chain and guard, pegs, stand, pedals ----
   b.set(FRM, MAT.metal);
   for (const sx of [-1, 1]) {
     beam(b, [sx * 0.092, 0.42, 0.17], [sx * 0.092, WR, RZ + 0.05], 0.014, 0.024);
-    const s0 = [sx * 0.118, 0.37, RZ - 0.07], s1 = [sx * 0.108, 0.795, 0.44], sp = [], sq = [];
-    for (let k = 0; k <= 8; k++) { const t = 0.18 + 0.7 * k / 8; sp.push([s0[0] + (s1[0] - s0[0]) * t, s0[1] + (s1[1] - s0[1]) * t, s0[2] + (s1[2] - s0[2]) * t]); sq.push(k & 1 ? 0.03 : 0.022); }
-    b.set(STEEL, MAT.metal); tube(b, [s0, s1], 0.013, 5); b.set(DK, MAT.metal); tube(b, sp, sq, 5, 0);
-    b.set(FRM, MAT.metal); tube(b, [[sx * 0.09, 0.335, 0.03], [sx * 0.255, 0.335, 0.03]], 0.014, 5); tube(b, [[sx * 0.1, 0.6, 0.38], [sx * 0.13, 0.46, 0.43], [sx * 0.275, 0.46, 0.43]], 0.012, 5); // rider and pillion pegs
+    const s0 = [sx * 0.122, 0.37, RZ - 0.07], s1 = [sx * 0.112, 0.795, 0.44], sp = [], sq = [];
+    for (let k = 0; k <= 8; k++) { const t = 0.18 + 0.7 * k / 8; sp.push([s0[0] + (s1[0] - s0[0]) * t, s0[1] + (s1[1] - s0[1]) * t, s0[2] + (s1[2] - s0[2]) * t]); sq.push(k & 1 ? 0.034 : 0.024); }
+    b.set(DK, MAT.metal); tube(b, [s0, s1], 0.015, 5); b.set([0.36, 0.36, 0.37], MAT.metal); tube(b, sp, sq, 6, 0);
+    b.set(FRM, MAT.metal); tube(b, [[sx * 0.09, 0.335, 0.1], [sx * 0.24, 0.335, 0.1]], 0.014, 5); tube(b, [[sx * 0.1, 0.6, 0.4], [sx * 0.12, 0.47, 0.46], [sx * 0.235, 0.47, 0.46]], 0.012, 5); // rider and pillion pegs
   }
   tube(b, [[-0.11, 0.42, 0.17], [0.11, 0.42, 0.17]], 0.016, 6); tube(b, [[-0.14, WR, RZ], [0.14, WR, RZ]], 0.011, 5);
   b.set(DK, MAT.metal); lathe(b, 0, 0.42, 0.1, [[-0.07, 0.02], [-0.07, 0.034], [-0.07, 0.034], [-0.062, 0.034], [-0.062, 0.034], [-0.062, 0.02]], 8);
-  beam(b, [-0.065, 0.452, 0.1], [-0.065, 0.428, RZ], 0.005, 0.007); beam(b, [-0.065, 0.388, 0.1], [-0.065, 0.234, RZ], 0.005, 0.007); // chain runs
+  b.set([0.2, 0.2, 0.21], MAT.metal); beam(b, [-0.067, 0.452, 0.1], [-0.067, 0.443, RZ], 0.007, 0.011); beam(b, [-0.067, 0.388, 0.1], [-0.067, 0.218, RZ], 0.007, 0.011); // chain runs
   b.set(FRM, MAT.metal); beam(b, [-0.068, 0.478, 0.2], [-0.068, 0.462, RZ - 0.05], 0.014, 0.004); // chain guard
   tube(b, [[-0.1, 0.285, 0.1], [-0.125, 0.275, 0.5]], 0.011, 4); pipe(b, [[0.1, 0.34, 0.05], [0.16, 0.33, -0.06], [0.2, 0.345, -0.1]], 0.008, 4, 0.02); pipe(b, [[-0.13, 0.4, -0.04], [-0.17, 0.37, -0.1], [-0.215, 0.375, -0.12]], 0.008, 4, 0.02); // side stand, brake pedal, gear lever
-  // ---- tail: mudguard, lamp, plate, rack with a pack and a jerry can, pannier bag ----
+  // ---- tail: mudguard, lamp, plate, rack with a pack and a jerry can, panniers ----
   b.set(OLV, MAT.rus); plate(b, [[0.69, 0.3], [0.745, 0.48], [0.765, 0.7], [0.75, 0.9], [0.7, 1.04], [0.62, 1.12]], 0.075, 0.008, 0.02);
   b.set([0.5, 0.04, 0.03], MAT.paint); b.box(-0.035, 0.705, 1.06, 0.035, 0.75, 1.1); b.set([0.6, 0.6, 0.58], MAT.paint); b.at(0, 0.6, 1.135, 0, 0.35); b.box(-0.085, 0, -0.004, 0.085, 0.1, 0.004); b.at(0, 0, 0);
-  b.at(0, 0, 0); roll(b, -0.2, 0.2, 0.935, 0.95, 0.075); b.set(OLD, MAT.pack); b.box(-0.27, 0.5, 0.72, -0.13, 0.78, 1.0, 0.012, 0.02); b.set(BLK, MAT.gear); for (const z of [0.79, 0.93]) b.box(-0.274, 0.5, z - 0.012, -0.126, 0.79, z + 0.012, 0.01, 0);
-  jerry(b, 0.21, 0.44, 0.9, 0);
-  b.set(FRM, MAT.metal); b.box(0.12, 0.425, 0.74, 0.3, 0.44, 1.06); m2([[0.12, 0.83, 0.74], [0.3, 0.44, 0.76]], (P) => tube(b, P, 0.008, 4, 0)); m2([[0.12, 0.845, 1.03], [0.3, 0.44, 1.04]], (P) => tube(b, P, 0.008, 4, 0));
-  // ---- the riders: the driver crouched over the bars, the pillion leaning out to the right with his AK at the shoulder ----
-  pose([0, 0.955, 0.2], [0, -0.14, 0], [0, -0.5, 0], [0, 0.52, 0], [-0.2, 0.455, 0.07], [0.2, 0.455, 0.07], [-0.35, 0.2, -1], [0.35, 0.2, -1], [-0.345, 1.105, -0.343], [0.345, 1.105, -0.343], [-1, -0.25, 0.25], [1, -0.25, 0.25]);
-  bakeRider(b, -1, 0, 0.12);
-  pose([0.035, 0.965, 0.62], [-0.08, -0.06, -0.1], [-0.5, -0.16, -0.2], [0.55, -0.1, 0.02], [-0.25, 0.565, 0.47], [0.27, 0.565, 0.47], [-0.75, 0.2, -1], [0.7, 0.2, -1], null, null, [-0.3, -1, 0.1], [0.9, -0.35, 0.3]);
-  shouldered(); bakeRider(b, 0, 1, 0.1);
+  roll(b, -0.19, 0.19, 0.93, 0.95, 0.07); snow(b, 0, 0.995, 0.95, 0.15, 0.016, 0.05, 3);
+  for (const sx of [-1, 1]) { // small canvas panniers on a frame: lid with a seam, two straps, snow on top
+    b.set(FRM, MAT.metal); tube(b, [[sx * 0.11, 0.83, 0.78], [sx * 0.135, 0.56, 0.8]], 0.008, 4, 0); tube(b, [[sx * 0.115, 0.84, 1.0], [sx * 0.135, 0.56, 0.98]], 0.008, 4, 0);
+    b.set([0.17, 0.17, 0.125], MAT.pack); b.box(sx * 0.19 - 0.055, 0.55, 0.78, sx * 0.19 + 0.055, 0.72, 1.0, 0.006, 0.008); b.set([0.21, 0.21, 0.155], MAT.pack); b.box(sx * 0.19 - 0.06, 0.715, 0.775, sx * 0.19 + 0.06, 0.765, 1.005, 0.014, 0.014);
+    b.set([0.05, 0.05, 0.045], MAT.gear); for (const z of [0.835, 0.945]) b.box(sx * 0.19 - 0.062, 0.6, z - 0.01, sx * 0.19 + 0.062, 0.768, z + 0.01, 0.012, 0);
+    snow(b, sx * 0.19, 0.768, 0.89, 0.04, 0.012, 0.09, 5 + sx, 5);
+  }
+  // ---- the riders: the driver crouched over the bars, the pillion turned 40 degrees to the right, firing past the driver's shoulder ----
+  pose([0, 0.955, 0.22], [0, -0.17, 0], [0, -0.57, 0], [0, 0.72, 0], [-0.175, 0.455, 0.15], [0.175, 0.455, 0.15], [-0.1, 0.2, -1], [0.1, 0.2, -1], [-0.345, 1.105, -0.343], [0.345, 1.105, -0.343], [-1, 0.0, 0.35], [1, 0.0, 0.35]);
+  bakeRider(b, { rifle: -1, toe: 0.12 });
+  pose([0.0, 0.965, 0.64], [-0.25, -0.02, 0], [-0.5, -0.1, 0], [0.12, -0.04, -0.22], [-0.17, 0.575, 0.5], [0.17, 0.575, 0.5], [-0.25, 0.2, -1], [0.25, 0.2, -1], null, null, [-0.3, -1, 0.1], [0.9, -0.3, 0.4]);
+  lowReady(0.1, 0.475, -0.37, 0.0, 0.12, 0.05); bakeRider(b, { rifle: 0, pack: 1, toe: 0.1 });
   motoWheel(b, FZ, 3, 0.092, 0.07, true); motoWheel(b, RZ, 4, 0.122, 0.088, false);
   return b.build();
 }
