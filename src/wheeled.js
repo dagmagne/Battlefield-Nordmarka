@@ -205,20 +205,130 @@ export function buildTigr() {
   return b.build();
 }
 export const BTR = { ty: 2.02, tz: -0.75, gy: 2.25, gz: -1.05, mz: -3.55, hl: 3.0, hw: 1.2, rad: 2.6, hh: 2.02, th: 2.6, tr: 0.82, bx: 1.45, bz: 3.75, cr: 1.6, cs: 2.0, wr: 0.55, ax: [-2.35, -0.95, 0.75, 2.15] };
-export function buildBTR() { // BTR-82A: eight wheels, boat hull, one-man turret with the 30 mm
-  const b = new MB(), G = [0.032, 0.034, 0.02], GD = [0.026, 0.028, 0.017], DK = [0.03, 0.031, 0.034];
-  b.part = 0; b.set(GD, MAT.rus);
-  extX(b, [[0.5, -3.1], [0.95, -3.85], [1.35, -3.75], [2.0, -2.2], [2.02, 3.0], [1.62, 3.82], [0.75, 3.75], [0.5, 3.2]], -1.18, 1.18); // lower and upper hull
-  b.set(G, MAT.rus); for (const sx of [-1, 1]) extX(b, [[1.1, -3.1], [1.62, -2.3], [1.95, -2.2], [1.95, 3.0], [1.55, 3.6], [1.1, 3.4]], sx > 0 ? 1.18 : -1.47, sx > 0 ? 1.47 : -1.18); // sloped side sponsons
-  for (const sx of [-1, 1]) { b.set(GD, MAT.rus); b.box(sx * 1.47 - 0.04, 1.2, -0.2, sx * 1.47 + 0.04, 1.75, 0.6); b.set(DK, MAT.metal); for (let k = 0; k < 3; k++) b.box(sx * 1.46 - 0.02, 1.62, -2.0 + k * 1.6, sx * 1.46 + 0.02, 1.72, -1.8 + k * 1.6); } // side hatches, firing ports
-  b.set([0.03, 0.04, 0.05], MAT.glass); for (const sx of [-1, 1]) poly(b, [[sx * 0.55 - 0.22, 1.72, -2.47], [sx * 0.55 + 0.22, 1.72, -2.47], [sx * 0.55 + 0.22, 1.85, -2.29], [sx * 0.55 - 0.22, 1.85, -2.29]], [sx * 0.55, 1.8, -3]); // driver's vision blocks
-  b.set([0.22, 0.21, 0.18], MAT.head); for (const sx of [-1, 1]) poly(b, [[sx * 0.95 - 0.08, 1.38, -3.79], [sx * 0.95 + 0.08, 1.38, -3.79], [sx * 0.95 + 0.08, 1.5, -3.77], [sx * 0.95 - 0.08, 1.5, -3.77]], [sx * 0.95, 1.44, -5]);
-  b.set(DK, MAT.metal); b.box(-0.6, 2.02, 1.2, 0.6, 2.05, 2.6); for (let k = 0; k < 6; k++) b.box(-0.55, 2.05, 1.3 + k * 0.22, 0.55, 2.07, 1.38 + k * 0.22); // engine grille
-  b.box(-1.25, 0.95, -3.95, 1.25, 1.02, -3.82); // trim vane edge
-  for (const z of BTR.ax) for (const sx of [-1, 1]) tyre(b, sx * 1.22, BTR.wr, z, BTR.wr, 0.36, 3 + BTR.ax.indexOf(z), [0.024, 0.026, 0.016]);
-  b.part = 1; const tz = BTR.tz; b.set(G, MAT.rus); b.cyl(0, 2.02, tz, 0, 2.4, tz, 0.82, 0.62, 16); b.cyl(0.25, 2.4, tz + 0.2, 0.25, 2.46, tz + 0.2, 0.26, 0.26, 12);
-  b.set(DK, MAT.metal); for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) b.cyl(sx * 0.72, 2.25, tz + 0.1 + k * 0.13, sx * 0.86, 2.38, tz + k * 0.13, 0.04, 0.04, 6); b.box(-0.55, 2.3, tz - 0.62, -0.3, 2.5, tz - 0.4);
-  b.part = 2; const gy = BTR.gy; b.set(G, MAT.rus); b.box(-0.16, gy - 0.12, -1.35, 0.16, gy + 0.12, -0.95);
-  b.set(DK, MAT.metal); b.cyl(0, gy, -1.3, 0, gy, BTR.mz, 0.035, 0.032, 8); b.cyl(0, gy, BTR.mz + 0.22, 0, gy, BTR.mz, 0.05, 0.05, 8); b.cyl(0.16, gy, -1.3, 0.16, gy, -1.9, 0.018, 0.018, 6);
+// BTR-82A. Below the belt line (the widest line, just over the wheels) the hull is a tub between the wheel wells with inclined side
+// plates outside it, cut by four trapezoid arches; bow and stern are lofted to a narrower nose and tail. Above the belt the sides slope
+// in to the roof; the upper glacis carries the folded trim vane, the steep plate above it the two windscreens with raised shutters.
+// The BPPU turret is a low cone; the 2A72 lies in an external cradle over its roof (bore 0.13 m above the trunnion).
+export function buildBTR() {
+  const b = new MB(), G = [0.03, 0.032, 0.019], GD = [0.023, 0.025, 0.015], DK = [0.016, 0.016, 0.014], BK = [0.012, 0.012, 0.013], GLS = [0.006, 0.011, 0.011], OL = [0.026, 0.03, 0.018], RST = [0.025, 0.021, 0.016];
+  const tint = (k) => [G[0] * k, G[1] * k, G[2] * k], WR = BTR.wr, AX = BTR.ax;
+  const XW = 1.0, XB = 1.45, YB = 1.3, YS = 0.62, XL = 1.18, YR = 2.02, AW = 0.64, AT = 1.2, AK = 0.92, ZF = AX[0] - AW, ZE = AX[3] + AW, ZN = -3.85;
+  const xo = (y) => XL + (y - YS) * (XB - XL) / (YB - YS); // the inclined lower side plate
+  const warm = (v0) => { for (let i = v0 * 14 + 10; i < b.v.length; i += 14) b.v[i] = -9; };
+  const lamp = (x, y, z, r, l) => { // a lamp facing -z of the current frame: dark bowl, grey lens, small core
+    b.set(BK, MAT.rubber); b.cyl(x, y, z + l, x, y, z, r * 0.75, r, 9);
+    b.set([0.13, 0.14, 0.14], MAT.paint); b.cyl(x, y, z + 0.01, x, y, z - 0.012, r * 0.86, r * 0.78, 9);
+    b.set([0.42, 0.4, 0.34], MAT.head); b.cyl(x, y, z - 0.004, x, y, z - 0.018, r * 0.3, r * 0.26, 6); };
+  const win = (P, z0) => { // armoured glass in a heavy bolted frame
+    b.set(GD, MAT.rus); const I = frame(b, P, 0.045, z0, z0 + 0.045); b.set(BK, MAT.void); frame(b, I, 0.012, z0, z0 + 0.035);
+    const c = cen(P); b.set(GLS, MAT.glass); poly(b, I.map((p) => [p[0], p[1], z0 + 0.008]), [c[0], c[1], -1]);
+    b.set(DK, MAT.rus); for (let i = 0; i < P.length; i++) { const j = (i + 1) % P.length, ax = (P[i][0] + I[i][0]) / 2, ay = (P[i][1] + I[i][1]) / 2, bx = (P[j][0] + I[j][0]) / 2, by = (P[j][1] + I[j][1]) / 2;
+      for (const t of [0, 0.5]) { const x = ax + (bx - ax) * t, y = ay + (by - ay) * t; b.box(x - 0.01, y - 0.01, z0 + 0.035, x + 0.01, y + 0.01, z0 + 0.054); } } };
+  const sill = (P, sx) => loft(b, [P.map((p) => [sx * XW, p[0], p[1]]), P.map((p) => [sx * xo(p[0]), p[0], p[1]])], 0, 1); // a convex piece [y, z] outside the tub
+  b.part = 0;
+  // ---- hull below the belt: tub, bow, stern, side pieces between the arches ----
+  b.set(G, MAT.rus); b.box(-XW, 0.5, ZF, XW, YB, ZE);
+  const lr = (z, xb, xs, ys, xt, yt, zb = z) => [[-xb, YB, z], [-xs, ys, zb], [-xt, yt, zb], [xt, yt, zb], [xs, ys, zb], [xb, YB, z]];
+  loft(b, [lr(ZN, 0.95, 0.93, 1.12, 0.8, 1.08), lr(ZF, XB, XL, YS, XW, 0.5)]); // pointed, upswept bow
+  loft(b, [lr(ZE, XB, XL, YS, XW, 0.5), lr(3.75, 1.3, 1.15, 0.8, 0.9, 0.72, 3.61)]); // stern
+  for (const sx of [-1, 1]) {
+    b.set(G, MAT.rus); sill([[AT, ZF], [AT, ZE], [YB, ZE], [YB, ZF]], sx);
+    AX.forEach((a, i) => { sill([[AK, a - AW], [AT, a - AW], [AT, a - 0.4]], sx); sill([[AK, a + AW], [AT, a + 0.4], [AT, a + AW]], sx);
+      if (i < 3) sill([[YS, a + AW], [YS, AX[i + 1] - AW], [AT, AX[i + 1] - AW], [AT, a + AW]], sx); });
+    for (const a of AX) { b.set(BK, MAT.void); poly(b, [[sx * 1.007, 0.5, a - AW + 0.01], [sx * 1.007, 0.5, a + AW - 0.01], [sx * 1.007, AT - 0.005, a + AW - 0.01], [sx * 1.007, AT - 0.005, a - AW + 0.01]], [0, 0.8, a]); // well liner
+      b.set(DK, MAT.rus); b.cyl(sx * 1.0, WR, a, sx * 1.08, WR, a, 0.17, 0.15, 10, 0); b.cyl(sx * 1.02, 1.14, a + 0.3, sx * 1.05, 0.62, a + 0.1, 0.035, 0.035, 5, 0); } // hub reduction, damper
+  }
+  // ---- hull above the belt: sloped sides, glacis, windscreen plate, roof, engine deck falling to the tail ----
+  const ur = (z, xb, xt, yt, zt = z) => [[-xb, YB, z], [-xt, yt, zt], [xt, yt, zt], [xb, YB, z]];
+  b.set(G, MAT.rus); loft(b, [ur(ZN, 0.95, 0.9, 1.315), ur(ZF, XB, 1.289, 1.57), ur(-2.62, XB, 1.223, 1.68), ur(-2.25, XB, 1.02, YR), ur(2.3, XB, 1.02, YR), ur(ZE, XB, 1.01, 1.955), ur(3.35, 1.3625, 1.0, 1.88), ur(3.75, 1.3, 0.97, 1.62, 3.6)], 0, 1);
+  // ---- glacis: the folded trim vane with ribs and hinges ----
+  onPlane(b, [0, 1.315, ZN], [0, 1.23, -0.365]);
+  b.set(tint(0.9), MAT.rus); plate(b, [[-0.84, 0.035], [0.84, 0.035], [0.98, 0.5], [-0.98, 0.5]], 0, 0.03);
+  b.set(GD, MAT.rus); for (const x of [-0.56, 0, 0.56]) b.box(x - 0.02, 0.06, 0.02, x + 0.02, 0.475, 0.05); b.box(-0.9, 0.44, 0.02, 0.9, 0.47, 0.045);
+  b.set(DK, MAT.rus); for (const s of [-1, 1]) { b.box(s * 0.62 - 0.05, -0.01, -0.01, s * 0.62 + 0.05, 0.07, 0.06); b.cyl(s * 0.3, 0.5, 0.03, s * 0.3, 0.78, 0.035, 0.018, 0.018, 5); } // hinges, stays
+  b.set(GD, MAT.rus); b.box(-0.2, 0.9, -0.01, 0.2, 1.2, 0.03, 0.02, 0.02); // winch hatch
+  // ---- windscreen plate: two windscreens, the armoured shutters raised over them ----
+  onPlane(b, [0, 1.68, -2.62], [0, 0.37, -0.34]);
+  for (const s of [-1, 1]) win([[s * 0.13, 0.09], [s * 0.75, 0.09], [s * 0.75, 0.39], [s * 0.13, 0.39]], 0);
+  b.at(0, 0, 0);
+  for (const s of [-1, 1]) { b.set(tint(0.88), MAT.rus); b.box(s * 0.44 - 0.34, 1.972, -2.62, s * 0.44 + 0.34, 2.0, -2.29); // shutter, about level
+    b.set(DK, MAT.rus); for (const e of [-1, 1]) { b.cyl(s * 0.44 + e * 0.3, 1.975, -2.58, s * 0.44 + e * 0.3, 1.73, -2.56, 0.012, 0.012, 4, 0); b.cyl(s * 0.44 + e * 0.2 - 0.05, 1.99, -2.29, s * 0.44 + e * 0.2 + 0.05, 1.99, -2.29, 0.02, 0.02, 5); }
+    // headlight cluster on the bow shoulder: main lamp in a guard, a small blackout lamp inboard
+    const hx = s * 0.98, hz = -3.22; b.set(DK, MAT.rus); b.box(hx - 0.05, 1.48, hz, hx + 0.05, 1.58, hz + 0.1); b.box(s * 0.76 - 0.03, 1.47, hz, s * 0.76 + 0.03, 1.55, hz + 0.07);
+    lamp(hx, 1.665, hz - 0.03, 0.095, 0.14); lamp(s * 0.76, 1.6, hz - 0.01, 0.055, 0.09);
+    b.set(DK, MAT.rus); for (const e of [-1, 1]) b.cyl(hx + e * 0.135, 1.46, hz - 0.09, hx + e * 0.135, 1.8, hz - 0.09, 0.011, 0.011, 4, 0);
+    b.cyl(hx - 0.135, 1.8, hz - 0.09, hx + 0.135, 1.8, hz - 0.09, 0.011, 0.011, 4, 0); b.cyl(hx - 0.135, 1.665, hz - 0.09, hx + 0.135, 1.665, hz - 0.09, 0.009, 0.009, 4, 0);
+    for (const e of [-1, 1]) b.cyl(hx + e * 0.135, 1.8, hz - 0.09, hx + e * 0.135, 1.62, hz + 0.16, 0.011, 0.011, 4, 0);
+    b.box(s * 0.6 - 0.03, 0.83, -3.7, s * 0.6 + 0.03, 0.99, -3.56); b.cyl(s * 0.6 - 0.06, 0.88, -3.69, s * 0.6 + 0.06, 0.88, -3.69, 0.025, 0.025, 6); // tow hook
+    // roof: periscopes over the windscreens, driver's and commander's hatches, troop hatches, intake louvres
+    for (const k of [0.2, 0.46, 0.72]) { b.set(GD, MAT.rus); b.box(s * k - 0.08, 2.0, -2.2, s * k + 0.08, 2.09, -2.07, 0, 0.012); b.set(GLS, MAT.glass); b.box(s * k - 0.06, 2.035, -2.2, s * k + 0.06, 2.075, -2.185); }
+    b.set(tint(0.92), MAT.rus); b.cyl(s * 0.5, 2.01, -1.79, s * 0.5, 2.06, -1.79, 0.27, 0.265, 14); b.cyl(s * 0.5, 2.06, -1.79, s * 0.5, 2.09, -1.79, 0.255, 0.15, 14);
+    b.set(DK, MAT.rus); b.box(s * 0.5 - 0.09, 2.01, -1.54, s * 0.5 + 0.09, 2.07, -1.49); b.box(s * 0.5 - 0.06, 2.085, -1.86, s * 0.5 + 0.06, 2.11, -1.83);
+    b.set(tint(0.92), MAT.rus); b.box(s * 0.5 - 0.29, 2.01, 0.25, s * 0.5 + 0.29, 2.055, 0.92, 0.02, 0.02);
+    b.set(DK, MAT.rus); b.box(s * 0.5 - 0.07, 2.05, 0.56, s * 0.5 + 0.07, 2.08, 0.59); for (const z of [0.4, 0.78]) b.cyl(s * 0.8, 2.04, z - 0.05, s * 0.8, 2.04, z + 0.05, 0.02, 0.02, 5);
+    const w0 = b.v.length / 14; b.set(BK, MAT.void); b.box(s * 0.47 - 0.36, 2.01, 1.3, s * 0.47 + 0.36, 2.028, 2.2);
+    b.set(GD, MAT.rus); for (let k = 0; k < 7; k++) b.box(s * 0.47 - 0.36, 2.015, 1.32 + k * 0.126, s * 0.47 + 0.36, 2.052, 1.39 + k * 0.126, 0, 0, 0.03);
+    for (const e of [-1, 1]) b.box(s * 0.47 + e * 0.375 - 0.02, 2.01, 1.28, s * 0.47 + e * 0.375 + 0.02, 2.06, 2.22); warm(w0);
+  }
+  b.set(BK, MAT.rubber); b.cyl(-0.82, 2.0, 1.1, -0.82, 2.16, 1.1, 0.035, 0.025, 6); b.cyl(-0.82, 2.16, 1.1, -0.82, 2.3, 1.1, 0.016, 0.016, 5); b.cyl(-0.82, 2.3, 1.1, -0.86, 3.95, 1.25, 0.008, 0.004, 4); // aerial
+  // ---- engine deck on the falling rear roof: access covers, outlet louvres ----
+  onPlane(b, [0, YR, 2.3], [0, 1.05, 0.14]);
+  for (const s of [-1, 1]) { b.set(tint(0.94), MAT.rus); plate(b, [[s * 0.1, -0.1], [s * 0.82, -0.1], [s * 0.82, -0.6], [s * 0.1, -0.6]], 0, 0.025);
+    b.set(DK, MAT.rus); b.box(s * 0.46 - 0.07, -0.37, 0.02, s * 0.46 + 0.07, -0.34, 0.05); for (const y of [-0.2, -0.5]) b.cyl(s * 0.83, y - 0.05, 0.02, s * 0.83, y + 0.05, 0.02, 0.02, 0.02, 5); }
+  let w0 = b.v.length / 14; b.set(BK, MAT.void); b.box(-0.82, -1.0, -0.01, 0.82, -0.68, 0.012);
+  b.set(GD, MAT.rus); for (let k = 0; k < 6; k++) b.box(-0.82, -0.995 + k * 0.053, 0.0, 0.82, -0.96 + k * 0.053, 0.04, 0, 0.012); b.box(-0.02, -1.0, 0, 0.02, -0.68, 0.045); for (const s of [-1, 1]) b.box(s * 0.84 - 0.02, -1.01, -0.01, s * 0.84 + 0.02, -0.67, 0.048); warm(w0);
+  // ---- sides: door leaves between axles 2 and 3, firing ports with vision blocks, silencers, tools ----
+  for (const sx of [-1, 1]) { const Z = (P) => P.map((p) => [-sx * p[0], p[1]]), X = (z) => -sx * z, lb = (z0, z1, y0, y1, d0, d1) => b.box(Math.min(-sx * z0, -sx * z1), y0, d0, Math.max(-sx * z0, -sx * z1), y1, d1);
+    onPlane(b, [sx * XB, YB, 0], [sx * 0.72, 0.43, 0]);
+    const DU = Z([[-0.47, 0.012], [0.27, 0.012], [0.27, 0.5], [-0.47, 0.5]]);
+    b.set(tint(1.08), MAT.rus); plate(b, DU, 0, 0.022); frame(b, inset(DU, 0.07), 0.016, 0.022, 0.03); // upper leaf (opens upward)
+    b.set(BK, MAT.void); for (const z of [-0.49, 0.27]) lb(z, z + 0.02, 0, 0.52, -0.01, 0.005); lb(-0.49, 0.29, 0.5, 0.52, -0.01, 0.005);
+    b.set(DK, MAT.rus); for (const z of [-0.3, 0.1]) b.cyl(X(z - 0.05), 0.515, 0.02, X(z + 0.05), 0.515, 0.02, 0.02, 0.02, 6);
+    b.set(BK, MAT.rubber); lb(-0.16, -0.04, 0.09, 0.12, 0, 0.05);
+    for (const z of [-1.7, -0.95, -0.1, 0.85]) { const d = z === -0.1 ? 0.022 : 0;
+      b.set(GD, MAT.rus); b.cyl(X(z), 0.3, d - 0.005, X(z), 0.3, d + 0.035, 0.11, 0.1, 8); b.set(tint(0.8), MAT.rus); b.cyl(X(z), 0.3, d + 0.03, X(z), 0.3, d + 0.05, 0.07, 0.065, 8); b.set(BK, MAT.rubber); b.box(X(z) - 0.012, 0.27, d + 0.045, X(z) + 0.012, 0.33, d + 0.065); // firing port
+      if (!d) { b.set(GD, MAT.rus); lb(z - 0.1, z + 0.1, 0.66, 0.775, -0.005, 0.06); b.set(GLS, MAT.glass); lb(z - 0.075, z + 0.075, 0.685, 0.75, 0.05, 0.066); } } // vision block
+    b.set(GD, MAT.rus); b.cyl(X(-2.1), 0.76, 0.05, X(-0.65), 0.76, 0.05, 0.014, 0.014, 4); for (const z of [-2.1, -1.37, -0.65]) b.cyl(X(z), 0.76, -0.01, X(z), 0.76, 0.05, 0.012, 0.012, 4, 0); // hand rail
+    const v0 = b.v.length / 14; b.set(RST, MAT.rus); b.cyl(X(1.72), 0.42, 0.135, X(3.0), 0.42, 0.135, 0.1, 0.1, 10); b.cyl(X(1.58), 0.42, 0.11, X(1.72), 0.42, 0.135, 0.045, 0.1, 10, 0); // silencer
+    b.cyl(X(3.0), 0.42, 0.135, X(3.24), 0.4, 0.15, 0.04, 0.04, 6); b.set(DK, MAT.rus); for (const z of [1.98, 2.76]) { b.cyl(X(z - 0.025), 0.42, 0.135, X(z + 0.025), 0.42, 0.135, 0.108, 0.108, 10); lb(z - 0.03, z + 0.03, 0.36, 0.48, -0.01, 0.06); }
+    warm(v0);
+    if (sx < 0) { b.set([0.05, 0.036, 0.02], MAT.rus); b.cyl(X(-2.72), 0.17, 0.03, X(-1.95), 0.17, 0.03, 0.017, 0.017, 5); b.set(DK, MAT.rus); plate(b, Z([[-2.97, 0.17], [-2.9, 0.09], [-2.72, 0.1], [-2.72, 0.24], [-2.9, 0.25]]), 0, 0.02); for (const z of [-2.5, -2.1]) lb(z, z + 0.03, 0.14, 0.2, 0, 0.05); } // shovel
+    else { b.set(DK, MAT.rus); b.cyl(X(-2.85), 0.16, 0.025, X(-1.4), 0.16, 0.025, 0.018, 0.018, 5); for (const z of [-2.9, -1.35]) b.cyl(X(z), 0.16, 0, X(z), 0.16, 0.035, 0.05, 0.05, 8); for (const z of [-2.4, -1.9]) lb(z, z + 0.03, 0.13, 0.19, 0, 0.045); } // tow cable
+    onPlane(b, [sx * XB, YB, 0], [sx * 0.68, -0.27, 0]);
+    b.set(tint(1.08), MAT.rus); plate(b, Z([[-0.27, -0.69], [0.07, -0.69], [0.07, -0.4], [-0.27, -0.4]]), 0, 0.02); plate(b, Z([[-0.27, -0.4], [0.07, -0.4], [0.27, -0.12], [0.27, -0.02], [-0.47, -0.02], [-0.47, -0.12]]), 0, 0.02); // lower leaf (drops as a step)
+    b.set(BK, MAT.void); lb(-0.295, -0.27, -0.7, -0.4, -0.01, 0.004); lb(0.07, 0.095, -0.7, -0.4, -0.01, 0.004); lb(-0.49, -0.47, -0.12, 0, -0.01, 0.004); lb(0.27, 0.29, -0.12, 0, -0.01, 0.004);
+    b.set(DK, MAT.rus); for (const z of [-0.2, 0]) b.cyl(X(z - 0.04), -0.71, 0.015, X(z + 0.04), -0.71, 0.015, 0.02, 0.02, 6); lb(-0.2, 0, -0.3, -0.27, 0.01, 0.05); // hinges, step rung
+  }
+  // ---- rear: lamp clusters and covers on the upper plate, water-jet outlet with its two-leaf cover, tow hooks ----
+  onPlane(b, [0, YB, 3.75], [0, 0.15, 0.32]);
+  for (const s of [-1, 1]) { b.set(tint(0.95), MAT.rus); plate(b, [[s * 0.08, 0.05], [s * 0.74, 0.05], [s * 0.74, 0.3], [s * 0.08, 0.3]], 0, 0.02);
+    b.set(BK, MAT.rubber); frame(b, [[s * 0.98 - 0.09, 0.09], [s * 0.98 + 0.09, 0.09], [s * 0.98 + 0.09, 0.25], [s * 0.98 - 0.09, 0.25]], 0.016, 0, 0.035);
+    b.set([0.16, 0.01, 0.008], MAT.paint); b.box(s * 0.98 - 0.07, 0.108, -0.01, s * 0.98, 0.232, 0.016); b.set([0.22, 0.095, 0.012], MAT.paint); b.box(s * 0.98, 0.108, -0.01, s * 0.98 + 0.07, 0.232, 0.016); }
+  onPlane(b, [0, YB, 3.75], [0, -0.14, 0.5]);
+  b.set(GD, MAT.rus); b.cyl(0, -0.27, -0.03, 0, -0.27, 0.05, 0.28, 0.26, 16); b.set(tint(0.9), MAT.rus); b.cyl(0, -0.27, 0.05, 0, -0.27, 0.07, 0.235, 0.225, 16);
+  b.set(BK, MAT.void); b.box(-0.01, -0.5, 0.06, 0.01, -0.04, 0.074); b.set(DK, MAT.rus); for (const s of [-1, 1]) { for (const y of [-0.38, -0.16]) b.box(s * 0.27 - 0.04, y - 0.03, 0, s * 0.27 + 0.04, y + 0.03, 0.075);
+    b.box(s * 0.78 - 0.03, -0.42, -0.02, s * 0.78 + 0.03, -0.28, 0.1); b.cyl(s * 0.78 - 0.06, -0.37, 0.09, s * 0.78 + 0.06, -0.37, 0.09, 0.025, 0.025, 6); }
+  b.box(-0.06, -0.52, -0.02, 0.06, -0.44, 0.12);
+  b.at(0, 0, 0);
+  AX.forEach((z, i) => { for (const sx of [-1, 1]) tyre(b, sx * 1.22, WR, z, WR, 0.36, 3 + i, GD, { seg: 16 }); });
+  // ---- part 1: BPPU turret, a low truncated cone; trunnion cheeks, sight, hatch and smoke dischargers on it ----
+  b.part = 1; const tz = BTR.tz, gy = BTR.gy, gz = BTR.gz, TR = 2.22;
+  b.set(GD, MAT.rus); b.cyl(0, 2.015, tz, 0, 2.06, tz, 0.86, 0.85, 20); b.set(G, MAT.rus); b.cyl(0, 2.05, tz, 0, TR, tz, 0.82, 0.66, 20);
+  for (const s of [-1, 1]) { b.box(s * 0.2 - 0.03, TR - 0.03, gz - 0.14, s * 0.2 + 0.03, gy + 0.19, gz + 0.14, 0, 0.05); b.set(DK, MAT.rus); b.cyl(s * 0.22, gy + 0.04, gz, s * 0.255, gy + 0.04, gz, 0.05, 0.045, 8); b.set(G, MAT.rus); }
+  b.set(tint(0.92), MAT.rus); b.cyl(0.15, TR - 0.01, tz + 0.32, 0.15, TR + 0.035, tz + 0.32, 0.25, 0.24, 12); b.set(DK, MAT.rus); b.box(0.07, TR, tz + 0.55, 0.23, TR + 0.05, tz + 0.6); b.box(0.1, TR + 0.03, tz + 0.2, 0.2, TR + 0.06, tz + 0.23);
+  b.set(OL, MAT.rus); b.box(-0.5, TR - 0.03, tz - 0.38, -0.28, 2.46, tz - 0.08, 0.008); b.box(-0.52, 2.46, tz - 0.44, -0.26, 2.485, tz - 0.08); // sight box with a hood
+  b.set(BK, MAT.void); b.box(-0.475, 2.29, tz - 0.386, -0.305, 2.44, tz - 0.37); b.set([0.012, 0.008, 0.018], MAT.glass); b.box(-0.465, 2.3, tz - 0.39, -0.315, 2.43, tz - 0.38);
+  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) { const a = 1.95 + k * 0.3, px = s * Math.sin(a) * 0.71, pz = tz - Math.cos(a) * 0.71; // 81 mm smoke dischargers
+    b.set(DK, MAT.rus); b.cyl(px, 2.11, pz, px + s * 0.05, 2.3, pz - 0.2, 0.046, 0.046, 7); b.set(BK, MAT.rubber); b.cyl(px + s * 0.05, 2.3, pz - 0.2, px + s * 0.053, 2.31, pz - 0.21, 0.04, 0.04, 6); }
+  b.set(DK, MAT.rus); b.cyl(-0.3, TR - 0.01, tz + 0.38, -0.3, TR + 0.05, tz + 0.38, 0.09, 0.07, 8); // ventilator
+  // ---- part 2 (about the trunnion): cradle and receiver cover, the slender 2A72 with its muzzle brake, coaxial PKTM, searchlight ----
+  b.part = 2; b.at(0, gy, gz); const ZM = BTR.mz - gz, by = 0.13;
+  b.set(OL, MAT.rus); b.box(-0.14, 0.02, -0.62, 0.14, 0.25, 0.22, 0.025, 0.03); b.box(-0.1, 0.035, -0.92, 0.1, 0.225, -0.62, 0.02, 0);
+  b.set(DK, MAT.rus); for (const s of [-1, 1]) b.cyl(s * 0.13, 0.04, 0, s * 0.172, 0.04, 0, 0.05, 0.05, 8);
+  b.cyl(0, by, -0.92, 0, by, -1.25, 0.058, 0.046, 10); b.cyl(0, by, -1.25, 0, by, ZM + 0.2, 0.031, 0.025, 8, 0); // sleeve, barrel
+  b.cyl(0, by, ZM + 0.27, 0, by, ZM + 0.2, 0.025, 0.041, 8, 0); b.cyl(0, by, ZM + 0.2, 0, by, ZM, 0.041, 0.041, 8); b.set(BK, MAT.void); b.cyl(0, by, ZM + 0.01, 0, by, ZM - 0.002, 0.018, 0.018, 6); // muzzle brake
+  b.set(OL, MAT.rus); b.box(0.14, 0.03, -0.6, 0.3, 0.18, -0.2); b.set(DK, MAT.rus); b.cyl(0.22, 0.1, -0.6, 0.22, 0.1, -1.02, 0.021, 0.016, 6); b.cyl(0.22, 0.1, -1.02, 0.22, 0.1, -1.1, 0.024, 0.02, 6); // PKTM
+  b.box(-0.22, 0.08, -0.52, -0.14, 0.15, -0.4); lamp(-0.29, 0.13, -0.56, 0.078, 0.13); // searchlight on the cradle
+  b.at(0, 0, 0);
   return b.build();
 }
