@@ -198,10 +198,13 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     alb *= 0.84 + 0.3 * vn(lp.xz * 3.7 + lp.y * 5.3);
     alb *= 1.0 - 0.14 * side * smoothstep(0.45, 0.9, vn(vec2f(hz * 8.0, lp.y * 1.2)));
     let low = smoothstep(1.3, 0.4, lp.y) * side;
-    alb = mix(alb, vec3f(0.085, 0.075, 0.062), 0.75 * low * smoothstep(0.2, 0.65, vn(vec2f(hz * 1.7, lp.y * 4.5) + 3.0) + 0.6 * low - 0.3));
-    alb = mix(alb, vec3f(0.4, 0.4, 0.39), 0.35 * smoothstep(0.7, 0.3, lp.y) * side * smoothstep(0.45, 0.8, vn(vec2f(hz * 6.0, lp.y * 9.0) + 2.0)));
-    let dust = smoothstep(0.8, 0.97, n.y) * smoothstep(0.5, 0.7, fbm3(lp.xz * 1.3 + 5.0));
-    alb = mix(alb, vec3f(0.85, 0.87, 0.9), 0.6 * dust);
+    alb = mix(alb, vec3f(0.052, 0.046, 0.038), 0.75 * low * smoothstep(0.2, 0.65, vn(vec2f(hz * 1.7, lp.y * 4.5) + 3.0) + 0.6 * low - 0.3));
+    alb = mix(alb, vec3f(0.4, 0.4, 0.39), 0.22 * smoothstep(0.7, 0.3, lp.y) * side * smoothstep(0.45, 0.8, vn(vec2f(hz * 6.0, lp.y * 9.0) + 2.0)));
+    // settled snow on the level plates: crisp-edged pads with a bluish rim (so they read as having thickness); uv.x = -9 marks warm plates (none there)
+    let sm = fbm3(lp.xz * 1.3 + 5.0) + 0.04 * vn(lp.xz * 13.0) - 0.57;
+    let pad = smoothstep(0.8, 0.95, n.y) * step(-5.0, uv.x);
+    let dust = pad * smoothstep(0.0, 0.012, sm);
+    alb = mix(alb, mix(vec3f(0.55, 0.62, 0.74), vec3f(0.88, 0.9, 0.93), smoothstep(0.012, 0.05, sm)), 0.95 * dust);
     spec = 0.022 * (1.0 - dust); gloss = 10.0;
   }
   if (OB.tr.z > 0.0) { alb = mix(alb, vec3f(0.012, 0.011, 0.01) * (0.6 + 0.8 * vn(in.lp.xz * 3.0 + in.lp.y * 2.0)), OB.tr.z * 0.93); spec *= 1.0 - OB.tr.z; refl *= 1.0 - OB.tr.z; emis *= 1.0 - OB.tr.z; }

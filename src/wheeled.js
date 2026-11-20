@@ -7,7 +7,7 @@ import { poly, extX, extY, mirror } from './vehutil.js';
 // (lugs included: they are placed radially from the angle, not through b.at), so a b.at() set by the caller places it (a spare wheel).
 // Optional o: { nuts: wheel nuts (default 6 when r > 0.35, 0 = none), lugs: tread blocks per side (0 = slick), seg: segments round }.
 export const tyre = (b, x, y, z, r, w, part, rim, o) => {
-  o = o || {}; b.part = part; const sx = Math.sign(x) || 1, n = o.seg || (r > 0.42 ? 18 : 14), h = w / 2, TAU = Math.PI * 2;
+  o = o || {}; b.part = part; const sx = Math.sign(x) || 1, n = o.seg || (r > 0.42 ? 20 : 14), h = w / 2, TAU = Math.PI * 2;
   const lathe = (P, c, mat) => { // profile [offset along the axle in half widths (+ = outer face), radius in r], from the inner face over the top to the outer one
     b.set(c, mat); const m = P.length, N = [];
     for (let k = 0; k < m - 1; k++) { const du = (P[k + 1][0] - P[k][0]) * h, dr = (P[k + 1][1] - P[k][1]) * r, l = Math.hypot(du, dr) || 1; N.push([-dr / l, du / l]); }
@@ -32,7 +32,7 @@ export const tyre = (b, x, y, z, r, w, part, rim, o) => {
       for (let j = 0; j < 2; j++) { poly(b, [T(j, -1), T(j, 1), T(j + 1, 1), T(j + 1, -1)], c); for (const e of [-1, 1]) poly(b, [B(j, e), T(j, e), T(j + 1, e), B(j + 1, e)], c); }
       poly(b, [B(0, -1), B(0, 1), T(0, 1), T(0, -1)], c); } }
   const k = r / 0.48, nn = o.nuts === undefined ? (r > 0.35 ? 6 : 0) : o.nuts, uh = x + sx * 0.6 * h;
-  b.set(HB, MAT.rus); b.cyl(uh, y, z, uh + sx * 0.07 * k, y, z, 0.15 * r, 0.1 * r, 8); // hub cap
+  b.set(HB, MAT.rus); b.cyl(uh, y, z, uh + sx * 0.07 * k, y, z, 0.15 * r, 0.1 * r, 12); // hub cap
   for (let i = 0; i < nn; i++) { const a = (i + 0.5) / nn * TAU, p = P3(0.34, 0.36, a); b.cyl(p[0], p[1], p[2], p[0] + sx * 0.05 * k, p[1], p[2], 0.022 * k, 0.018 * k, 5); }
   b.part = 0;
 };
@@ -75,7 +75,11 @@ export function buildTigr() {
   const ZN = -2.86, ZC = -1.0, ZR = 2.66, XS = 1.12, YB = 1.5, YT = 2.02, XW = 0.72, AW = 0.64, AT = 1.22, AK = 0.93; // AW AT AK: wheel arch half width, top, knee
   const win = (P, z0) => { // armoured glass set 4 cm down in a heavy frame with a dark reveal
     b.set(GD, MAT.rus); const I = frame(b, P, 0.05, z0, z0 + 0.05); b.set(BK, MAT.void); frame(b, I, 0.012, z0, z0 + 0.04);
-    const c = cen(P); b.set(GLS, MAT.void); poly(b, I.map((p) => [p[0], p[1], z0 + 0.008]), [c[0], c[1], -1]); return I; };
+    const c = cen(P); b.set(GLS, MAT.glass); poly(b, I.map((p) => [p[0], p[1], z0 + 0.008]), [c[0], c[1], -1]); // dark glass: MAT.glass mirrors the sky by Fresnel, so the colour must be near black
+    b.set(DK, MAT.rus); for (let i = 0; i < P.length; i++) { const j = (i + 1) % P.length, ax = (P[i][0] + I[i][0]) / 2, ay = (P[i][1] + I[i][1]) / 2, bx = (P[j][0] + I[j][0]) / 2, by = (P[j][1] + I[j][1]) / 2;
+      for (const t of [0, 0.5]) { const x = ax + (bx - ax) * t, y = ay + (by - ay) * t; b.box(x - 0.011, y - 0.011, z0 + 0.04, x + 0.011, y + 0.011, z0 + 0.06); } } // frame bolts
+    return I; };
+  const warm = (v0) => { for (let i = v0 * 14 + 10; i < b.v.length; i += 14) b.v[i] = -9; }; // uv.x = -9: the paint shader lays no snow there (engine heat)
   b.part = 0;
   // ---- underbody: a dark frame slab under the tub, a deeper belly between the axles, skid plate, axles with hub reductions ----
   b.set(DK, MAT.rus); b.box(-0.7, 0.5, -2.4, 0.7, 0.64, 2.6); b.box(-0.46, 0.38, -1.05, 0.46, 0.52, 1.3);
@@ -94,7 +98,7 @@ export function buildTigr() {
   const fr = (z, f) => [[-XS, AT, z], [-XS, f - 0.06, z], [-1.05, f, z], [1.05, f, z], [XS, f - 0.06, z], [XS, AT, z]];
   loft(b, [fr(ZN, 1.3), fr(-2.74, 1.36), fr(ZC, 1.45)], 1, 0); // wings with a chamfered outer edge; their front is the flat nose panel
   const hr = (z, f, h) => [[-0.76, f - 0.03, z], [-0.7, h, z], [0.7, h, z], [0.76, f - 0.03, z]];
-  b.set(tint(0.94), MAT.rus); loft(b, [hr(ZN - 0.015, 1.3, 1.36), hr(-2.74, 1.36, 1.425), hr(ZC, 1.45, 1.49)], 1, 0); // broad raised centre section of the bonnet
+  let w0 = b.v.length / 14; b.set(tint(0.94), MAT.rus); loft(b, [hr(ZN - 0.015, 1.3, 1.36), hr(-2.74, 1.36, 1.425), hr(ZC, 1.45, 1.49)], 1, 0); warm(w0); // broad raised centre section of the bonnet
   b.set(G, MAT.rus); b.box(-XS, AT, ZC, XS, YB, ZR); // cab below the belt line
   const cr = (y, x, z0, z1) => [[-x, y, z0], [x, y, z0], [x, y, z1], [-x, y, z1]];
   loft(b, [cr(YB, XS, ZC, ZR), cr(YT, 1.0, -0.76, ZR - 0.06), cr(2.1, 0.91, -0.69, ZR - 0.13)], 0, 1); // cab above it: raked screen, 13 degrees of tumblehome, chamfered roof edge
@@ -128,8 +132,8 @@ export function buildTigr() {
   b.box(-0.22, 0.62, -3.125, 0.22, 0.78, -3.09); b.set(BK, MAT.void); b.box(-0.17, 0.66, -3.13, 0.17, 0.74, -3.1); // fairlead with its slot
   b.set([0.045, 0.05, 0.052], MAT.paint); for (const s of [-1, 1]) b.box(s * 0.84 - 0.065, 0.655, -3.118, s * 0.84 + 0.065, 0.735, -3.1);
   const hy = (z) => 1.425 + (z + 2.74) * 0.0374; // bonnet top
-  b.set(GD, MAT.rus); for (const s of [-1, 1]) for (let k = 0; k < 6; k++) { const z = -1.75 + k * 0.085; b.box(s * 0.38 - 0.17, hy(z) - 0.006, z, s * 0.38 + 0.17, hy(z) + 0.02, z + 0.03); } // intake louvres
-  b.set(DK, MAT.rus); for (const s of [-1, 1]) b.box(s * 0.58 - 0.02, hy(-2.6) - 0.006, -2.6, s * 0.58 + 0.02, hy(-2.6) + 0.028, -2.5); // bonnet catches
+  w0 = b.v.length / 14; b.set(GD, MAT.rus); for (const s of [-1, 1]) for (let k = 0; k < 6; k++) { const z = -1.75 + k * 0.085; b.box(s * 0.38 - 0.17, hy(z) - 0.006, z, s * 0.38 + 0.17, hy(z) + 0.02, z + 0.03); } // intake louvres
+  b.set(DK, MAT.rus); for (const s of [-1, 1]) b.box(s * 0.58 - 0.02, hy(-2.6) - 0.006, -2.6, s * 0.58 + 0.02, hy(-2.6) + 0.028, -2.5); warm(w0); // bonnet catches
   b.set(BK, MAT.void); b.box(-0.705, 1.3, -1.02, 0.705, hy(-1.02) + 0.004, -1.005); // the gap under the screen
   // ---- windscreen: two panes, a heavy centre post, wipers ----
   onPlane(b, [0, YB, ZC], [0, 0.24, -0.52]);
@@ -157,9 +161,8 @@ export function buildTigr() {
   // ---- roof: crew hatches, fixed ring, stowage rack with a tarpaulin over the load, aerial ----
   for (const s of [-1, 1]) { b.set(tint(0.92), MAT.rus); b.box(s * 0.45 - 0.3, 2.09, -0.62, s * 0.45 + 0.3, 2.135, -0.12, 0.02, 0.02); b.set(DK, MAT.rus); b.box(s * 0.45 - 0.08, 2.13, -0.3, s * 0.45 + 0.08, 2.16, -0.27); for (const e of [-1, 1]) b.cyl(s * 0.45 + e * 0.2 - 0.04, 2.125, -0.105, s * 0.45 + e * 0.2 + 0.04, 2.125, -0.105, 0.018, 0.018, 5); }
   b.set(GD, MAT.rus); b.cyl(0, 2.09, TIGR.tz, 0, 2.125, TIGR.tz, 0.52, 0.5, 18);
-  b.set(DK, MAT.rus); for (const s of [-1, 1]) { b.box(s * 0.8 - 0.015, 2.22, 1.2, s * 0.8 + 0.015, 2.25, 2.42); for (const z of [1.215, 1.81, 2.405]) b.box(s * 0.8 - 0.012, 2.09, z - 0.012, s * 0.8 + 0.012, 2.23, z + 0.012); }
-  for (const z of [1.2, 2.42]) b.box(-0.8, 2.22, z - 0.015, 0.8, 2.25, z + 0.015);
-  b.set([0.04, 0.035, 0.022], MAT.rus); b.blob(0.02, 2.2, 1.8, 0.74, 0.19, 0.56, 5, 0.16, 9); // tarpaulin over the load (the paint's snow term whitens its top)
+  for (const s of [-1, 1]) { b.set(tint(0.92), MAT.rus); b.box(s * 0.32 - 0.3, 2.09, 1.2, s * 0.32 + 0.3, 2.13, 2.25, 0.015, 0.015); // flat two-leaf hatch over the rear compartment
+    b.set(DK, MAT.rus); b.box(s * 0.12 - 0.02, 2.125, 1.65, s * 0.12 + 0.02, 2.155, 1.8); for (const z of [1.4, 2.05]) b.cyl(s * 0.63, 2.12, z - 0.06, s * 0.63, 2.12, z + 0.06, 0.018, 0.018, 5); }
   b.set(BK, MAT.rubber); b.cyl(-0.85, 2.09, 2.46, -0.85, 2.24, 2.46, 0.03, 0.022, 6); b.cyl(-0.85, 2.24, 2.46, -0.85, 2.36, 2.46, 0.016, 0.016, 5); b.cyl(-0.85, 2.36, 2.46, -0.9, 3.75, 2.6, 0.008, 0.004, 4);
   // ---- rear: door with a window, small lamp clusters, spare wheel on a swing carrier, bumper ----
   onPlane(b, [0, 0, ZR], [0, 0, 1]);
@@ -190,7 +193,7 @@ export function buildTigr() {
   b.box(-0.145, 0.24, -0.68, 0.145, 0.265, -0.2); for (const s of [-1, 1]) b.box(s * 0.135 - 0.01, 0.06, -0.66, s * 0.135 + 0.01, 0.25, -0.58); // hood and its cheeks
   b.box(-0.37, -0.095, -0.5, 0.37, -0.035, -0.34); // beam under the containers
   b.set(BK, MAT.void); b.box(-0.105, 0.07, -0.606, 0.03, 0.21, -0.59); b.box(0.05, 0.1, -0.606, 0.11, 0.19, -0.59); // window surrounds
-  b.set([0.03, 0.012, 0.035], MAT.paint); b.box(-0.095, 0.08, -0.61, 0.02, 0.2, -0.6); b.set(GLS, MAT.paint); b.box(0.058, 0.108, -0.61, 0.102, 0.182, -0.6); // thermal and day windows
+  b.set([0.012, 0.008, 0.018], MAT.glass); b.box(-0.095, 0.08, -0.61, 0.02, 0.2, -0.6); b.set(GLS, MAT.glass); b.box(0.058, 0.108, -0.61, 0.102, 0.182, -0.6); // thermal and day windows
   for (const s of [-1, 1]) { const x = s * 0.29, y = 0.06;
     b.set([0.028, 0.033, 0.018], MAT.rus); b.cyl(x, y, ZM + 0.02, x, y, -0.2, 0.08, 0.08, 14, 0); // container, 1.3 m by 0.16 m
     b.cyl(x, y, ZM, x, y, ZM + 0.11, 0.092, 0.092, 14); b.cyl(x, y, -0.2, x, y, -0.05, 0.08, 0.1, 14); // front cap, flared rear
