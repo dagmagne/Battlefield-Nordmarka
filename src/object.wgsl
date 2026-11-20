@@ -167,7 +167,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     let q = in.lp;
     let crease = vn(vec2f(q.y * 23.0 + q.x * 7.0, q.z * 19.0 + q.x * 11.0)) * 0.6 + vn(vec2f(q.x * 61.0 - q.y * 13.0, q.z * 57.0 + q.y * 17.0)) * 0.4;
     let weave = vn(vec2f(q.x * 260.0 + q.z * 90.0, q.y * 240.0)) - 0.5;
-    alb *= (0.84 + 0.22 * crease + 0.06 * weave) * (0.9 + 0.14 * vn(vec2f(q.x * 7.0 + q.y * 3.0, q.z * 7.0 - q.y * 5.0) + in.col.r * 37.0)); // creases, weave, worn patches
+    alb *= (0.84 + 0.22 * crease + 0.06 * weave) * (0.9 + 0.14 * vn(vec2f(q.x * 7.0 + q.y * 3.0, q.z * 7.0 - q.y * 5.0) + in.col.r * 37.0 * (1.0 - isG))); // creases, weave, worn patches
     if (m == 24u) {
       let hs = (0.5 - abs(fract(q.y * 4.3) - 0.5)) / 4.3;
       let seam = 1.0 - 0.2 * (1.0 - smoothstep(0.0025, 0.006, abs(q.x))) - 0.12 * (1.0 - smoothstep(0.002, 0.005, hs));

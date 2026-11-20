@@ -145,11 +145,18 @@ function bakeRider(b, o) {
   for (let s = 0; s < 2; s++) { const m = (9 + s) * 16; fa[s] = Math.atan2(M[m + 9], M[m + 5]) + (o.toe || 0); }
   for (let t = 0; t < idx.length; t += 3) {
     const p = v[idx[t] * VS + 12]; if (p === 12 || (p === 11 && rifle < 0)) continue;
-    if (!o.pack && p === 1 && (v[idx[t] * VS + 9] === MAT.pack || Math.min(v[idx[t] * VS + 2], v[idx[t + 1] * VS + 2], v[idx[t + 2] * VS + 2]) > 0.145)) continue;
+    if (p === 1 && v[idx[t] * VS + 9] === MAT.gear && Math.min(v[idx[t] * VS + 2], v[idx[t + 1] * VS + 2], v[idx[t + 2] * VS + 2]) > 0.19) continue; // the pack's compression strap: its corners stand out of the pack as a spike at this range
+    if (!o.pack && p === 1) { // no pack: nor its compression strap, nor its shoulder straps (they would stand off the shoulders as loose tabs)
+      if (v[idx[t] * VS + 9] === MAT.pack || Math.min(v[idx[t] * VS + 2], v[idx[t + 1] * VS + 2], v[idx[t + 2] * VS + 2]) > 0.145) continue;
+      let st = v[idx[t] * VS + 9] === MAT.gear;
+      for (let e = 0; e < 3 && st; e++) { const q = idx[t + e] * VS, ax = Math.abs(v[q]); st = v[q + 1] > 0.299 && v[q + 1] < 0.426 && ax > 0.06 && ax < 0.11 && v[q + 2] > -0.05 && v[q + 2] < 0.16; }
+      if (st) continue;
+    }
     for (let e = 0; e < 3; e++) {
       const i = idx[t + e];
       if (map[i] < 0) {
         const q = i * VS, m = p * 16, x0 = v[q], yy = v[q + 1], mt = v[q + 9]; let x = x0, y = yy, z = v[q + 2], nx = v[q + 3], ny = v[q + 4], nz = v[q + 5];
+        if (p === 1 && mt === MAT.gear && y > 0.42 && z > 0.1 && Math.abs(x) > 0.06 && Math.abs(x) < 0.11) y = 0.365; // the shoulder straps run down to the pack instead of standing off behind the neck
         if ((p === 9 || p === 10) && y < -0.418) { // level the foot about the ankle
           const c = Math.cos(fa[p - 9]), s = Math.sin(fa[p - 9]), y0 = y + 0.42, n0 = ny;
           y = -0.42 + y0 * c - z * s; z = y0 * s + z * c; ny = n0 * c - nz * s; nz = n0 * s + nz * c;
@@ -176,20 +183,29 @@ function bakeRider(b, o) {
   }
   const p0 = b.part; b.part = up;
   b.m.set(M.subarray(16, 32)); b.set([0.6, 0.59, 0.55], MAT.cloth); // shoulders run into the torso
-  for (const sx of [-1, 1]) b.blob(sx * 0.168, 0.385, 0.002, 0.088, 0.066, 0.088, 3, 0, 5);
+  for (const sx of [-1, 1]) b.blob(sx * 0.158, 0.38, 0.002, 0.08, 0.06, 0.082, 3, 0, 6);
   if (o.straps) { b.set([0.1, 0.11, 0.09], MAT.gear); for (const sx of [-1, 1]) { b.box(sx * 0.085 - 0.02, 0.235, -0.166, sx * 0.085 + 0.02, 0.43, -0.15, 0, 0); b.box(sx * 0.085 - 0.02, 0.428, -0.166, sx * 0.085 + 0.02, 0.447, 0.13); } b.box(-0.08, 0.3, -0.17, 0.08, 0.33, -0.156); }
   b.m.set(M.subarray(32, 48)); // goggles: a curved lens in a thin frame under the helmet brim, the strap round the cover
-  b.set([0.045, 0.06, 0.085], MAT.paint); band(b, 0.134, 0.17, 0.086, 0.124, 0, -0.95, 0.95, 8);
+  b.set([0.03, 0.04, 0.06], MAT.paint); band(b, 0.134, 0.152, 0.087, 0.127, 0, -0.95, 0.95, 8); b.set([0.07, 0.09, 0.12], MAT.paint); band(b, 0.152, 0.17, 0.086, 0.125, 0, -0.95, 0.95, 8);
   b.set([0.16, 0.16, 0.14], MAT.gear); band(b, 0.126, 0.134, 0.088, 0.127, 0, -1.0, 1.0, 8); band(b, 0.17, 0.178, 0.088, 0.127, 0, -1.0, 1.0, 8);
   b.set([0.09, 0.09, 0.085], MAT.gear); band(b, 0.176, 0.198, 0.118, 0.136, 0.008, 0.95, Math.PI * 2 - 0.95, 12);
   b.at(0, 0, 0); b.part = p0;
 }
 // the rifle held as in the infantry's low-ready (torso frame), hands on its grips
+// the rifle at the shoulder with the infantry's cheek weld (butt in the right shoulder pocket), then swung by yaw about the butt
+function shouldered(yaw) {
+  RIG.wAimed(PP, 36, 0, 0.05, RIG.RIF_BUTT[0], RIG.RIF_BUTT[1], RIG.RIF_BUTT[2], RIG.AIM[0], RIG.AIM[1], RIG.AIM[2]);
+  const c = Math.cos(yaw), sn = Math.sin(yaw), B = RIG.RIF_BUTT, rot = (k) => { const x = PP[k], z = PP[k + 2]; PP[k] = c * x + sn * z; PP[k + 2] = -sn * x + c * z; };
+  const bx = PP[45] + PP[36] * B[0] + PP[39] * B[1] + PP[42] * B[2], by = PP[46] + PP[37] * B[0] + PP[40] * B[1] + PP[43] * B[2], bz = PP[47] + PP[38] * B[0] + PP[41] * B[1] + PP[44] * B[2];
+  rot(36); rot(39); rot(42); rot(30); rot(33);
+  PP[45] = bx - (PP[36] * B[0] + PP[39] * B[1] + PP[42] * B[2]); PP[46] = by - (PP[37] * B[0] + PP[40] * B[1] + PP[43] * B[2]); PP[47] = bz - (PP[38] * B[0] + PP[41] * B[1] + PP[44] * B[2]);
+  RIG.handsOn(PP, 36, RIG.RIF_L[0], RIG.RIF_L[1], RIG.RIF_L[2], RIG.RIF_R[0], RIG.RIF_R[1], RIG.RIF_R[2]);
+}
 function lowReady(x, y, z, yaw, pitch, roll) { RIG.wFromTorso(PP, 36, x, y, z, yaw, pitch, roll); RIG.handsOn(PP, 36, RIG.RIF_L[0], RIG.RIF_L[1], RIG.RIF_L[2], RIG.RIF_R[0], RIG.RIF_R[1], RIG.RIF_R[2]); }
 
 const DK = [0.03, 0.031, 0.034], STEEL = [0.2, 0.2, 0.21], ALU = [0.21, 0.21, 0.215], BLK = [0.02, 0.02, 0.022], OLV = [0.065, 0.08, 0.048], OLD = [0.045, 0.055, 0.036], CANV = [0.2, 0.2, 0.15], LENS = [1, 0.95, 0.82];
 const SNOW = [0.93, 0.95, 0.98];
-const snow = (b, x, y, z, rx, ry, rz, seed, seg = 6) => { b.set(SNOW, MAT.snow); b.blob(x, y, z, rx, ry, rz, seed, 0.16, seg); }; // a pillow of settled snow
+const snow = (b, x, y, z, rx, ry, rz, seed, seg = 7) => { b.set(SNOW, MAT.snow); b.blob(x, y, z, rx, ry, rz, seed, 0.06, seg); }; // a pillow of settled snow
 // a lamp facing -z: dark shell, grey lens in a rim, a small bright core
 function lamp(b, x, y, z, r, core) {
   b.set(DK, MAT.metal); b.cyl(x, y, z + r * 0.9, x, y, z, r * 0.75, r * 1.08, 10); b.set([0.3, 0.31, 0.3], MAT.metal); b.cyl(x, y, z, x, y, z - 0.004, r * 0.9, r * 0.9, 10);
@@ -310,12 +326,12 @@ export function buildBuggy() { // light assault buggy: welded tube space frame, 
   b.cyl(0, 0.345, -0.1, 0.0, 0.62, -0.18, 0.011, 0.011, 5); b.set(BLK, MAT.rubber); b.cyl(0, 0.62, -0.18, 0, 0.67, -0.195, 0.022, 0.018, 6); b.set(DK, MAT.metal); b.box(-0.03, 0.345, 0.0, 0.03, 0.42, 0.25); b.cyl(0.0, 0.42, 0.2, 0, 0.56, 0.05, 0.012, 0.012, 5); // gear lever, tunnel, hand brake
   bucketSeat(b, -0.32, 0.345, -0.02, 0.3); bucketSeat(b, 0.32, 0.345, -0.02, 0.3);
   // ---- crew: driver on the left with his hands on the wheel, passenger with his AK upright between his knees ----
-  pose([-0.32, 0.565, -0.02], [0, 0.3, 0], [0, 0.0, 0], [0, -0.24, 0], [-0.42, 0.47, -0.66], [-0.23, 0.47, -0.66], [-0.6, 1, -0.4], [0.3, 1, -0.4], [-0.47, 1.0, -0.345], [-0.17, 1.0, -0.345], [-1, -0.5, 0.2], [1, -0.5, 0.2]);
+  pose([-0.32, 0.565, -0.02], [0, 0.3, 0], [0, 0.0, 0], [0, -0.24, 0], [-0.42, 0.47, -0.66], [-0.23, 0.47, -0.66], [-0.6, 1, -0.4], [0.3, 1, -0.4], [-0.47, 1.0, -0.345], [-0.17, 1.0, -0.345], [-0.3, -1, 0.3], [0.5, -1, 0.3]);
   bakeRider(b, { rifle: -1, toe: 0.5, straps: 1 });
   pose([0.32, 0.565, -0.02], [0, 0.3, 0], [0.0, 0.0, 0], [0.1, -0.24, 0], [0.2, 0.47, -0.62], [0.44, 0.47, -0.6], [-0.4, 1, -0.4], [0.6, 1, -0.4], null, null, [-0.8, -0.6, 0.3], [0.9, -0.5, 0.3]);
   lowReady(0.01, 0.06, -0.3, -0.12, 0.95, 0.0); bakeRider(b, { rifle: 0, toe: 0.35, straps: 1 });
   // ---- the gunner: he stands on the floor behind the seats, leaning on a webbing sling, his legs fixed and his upper body turning with the mount ----
-  pose([0, 1.16, 0.5], [0, 0.0, 0], [0, -0.1, 0], [0, 0.12, 0], [-0.17, 0.43, 0.6], [0.17, 0.43, 0.62], [-0.3, 0.1, -1], [0.3, 0.1, -1], [-0.075, 1.63, 0.19], [0.012, 1.672, 0.338], [-1, -0.2, 0.3], [1, -0.35, 0.4]);
+  pose([0, 1.16, 0.5], [0, 0.0, 0], [0, -0.1, 0], [0, 0.12, 0], [-0.17, 0.43, 0.6], [0.17, 0.43, 0.62], [-0.3, 0.1, -1], [0.3, 0.1, -1], [-0.075, 1.63, 0.19], [0.012, 1.672, 0.338], [-0.6, -0.8, 0.5], [0.5, -0.8, 0.7]);
   bakeRider(b, { rifle: -1, up: 1 });
   b.set([0.22, 0.23, 0.19], MAT.gear); b.box(-0.52, 1.0, 0.615, 0.52, 1.09, 0.625);
   // ---- fuel tank and stowage over the gearbox ----
@@ -376,8 +392,8 @@ function motoWheel(b, z, part, w, hs, front) {
   }
   b.at(0, 0, 0); const wr = w * 0.36, lip = rr + hs * 0.2;
   b.set([0.16, 0.16, 0.165], MAT.metal); lathe(b, 0, y, z, [[wr, lip], [wr, rr - 0.012], [wr, rr - 0.012], [-wr, rr - 0.012], [-wr, rr - 0.012], [-wr, lip]], 18); // rim
-  b.set(STEEL, MAT.metal);
-  const hw = front ? 0.04 : 0.048, hr = front ? 0.036 : 0.062;
+  const hw = front ? 0.04 : 0.048, hr = front ? 0.036 : 0.055;
+  b.set(front ? STEEL : [0.06, 0.06, 0.065], MAT.metal);
   lathe(b, 0, y, z, [[-hw - 0.012, 0], [-hw - 0.012, 0.022], [-hw, hr], [-hw + 0.01, hr], [0, hr * (front ? 0.6 : 0.92)], [hw - 0.01, hr], [hw, hr], [hw + 0.012, 0.022], [hw + 0.012, 0]], 9); // hub with spoke flanges (the rear a drum)
   b.set([0.42, 0.42, 0.43], MAT.metal);
   for (let k = 0; k < 14; k++) for (const sx of [-1, 1]) { // crossed wire spokes
@@ -386,7 +402,7 @@ function motoWheel(b, z, part, w, hs, front) {
   }
   b.set([0.07, 0.07, 0.075], MAT.metal);
   if (front) lathe(b, 0, y, z, [[-0.056, 0.045], [-0.056, 0.108], [-0.056, 0.108], [-0.051, 0.108], [-0.051, 0.108], [-0.051, 0.045]], 12); // brake disc
-  else { b.set(DK, MAT.metal); b.set([0.33, 0.33, 0.34], MAT.metal); lathe(b, 0, y, z, [[-0.071, 0.05], [-0.071, 0.115], [-0.071, 0.115], [-0.063, 0.115], [-0.063, 0.115], [-0.063, 0.05]], 14); } // sprocket
+  else { b.set(DK, MAT.metal); b.set([0.06, 0.06, 0.065], MAT.metal); lathe(b, 0, y, z, [[-0.071, 0.05], [-0.071, 0.1], [-0.071, 0.1], [-0.063, 0.1], [-0.063, 0.1], [-0.063, 0.05]], 14); } // sprocket
   b.part = 0;
 }
 export function buildMoto() { // military enduro with a rider and a pillion gunner. Parts 1 and 2 (the aim) are empty: their pivot lies in the rider, so a rifle in them would leave the gunner's hands; he fires 40 degrees off to the right instead
@@ -464,7 +480,7 @@ export function buildMoto() { // military enduro with a rider and a pillion gunn
   tube(b, [[-0.1, 0.285, 0.1], [-0.125, 0.275, 0.5]], 0.011, 4); pipe(b, [[0.1, 0.34, 0.05], [0.16, 0.33, -0.06], [0.2, 0.345, -0.1]], 0.008, 4, 0.02); pipe(b, [[-0.13, 0.4, -0.04], [-0.17, 0.37, -0.1], [-0.215, 0.375, -0.12]], 0.008, 4, 0.02); // side stand, brake pedal, gear lever
   // ---- tail: mudguard, lamp, plate, rack with a pack and a jerry can, panniers ----
   b.set(OLV, MAT.rus); plate(b, [[0.69, 0.3], [0.745, 0.48], [0.765, 0.7], [0.75, 0.9], [0.7, 1.04], [0.62, 1.12]], 0.075, 0.008, 0.02);
-  b.set([0.5, 0.04, 0.03], MAT.paint); b.box(-0.035, 0.705, 1.06, 0.035, 0.75, 1.1); b.set([0.6, 0.6, 0.58], MAT.paint); b.at(0, 0.6, 1.135, 0, 0.35); b.box(-0.085, 0, -0.004, 0.085, 0.1, 0.004); b.at(0, 0, 0);
+  b.set([0.5, 0.04, 0.03], MAT.paint); b.box(-0.035, 0.705, 1.06, 0.035, 0.75, 1.1); b.set([0.26, 0.25, 0.22], MAT.rus); b.at(0, 0.6, 1.135, 0, 0.35); b.box(-0.085, 0, -0.004, 0.085, 0.1, 0.004); b.at(0, 0, 0);
   roll(b, -0.19, 0.19, 0.93, 0.95, 0.07); snow(b, 0, 0.995, 0.95, 0.15, 0.016, 0.05, 3);
   for (const sx of [-1, 1]) { // small canvas panniers on a frame: lid with a seam, two straps, snow on top
     b.set(FRM, MAT.metal); tube(b, [[sx * 0.11, 0.83, 0.78], [sx * 0.135, 0.56, 0.8]], 0.008, 4, 0); tube(b, [[sx * 0.115, 0.84, 1.0], [sx * 0.135, 0.56, 0.98]], 0.008, 4, 0);
@@ -472,11 +488,11 @@ export function buildMoto() { // military enduro with a rider and a pillion gunn
     b.set([0.05, 0.05, 0.045], MAT.gear); for (const z of [0.835, 0.945]) b.box(sx * 0.19 - 0.062, 0.6, z - 0.01, sx * 0.19 + 0.062, 0.768, z + 0.01, 0.012, 0);
     snow(b, sx * 0.19, 0.768, 0.89, 0.04, 0.012, 0.09, 5 + sx, 5);
   }
-  // ---- the riders: the driver crouched over the bars, the pillion turned 40 degrees to the right, firing past the driver's shoulder ----
+  // ---- the riders: the driver crouched over the bars, the pillion twisted to the right in the infantry's standing aim (butt in the shoulder, cheek on the stock), firing 40 degrees off the bike's axis past the driver ----
   pose([0, 0.955, 0.22], [0, -0.17, 0], [0, -0.57, 0], [0, 0.72, 0], [-0.175, 0.455, 0.15], [0.175, 0.455, 0.15], [-0.1, 0.2, -1], [0.1, 0.2, -1], [-0.345, 1.105, -0.343], [0.345, 1.105, -0.343], [-1, 0.0, 0.35], [1, 0.0, 0.35]);
   bakeRider(b, { rifle: -1, toe: 0.12 });
-  pose([0.0, 0.965, 0.64], [-0.25, -0.02, 0], [-0.5, -0.1, 0], [0.12, -0.04, -0.22], [-0.17, 0.575, 0.5], [0.17, 0.575, 0.5], [-0.25, 0.2, -1], [0.25, 0.2, -1], null, null, [-0.3, -1, 0.1], [0.9, -0.3, 0.4]);
-  lowReady(0.1, 0.475, -0.37, 0.0, 0.12, 0.05); bakeRider(b, { rifle: 0, pack: 1, toe: 0.1 });
+  pose([0.0, 0.965, 0.64], [-0.35, -0.02, 0], [-1.0, -0.22, -0.07], [0.6, -0.34, -0.32], [-0.17, 0.575, 0.5], [0.17, 0.575, 0.5], [-0.25, 0.2, -1], [0.25, 0.2, -1], null, null, [-0.25, -1, 0.1], [0.9, -0.35, 0.3]);
+  shouldered(-0.7); bakeRider(b, { rifle: 0, pack: 1, toe: 0.1 });
   motoWheel(b, FZ, 3, 0.092, 0.07, true); motoWheel(b, RZ, 4, 0.122, 0.088, false);
   return b.build();
 }
