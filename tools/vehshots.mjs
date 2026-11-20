@@ -73,7 +73,7 @@ const EN = { t72: [0, 7.4, 2.4], bmp: [1, 6.8, 2.2], tigr: [2, 5.8, 2.7], btr: [
 for (const k of Object.keys(EN)) {
   if (!only.includes(k)) continue;
   const [t, L, H] = EN[k];
-  const p = await ev(`(()=>{ for (const e of G.enemies) e.on=false; G.spawn(${t},3); const e=G.enemies.find((q)=>q.on&&q.type===${t}); e.x=L.x+FX*25; e.z=L.z+FZ*25; e.y=__W.heightAt(e.x,e.z); e.yaw=Math.atan2(-FX,-FZ)+2.2; e.path=-1; e.immob=true; e.v=0; __sim(1/60,20); return [e.x,e.z,e.yaw]; })()`);
+  const p = await ev(`(()=>{ for (const e of G.enemies) e.on=false; G.spawn(${t},3); const e=G.enemies.find((q)=>q.on&&q.type===${t}); e.x=L.x+FX*25; e.z=L.z+FZ*25; e.y=__W.heightAt(e.x,e.z); e.yaw=Math.atan2(-FX,-FZ)+2.2; e.path=-1; e.immob=true; e.v=0; e.cage=${a.includes('--cage')}; __sim(1/60,20); return [e.x,e.z,e.yaw]; })()`);
   await ring(k, p[0], p[1], p[2], L, H);
   if (a.includes('--aim')) { // the weapon traversed and elevated, and the wheels rolled on a little
     await ev(`(()=>{ const e=G.enemies.find((q)=>q.on&&q.type===${t}); e.turYaw=1.0; e.gunPitch=0.25; e.trL+=0.4; e.trR+=0.4; const a=${p[2]}+0.3,d=${0.55 * L + 1.2};__look(${p[0]}-Math.sin(a)*d,${0.95 * H},${p[1]}-Math.cos(a)*d,${p[0]},${0.7 * H},${p[1]}); })()`);

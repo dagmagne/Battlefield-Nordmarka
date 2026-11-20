@@ -96,7 +96,7 @@ function cog(b, xa, xb, cy, cz, r0, r1, n) {
 // link thickness t (the road wheels stand on the links, so the link's outer face is the ground line).
 export const GEAR = [
   { n: 7, wr: 0.35, z0: -2.36, z1: 2.56, id: [-3.0, 0.62, 0.25], sp: [3.33, 0.6, 0.3], t: 0.11 },
-  { n: 6, wr: 0.375, z0: -2.4, z1: 2.3, id: [-3.08, 0.61, 0.25], sp: [3.0, 0.59, 0.28], t: 0.07 },
+  { n: 6, wr: 0.375, z0: -2.4, z1: 2.3, id: [-3.1, 0.62, 0.26], sp: [3.02, 0.62, 0.29], t: 0.07 },
   { n: 6, wr: 0.3, z0: -2.4, z1: 2.45, id: [-3.0, 0.57, 0.24], sp: [3.0, 0.57, 0.27], t: 0.07 }];
 // The loop is the convex hull of four circles (first road wheel, last road wheel, sprocket, idler): 4 straight runs and 4 arcs, in the
 // direction the lower run moves when driving forward (to the rear). A segment is { s (start), r (0 = straight), py, pz, oy, oz (straight:
