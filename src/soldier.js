@@ -54,8 +54,8 @@ function hexa(b, P) {
 }
 
 // lo = 1: distant LOD (same parts and matrices, ~230 triangles)
-export function buildSoldier(lo = 0) {
-  const b = new MB(), S = lo ? 4 : 9, SL = lo ? 4 : 6, CL = MAT.cloth, GR = MAT.gear, PK = MAT.pack, GV = MAT.glove;
+export function buildSoldier(lo = 0, SL = lo ? 4 : 6) { // SL: segments round the limbs (the riders in bikes.js use rounder ones)
+  const b = new MB(), S = lo ? 4 : 9, CL = MAT.cloth, GR = MAT.gear, PK = MAT.pack, GV = MAT.glove;
   b.at(0, 0, 0);
   // 0 pelvis: tapers into the thighs (no flat seat block), a grey belt
   b.part = 0; b.set(WHITE, CL);

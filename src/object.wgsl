@@ -184,6 +184,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
     if (isG > 0.5) {
       th = 0.36 + 0.1 * vn(in.lp.xz * 2.1 + in.lp.y * 3.0);
       if (m == 8u || m == 9u || m == 14u) { th = 0.8; }
+      if (m >= 24u && m <= 28u) { th = select(select(select(0.74, 0.4, m == 27u), 0.95, m == 28u), 1.05, m == 25u); } // riders baked into a vehicle mesh are warm bodies
       th += 1.2 * smoothstep(0.7, 1.9, in.lp.z) * smoothstep(0.7, 1.1, in.lp.y) * smoothstep(1.75, 1.55, in.lp.y);
       th = mix(th, 1.0 + 0.9 * vn(in.lp.xz * 1.7 + in.lp.y * 2.0), OB.tr.z);
     }
