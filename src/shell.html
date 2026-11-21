@@ -17,12 +17,17 @@ html,body{margin:0;height:100%;background:#0b1420;overflow:hidden;overscroll-beh
 #load h1{font-size:clamp(30px,5.5vw,58px)!important;font-weight:750!important;letter-spacing:.04em!important;text-transform:uppercase;text-shadow:0 2px 18px #000c,0 1px 3px #000}
 #load #msg{opacity:.9;text-shadow:0 1px 4px #000}
 #lMu{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right))}
-@media (max-height:500px){#load{padding-bottom:16px;gap:10px}#pick button{width:190px;padding:10px 12px}#pick b{font-size:16px}}
-#pick{display:none;gap:12px;flex-wrap:wrap;justify-content:center;padding:0 16px}
+#pick{display:none;padding:0 16px;max-width:100%}
+.pg{display:none;gap:12px;flex-wrap:wrap;justify-content:center;max-height:62vh;overflow:auto}
+.pg.on{display:flex}
+#pick button.back{width:auto;padding:10px 16px;align-self:center;opacity:.85}
+#pick button i{font-style:normal;color:#7dffb0;font-size:12px;font-weight:650}
 #pick button{cursor:pointer;width:230px;padding:18px 16px;border-radius:16px;border:1px solid #ffffff3a;background:#0b1420a8;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#eef3f8;font:14px system-ui,sans-serif;display:flex;flex-direction:column;gap:6px;text-align:left}
 #pick button:hover{background:#1c3350d0;border-color:#ffffff88}
 #pick b{font-size:19px;font-weight:650}
 #pick span{opacity:.75;line-height:1.35}
+#pg1{max-width:760px;margin:0 auto}
+@media (max-height:500px){#load{padding-bottom:10px;gap:6px}#load h1{font-size:22px!important}#pick button{width:196px;padding:7px 10px;gap:2px;font-size:11.5px;border-radius:12px}#pick b{font-size:14px}#pick span{line-height:1.25}.pg{gap:7px;max-height:78vh}#pg1{max-width:none}#pick button.back{padding:7px 12px}}
 #load h1,#err h1{margin:0;font-weight:600;font-size:26px;letter-spacing:.02em}
 #bar{width:min(320px,70vw);height:4px;border-radius:2px;background:#ffffff22;overflow:hidden}
 #bar i{display:block;height:100%;width:0;background:#e9f2ff;transition:width .15s}
@@ -79,7 +84,11 @@ kbd{margin:0 1px}
 .touch #wave{right:auto;left:var(--sl);top:calc(var(--st) + 46px);padding:4px 10px;font-size:10.5px}
 .touch #dbg{top:calc(var(--st) + 80px)}
 .touch #hud{gap:8px;padding:6px 10px}
-#ovP{opacity:.85;line-height:1.5}
+#ovP{opacity:.85;line-height:1.5;white-space:pre-line}
+.card .go.alt{background:#ffffff14;color:#eef3f8;border:1px solid #ffffff22;margin-top:8px}
+#obj{right:var(--sr);top:calc(var(--st) + 62px);padding:6px 12px;font-weight:600;font-size:12.5px;max-width:min(520px,60vw);text-align:right;border-color:#7dffb055}
+#obj.hot{border-color:#ff6a55;color:#ffd0c8}
+.touch #obj{right:auto;left:var(--sl);top:calc(var(--st) + 74px);font-size:11px;padding:4px 9px;text-align:left;max-width:46vw}
 #osd{left:50%;top:50%;transform:translate(-50%,-50%);width:min(70vw,112vh);height:min(64vh,46vw);display:none;color:#fff;font:700 15px/1.35 ui-monospace,Menlo,Consolas,monospace;text-shadow:0 0 2px #000,0 0 3px #000,1px 1px 0 #000}
 #osd.a,#osd.d{display:block}
 #osd>div{position:absolute;white-space:pre}
@@ -104,7 +113,7 @@ kbd{margin:0 1px}
 #padk,#padd,.pad #keys,.pad.droning #padk{display:none}
 .pad #padk,.pad.droning #padd{display:block}
 .touch #keys,.touch #padk,.touch #padd{display:none}
-.modal{inset:0;display:none;align-items:center;justify-content:center;background:#060b12a0;pointer-events:auto;padding:12px}
+.modal{z-index:7;inset:0;display:none;align-items:center;justify-content:center;background:#060b12a0;pointer-events:auto;padding:12px}
 .modal.show{display:flex}
 .card{max-width:560px;width:100%;max-height:100%;overflow:auto;padding:18px 20px;border-radius:18px}
 .card h2{margin:0 0 12px;font-size:18px;font-weight:650}
@@ -117,7 +126,7 @@ kbd{margin:0 1px}
 .grid b{white-space:nowrap;font-weight:500}
 .note{opacity:.6;font-size:12px;margin-top:8px}
 @media (max-height:420px){#acts .btn,#fly .btn{width:66px;height:66px}#acts .r .btn{width:48px;height:48px}.touch #map{top:calc(var(--st) + 54px);width:96px;height:96px}#bT{width:76px!important;height:76px!important}.btn{width:46px;height:46px}}
-@media (orientation:portrait){.touch #map{top:calc(var(--st) + 112px)}.touch #wave{top:calc(var(--st) + 50px)}#joyhint{bottom:calc(var(--sb) + 40px)}#top{top:calc(var(--st) + 50px)}#dbg{top:calc(var(--st) + 112px)}#toast{top:calc(var(--st) + 116px)}}
+@media (orientation:portrait){.touch #map{top:calc(var(--st) + 112px)}.touch #wave{top:calc(var(--st) + 50px)}.touch #obj{top:calc(var(--st) + 78px)}#joyhint{bottom:calc(var(--sb) + 40px)}#top{top:calc(var(--st) + 50px)}#dbg{top:calc(var(--st) + 112px)}#toast{top:calc(var(--st) + 116px)}}
 </style>
 </head>
 <body>
@@ -125,9 +134,10 @@ kbd{margin:0 1px}
 <div id="ui">
   <div id="hud" class="pill"><span><span id="spd">0</span><small>km/h</small></span><span id="sH" class="st on">HULL 100</span><span id="sT" class="st bad" style="display:none">TRACK</span><span id="sA" class="st on">APFSDS 20</span><span id="sM" class="st">MG 2000</span><span id="sK" class="st">SMOKE 2</span><span id="sD" class="st">DRONE 5</span><span id="sR" class="st on">ARTY 1</span><span id="rng">0 m</span><span id="sC" class="st">CMDR</span></div>
   <div id="wave" class="pill">WAVE 1 · 0 KILLS</div>
+  <div id="obj" class="pill"></div>
   <canvas id="map" width="464" height="464"></canvas>
   <canvas id="bmap" width="600" height="600"></canvas>
-  <div id="over" class="modal"><div class="card pill"><h2 id="ovT"></h2><div id="ovP"></div><button class="go" id="ovGo">Restart (R)</button></div></div>
+  <div id="over" class="modal"><div class="card pill"><h2 id="ovT"></h2><div id="ovP"></div><button class="go" id="ovGo">Restart (R)</button><button class="go alt" id="ovAlt" style="display:none"></button></div></div>
   <div id="top">
     <button class="btn" id="bD" aria-label="Time of day"><svg viewBox="0 0 24 24"><path d="M3 17h18M6 17a6 6 0 0 1 12 0M12 5v3M4.5 9.5l2 1.8M19.5 9.5l-2 1.8M8 21h8"/></svg>TIME</button>
     <button class="btn" id="bC" aria-label="Camera"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>CAM</button>
@@ -177,6 +187,7 @@ kbd{margin:0 1px}
       <b><kbd>B</kbd></b><span>Artillery: one fire mission per wave (restocked when the wave is cleared) — six 155 mm rounds land around the point about 25 s later. In the tank it goes where the sight is laid; from a drone, where its camera looks (the bomber: on the drop marker). Kills light vehicles and BMPs, wrecks houses, often knocks out a T-72. Within 150 m of your tank it is danger close</span>
       <b>Mines</b><span>Enemy engineers mine roads ahead (a faint grey patch in the snow, warm in the thermal sight) and rockets can scatter mines around you. Driving onto one blows a track: you are stuck for a few seconds (TRACK) and lose hull. Drones and a close look mark them with red flags; HE or a burst of MG fire sets them off</span>
       <b><kbd>T</kbd> <kbd>N</kbd> <kbd>M</kbd> <kbd>U</kbd></b><span>Time of day · snowfall · sound · music</span>
+      <b>Missions</b><span>The pill under the top bar names the objective, what is left, and the range and direction to it; the map shows it as a dashed ring (green: drive there · blue: hold it · red: enemy there · amber: search area) and coloured smoke rises from a place to reach or hold. <kbd>R</kbd> restarts the mission; the menu takes you back to the start screen</span>
       <b><kbd>R</kbd> <kbd>H</kbd> <kbd>Esc</kbd></b><span>Restart · this help · menu</span>
       <b>Gamepad</b><span>Left stick drive · right stick aim · R2 fire · L2 sight (hold; L3 locks it) · R1 MG · R3 force hatch MG · L1 smoke · □ ammo · △ thermal · hold ✕ launch drone · hold ○ artillery · D-pad ↑↓ magnification, ←→ drone type · Create map · Options menu (Vibration: off / light / full)</span>
       <b>Pad, drone</b><span>Like a DJI controller (Mode 2): left stick height and turn · right stick fly · L1/L2 tilt the camera · R2 detonate / drop · hold ✕ back to the tank (recon: autopilot) · hold ○ artillery where the camera looks · △ thermal · D-pad ↑↓ view: FPV chase far / chase / goggles, bomber and recon outside / camera / 2× / 4× (the mouse wheel and pinch do the same)</span>
@@ -190,6 +201,7 @@ kbd{margin:0 1px}
       <b>ARTY</b><span>One artillery fire mission per wave: six 155 mm rounds land about 25 s later on the point the sight is laid on — or, from a drone, where its camera looks. Keep your tank 150 m clear</span>
       <b>Map</b><span>Tap the map for the large view (tap again to close). Enemies someone has seen — the crew, the sight, a drone or their own muzzle flash (red T-72, orange BMP-2; hollow = last known position)</span>
       <b>Mines</b><span>Grey patches in the snow on roads ahead may be mines; red flags mark the ones found. Driving onto one blows a track (TRACK) — shoot it with HE or the MG instead</span>
+      <b>Missions</b><span>The pill under the wave line names the objective, what is left, and the range and direction to it; the map shows it as a dashed ring, and coloured smoke rises from a place to reach or hold. MENU → Restart starts the mission again</span>
       <b>CAM · TIME</b><span>Commander view or gunner sight · time of day</span>
       <b>3-finger tap</b><span>Performance overlay</span>
     </div>
@@ -207,16 +219,30 @@ kbd{margin:0 1px}
     <div class="row"><span>Trees <span class="note">(lower = faster)</span></span><div class="seg" id="mF"><button data-v="high">High</button><button data-v="medium">Medium</button><button data-v="low">Low</button><button data-v="off">Off</button></div></div>
     <div class="row"><span>Dynamic resolution</span><div class="seg" id="mR"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
     <div class="row"><span>Performance overlay</span><div class="seg" id="mB"><button data-v="0">Off</button><button data-v="1">On</button></div></div>
-    <div class="row"><span>World</span><div class="seg"><button id="mW">Choose another world</button></div></div>
+    <div class="row"><span>Game</span><div class="seg"><button id="mX">Restart</button><button id="mW">Choose mode, mission or world</button></div></div>
     <div class="row"><span>Controls</span><div class="seg"><button id="mH">Show help</button></div></div>
     <div class="note" id="mI"></div>
     <button class="go" id="mGo">Close</button>
   </div></div>
 </div>
 <div id="load"><button class="btn mbtn" id="lMu" aria-label="Music"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>MUSIC</button><h1>Battlefield Nordmarka</h1><div id="pick">
-<button data-w="holmenkollen"><b>Holmenkollen</b><span>Real Nordmarka — start by the ski jump</span></button>
-<button data-w="frogner"><b>Frognerseteren</b><span>Real Nordmarka — start at the lodge</span></button>
-<button data-w="fantasi"><b>Fantasi</b><span>The invented forest, lake and three mountains</span></button>
+<div class="pg on" id="pg0">
+<button data-go="pg1"><b>Missions</b><span>Six scripted fights on real ground: ambush a column, retake the tower, break out at night</span></button>
+<button data-go="pg2"><b>Defence</b><span>Hold Nordmarka against six waves of armour, drones and infantry</span></button>
+<button data-go="pg3"><b>Free roam</b><span>No enemies: drive, fly the drones and look around</span></button>
+</div>
+<div class="pg" id="pg1"><button class="back" data-go="pg0">‹ Back</button></div>
+<div class="pg" id="pg2">
+<button data-w="holmenkollen"><b>Holmenkollen</b><span>Start by the ski jump</span></button>
+<button data-w="frogner"><b>Frognerseteren</b><span>Start at the lodge</span></button>
+<button class="back" data-go="pg0">‹ Back</button>
+</div>
+<div class="pg" id="pg3">
+<button data-w="holmenkollen" data-p="1"><b>Holmenkollen</b><span>Real Nordmarka — by the ski jump</span></button>
+<button data-w="frogner" data-p="1"><b>Frognerseteren</b><span>Real Nordmarka — at the lodge</span></button>
+<button data-w="fantasi" data-p="1"><b>Fantasi</b><span>The invented forest, lake and three mountains</span></button>
+<button class="back" data-go="pg0">‹ Back</button>
+</div>
 </div><div id="bar"><i></i></div><div id="msg">Starting…</div></div>
 <div id="err"><h1>WebGPU is not available</h1><p id="errp"></p>
 <ul>

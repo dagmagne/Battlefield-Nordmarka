@@ -22,6 +22,7 @@ export function initUI(api, isTouch) {
     if (e.repeat || e.metaKey || e.ctrlKey) return;
     const c = e.code;
     if (modalOpen()) { if (c === 'Escape' || c === 'Enter' || c === 'Space' || c === 'KeyH') { showHelp(false); showMenu(false); e.preventDefault(); } return; }
+    if (cardKeys && U.cardOpen() && (c === 'Enter' || c === 'Space')) { e.preventDefault(); cardGo(); return; } // a briefing card: Enter or Space starts
     keys.add(c);
     if (c === 'Tab' && !e.repeat) api.bigMap();
     if (c === 'Space' || c === 'Tab') e.preventDefault();
@@ -116,7 +117,8 @@ export function initUI(api, isTouch) {
       } catch (e) { toast('Fullscreen not available'); }
     });
     for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => b.classList.toggle('on', !!fsEl())); }
-  btn('mW', () => { const l = new URL(location.href); l.searchParams.delete('w'); l.searchParams.delete('nohint'); location.href = l.href; });
+  btn('mW', () => { const l = new URL(location.href); for (const k of ['w', 'm', 'peace', 'nohint']) l.searchParams.delete(k); location.href = l.href; });
+  btn('mX', () => { showMenu(false); api.restart(); });
   btn('hGo', () => showHelp(false)); btn('mGo', () => showMenu(false)); btn('mH', () => { showMenu(false); showHelp(true); });
   const hold = (id, v) => { const b = $(id); const set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); inp.holdY = on ? v : 0; b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   inp.holdY = 0; hold('bUp', 1); hold('bDn', -1);
@@ -155,7 +157,7 @@ export function initUI(api, isTouch) {
     const bv = (i) => (i < n ? b[i].value : 0);
     const sync = () => { for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; };
     if (modalOpen()) { holdEnd(); if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } sync(); return; }
-    if ($('over').classList.contains('show')) { holdEnd(); if (press(0)) api.restart(); else if (press(1) && overCont) U.over(null); sync(); return; } // end card: ✕ restart, ○ keep playing (after a victory)
+    if ($('over').classList.contains('show')) { holdEnd(); if (press(0)) cardGo(); else if (press(1)) { if (altOn) cardAlt(); else if (overCont) U.card(null); } sync(); return; } // card: ✕ the main button, ○ the second one, or keep playing (after a victory)
     // ✕ drone / ○ artillery: start on the press, cancel on release, fire after HOLD_MS
     if (press(0)) { const l = api.droneLabel(); if (l) holdStart(1, 'HOLD ✕ · ' + l); else api.drone(); } // '' = no hold needed (skip the blast view, or nothing to launch: the toast says why)
     if (press(1)) holdStart(2, 'HOLD ○ · FIRE MISSION');
@@ -224,10 +226,17 @@ export function initUI(api, isTouch) {
     oSet('oTC', sig < 25 ? (mode === 1 ? 'LOW SIGNAL' : 'WEAK SIGNAL — turn back') : '');
   };
   // end-of-game card (knocked out / victory); `cont` lets the player close it and keep going
-  let overCont = false;
-  U.over = (title, text, cont) => { overCont = !!cont; $('over').classList.toggle('show', !!title); if (title) { $('ovT').textContent = title; $('ovP').textContent = text; if (document.pointerLockElement) document.exitPointerLock(); } };
-  $('ovGo').addEventListener('click', () => api.restart());
-  $('over').addEventListener('pointerdown', (e) => { if (e.target === $('over') && overCont) U.over(null); });
+  // o: { title, text, cont (may be closed to keep playing), go / goFn (main button; default Restart), alt / altFn (second button; default restart), keys (Enter or Space presses the main button) }
+  let overCont = false, goFn = null, altFn = null, altOn = false, cardKeys = false;
+  const cardGo = () => { if (goFn) goFn(); else api.restart(); }, cardAlt = () => { if (altFn) altFn(); else api.restart(); };
+  U.card = (o) => { overCont = !!(o && o.cont); $('over').classList.toggle('show', !!o); if (!o) return;
+    goFn = o.goFn || null; altFn = o.altFn || null; altOn = !!o.alt; cardKeys = !!o.keys;
+    $('ovT').textContent = o.title; $('ovP').textContent = o.text; $('ovGo').textContent = o.go || 'Restart (R)'; $('ovAlt').textContent = o.alt || ''; $('ovAlt').style.display = altOn ? '' : 'none';
+    if (document.pointerLockElement) document.exitPointerLock(); };
+  U.over = (title, text, cont) => U.card(title ? { title, text, cont } : null);
+  U.cardOpen = () => $('over').classList.contains('show');
+  $('ovGo').addEventListener('click', cardGo); $('ovAlt').addEventListener('click', cardAlt);
+  $('over').addEventListener('pointerdown', (e) => { if (e.target === $('over') && overCont) U.card(null); });
   U.setDebug = (on) => { U.dbgOn = on; $('dbg').style.display = on ? 'block' : 'none'; };
   U.dbgText = (t) => { $('dbg').textContent = t; };
   let seen = false; try { seen = !!localStorage.getItem('hint1'); } catch (e) { /* ignore */ }

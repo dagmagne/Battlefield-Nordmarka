@@ -21,6 +21,7 @@ import { setTod, updateTod, writeTod, todIndex } from './tod.js';
 import { buildLeopard, buildT72, buildBMP, buildTigr, buildBTR, buildBuggy, buildMoto, buildDrone, buildMine, buildLancet, buildOrlan, tankParts, turMat, gunMat, LEO, TRK, TRACK_WGSL } from './tank.js';
 const objDefW = TRACK_WGSL + objDefW0; // the track loop tables (gear.js) in front of the deform function that reads them
 import { initCombat, MAXE, MAXG, MAXM, MAXA, MAXI } from './combat.js';
+import { initMissions, MISSIONS } from './missions.js';
 import { buildSoldier, initSoldiers, IST, WALK_V, RUN_V } from './soldier.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
@@ -101,10 +102,18 @@ async function main() {
 
   const tick = (m, p) => { $('msg').textContent = m + '…'; $('bar').firstChild.style.width = (p * 100).toFixed(0) + '%'; return new Promise((r) => setTimeout(r, 0)); };
   // world choice: ?w=fantasi|holmenkollen|frogner, otherwise ask (scripted runs with ?nohint default to Frognerseteren)
-  let wsel = qs.get('w') || (qs.has('nohint') ? 'frogner' : '');
-  if (!wsel) { $('pick').style.display = 'flex'; $('bar').style.display = $('msg').style.display = 'none';
-    wsel = await new Promise((r) => { for (const b of $('pick').children) b.onclick = () => r(b.dataset.w); });
-    $('pick').style.display = 'none'; $('bar').style.display = $('msg').style.display = ''; }
+  // mode, mission and world: from the URL (?w= world and start, ?m= mission, ?peace), else the start screen (mode -> mission, start point or world)
+  let msel = MISSIONS.some((m) => m.id === qs.get('m')) ? qs.get('m') : '', pickPeace = null;
+  let wsel = qs.get('w') || (qs.has('nohint') || msel ? 'frogner' : '');
+  if (!wsel) { const P = $('pick'); P.style.display = 'block'; $('bar').style.display = $('msg').style.display = 'none';
+    let best = {}; try { best = JSON.parse(localStorage.gmsn || '{}') || {}; } catch (e) { /* ignore */ }
+    const g1 = $('pg1'), back = g1.firstChild; MISSIONS.forEach((m, i) => { const b = document.createElement('button'), s = best[m.id]; b.dataset.m = m.id; b.dataset.w = 'frogner';
+      b.innerHTML = `<b>${i + 1} · ${m.name}</b><span>${m.card}</span>` + (s > 0 ? `<i>✓ best ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</i>` : ''); g1.insertBefore(b, back); });
+    const r = await new Promise((res) => { P.onclick = (e) => { const b = e.target.closest && e.target.closest('button'); if (!b) return;
+      if (b.dataset.go) { for (const g of P.children) g.classList.toggle('on', g.id === b.dataset.go); return; } res(b.dataset); }; });
+    wsel = r.w; msel = r.m || ''; pickPeace = r.p === '1'; try { localStorage.gpeace = pickPeace ? '1' : '0'; } catch (e) { /* ignore */ }
+    P.style.display = 'none'; $('bar').style.display = $('msg').style.display = ''; }
+  if (wsel === 'fantasi') msel = '';
   await tick('Shaping terrain', 0);
   const W = wsel === 'fantasi' ? await genFantasy(tick, Q) : await genWorld(tick, Q, wsel);
   const PLAY = W.PLAY, MW = W.MW;
@@ -588,6 +597,7 @@ async function main() {
     smoke() { if (R.game) R.game.smoke(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
     restart() { treesRestore(); if (R.game) R.game.restart(); },
+    mission(id) { if (msn.set(id) && game.peace) game.peace = false; api.restart(); }, // '' = the defence waves
     snow(v) { R.snow = v === undefined ? 1 - R.snow : v; ui.toast(R.snow ? 'Snowfall on' : 'Snowfall off'); },
     tod(i) { if (i < 0) i = (todIndex + 1) % 4; setTod(i); tshDirty = 2; ui.toast(TODN[i]); },
     debug(v) { R.debug = v === undefined ? !R.debug : !!v; ui.setDebug(R.debug); },
@@ -608,8 +618,9 @@ async function main() {
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); if (R.hap) R.hap.ev(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' || peacePref() });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: W.name === 'fantasy' || (pickPeace !== null ? pickPeace : qs.has('peace') || qs.has('auto') || qs.has('perf') || (!msel && peacePref())) });
   R.game = game; R.aimHit = game.aimHit;
+  const msn = initMissions({ W, R, veh, aim, cam, rnd, ui, parts, bld: BL }, game, { quiet: qs.has('nohint') || qs.has('auto') || qs.has('perf'), tp: (x, z, yaw) => window.__tp(x, z, yaw), tod: (i) => { if (i !== todIndex) { setTod(i); tshDirty = 2; } }, go: (id) => api.mission(id) });
   const SOL = initSoldiers(MAXI, W.groundAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
@@ -1081,7 +1092,8 @@ async function main() {
   window.__aim = (yaw, pitch, mode) => { R.pose = null; R.chase = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
   window.__tp = (x, z, yaw, top) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = (top ? W.groundAt(x, z, 1e5) : W.heightAt(x, z)) + 0.03; stInit = false; R.snap = true; }; // top: on the highest surface (a bridge deck)
-  Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
+  Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui, __msn: msn });
+  if (msel && W.name !== 'fantasy' && msn.set(msel)) msn.begin(); // a mission chosen on the start screen or with ?m=
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none'; music.game();
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();
