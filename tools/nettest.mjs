@@ -54,6 +54,16 @@ check('driving, the main gun, the MG and K take the net off', r.drive.net === 0 
 check('the net stays up while a drone is flown, and a restart clears it', r.drone.net === 1 && r.drone.flying && r.restart.net === 0 && !r.restart.on, { drone: r.drone, restart: r.restart });
 await page.close();
 
+// an Orlan circling a still tank in the open: watches it without the net, does not find it under the net
+{ const p2 = await (await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 })).newPage();
+  await p2.goto(`${base}?w=frogner&nohint&peace&q=low&drs=0&mute`); await p2.waitForFunction('window.__ready===true', null, { timeout: 120000 });
+  const o = await p2.evaluate(`(()=>{ const G=__game, P=__W.PLAY-150, L=__W.lakes.filter((l)=>Math.abs(l.x)<P&&Math.abs(l.z)<P).sort((a,b)=>b.area-a.area)[0]; __ui.poll=()=>{}; __R.god=true;
+    const run=(s)=>{ const n=Math.round(s*60); for (let k=0;k<n;k+=30) __sim(1/60, Math.min(30,n-k)); }, go=(net)=>{ __api.restart(); G.peace=false; G.state=1; G.timer=1e9; G.wave=1; __tp(L.x, L.z, 0); run(1); if (net) { G.netKey(); run(9); }
+      const a=G.airSpawn(2, 0); a.x=__veh.x+250; a.z=__veh.z; a.y=__W.heightAt(a.x,a.z)+180; a.tx=__veh.x; a.tz=__veh.z; let mx=0; for (let t=0;t<40;t++) { run(1); mx=Math.max(mx,G.orlan); } return +mx.toFixed(1); };
+    return {open:go(false), net:go(true), calls:G.arty.calls}; })()`);
+  check('Orlan over a still tank on the open ice: watches it without the net (seconds), never under the net', o.open >= 15 && o.net === 0, o);
+  await p2.close(); }
+
 // touch: the NET button is on screen, clear of the other buttons, and rigs the net
 { const c2 = await browser.newContext({ viewport: { width: 852, height: 393 }, deviceScaleFactor: 1, hasTouch: true }), p = await c2.newPage();
   p.on('pageerror', (e) => { console.log('[pageerror]', String(e.stack || e).slice(0, 400)); errs++; });

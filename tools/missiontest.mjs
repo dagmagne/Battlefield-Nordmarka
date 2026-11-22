@@ -102,8 +102,9 @@ if (want('cp')) {
 
 // ---- Command post: found when a command vehicle is seen; barrages are called on the tank; destroyed is a win ----
 if (want('cp')) {
-  const r = await ev(`(()=>{ start('cp'); const tod=__api.state().tod, arty=G.support.n, c0=G.arty.calls; run(70); const c1=G.arty.calls, a=st(); tag(2)[0].spotT=5; run(1); const b=st(); G.kill(tag(1)[0]); run(1); const c=st(); killTag(2); return {tod,arty,c0,c1,a,b,c,s:st(),n1:tag(1).length}; })()`);
-  check('cp: blue hour, two fire missions, a barrage called on the tank, found on sight, won when the three vehicles are destroyed (guards may live)', r.tod === 2 && r.arty === 2 && r.c1 > r.c0 && r.a.s === 0 && r.b.s === 1 && r.c.done === 0 && r.s.done === 1 && r.n1 >= 1, r);
+  const r = await ev(`(()=>{ start('cp'); G.netKey(); run(9); const tod=__api.state().tod, arty=G.support.n, c0=G.arty.calls; run(71); const offN=Math.hypot(G.arty.x-__veh.x,G.arty.z-__veh.z)|0; start('cp'); run(80); const c1=G.arty.calls, off=Math.hypot(G.arty.x-__veh.x,G.arty.z-__veh.z)|0, hp=__veh.hp; __R.god=false; run(60); const hp2=__veh.hp; __R.god=true; const a=st(); tag(2)[0].spotT=5; run(1); const b=st(); G.kill(tag(1)[0]); run(1); const c=st(); killTag(2); return {tod,arty,c0,c1,off,offN,hp2,a,b,c,s:st(),n1:tag(1).length}; })()`);
+  check('cp: searching fire lands 90-180 m off an unseen tank (250-400 m off a netted one) and does not hurt it', r.c1 > r.c0 && r.off >= 85 && r.off <= 185 && r.offN >= 245 && r.offN <= 405 && r.hp2 === 100, { off: r.off, offN: r.offN, hp: r.hp2 });
+  check('cp: blue hour, two fire missions, found on sight, won when the three vehicles are destroyed (guards may live)', r.tod === 2 && r.arty === 2 && r.a.s === 0 && r.b.s === 1 && r.c.done === 0 && r.s.done === 1 && r.n1 >= 1, r);
 }
 
 // ---- Night breakthrough: night, the clock fails it, the arena wins it ----

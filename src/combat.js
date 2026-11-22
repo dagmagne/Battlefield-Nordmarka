@@ -752,8 +752,9 @@ export function initCombat(C) {
         const dc = Math.hypot(a.x - a.tx, a.z - a.tz); let gx, gz;
         if (dc > 330) { gx = a.tx; gz = a.tz; } else { a.ang += T.v / 280 * dt; gx = a.tx + Math.sin(a.ang) * 280; gz = a.tz + Math.cos(a.ang) * 280; }
         steer(a, gx - a.x, hAt(a.tx, a.tz) + T.alt - a.y, gz - a.z, T.v, Math.min(1, dt * 0.7));
+        // (a netted, still tank is not found by an Orlan that is not already watching it: factor 0.24 against the 0.25 threshold)
         a.chk -= dt; if (a.chk <= 0) { a.chk = 0.5; const vis = veh.dead ? 0 : losVis(a.x, a.y, a.z, veh.x, tankY, veh.z) * (1 - 0.7 * (R.trees ? canAt(veh.x, veh.z) / 255 : 0));
-          if (vis * (G.net >= 1 && G.orlan <= 0 ? 0.45 : 1) > 0.25) { G.orlan += 0.5; for (let j = 0; j < MAXE; j++) { const e = G.enemies[j]; if (e.on && !e.dead) e.known = Math.max(e.known, 4); } } else G.orlan = 0; }
+          if (vis * (G.net >= 1 && G.orlan <= 0 ? 0.24 : 1) > 0.25) { G.orlan += 0.5; for (let j = 0; j < MAXE; j++) { const e = G.enemies[j]; if (e.on && !e.dead) e.known = Math.max(e.known, 4); } } else G.orlan = 0; }
       } else { // FPV and Lancet
         a.t -= dt; if (a.t <= 0) { airBoom(a, false); continue; }
         const dx = veh.x - a.x, dz = veh.z - a.z, dh = Math.hypot(dx, dz), smk = smokeNear(veh.x, veh.z, 35);

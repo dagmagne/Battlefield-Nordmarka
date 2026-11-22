@@ -70,16 +70,16 @@ export const MISSIONS = [
         done: (m) => m.left(3) === 0 }] },
 
   { id: 'cp', name: 'Find the command post', card: 'A camouflaged command post directs artillery at you. Search the forest with the drone and destroy it.', lvl: 3, tod: 2, arty: 2, start: FROG,
-    brief: 'An enemy command post somewhere in the forest east of Frognerseteren is directing artillery, and it knows roughly where you are: keep moving.\n\nIt stands under camouflage nets on one of the forest roads, in a different place every time: a drone has to pass within about 350 m to make it out, so search the area road by road with the recon drone (Z picks the type). Then destroy its command vehicle and both Kornet carriers. You have two fire missions.',
+    brief: 'An enemy command post somewhere in the forest east of Frognerseteren is directing artillery. It does not have your position: its fire searches the area, and an Orlan will come looking. Under the camouflage net (K) a still tank is hidden from it; once it has watched you for a quarter of a minute, the fire is accurate.\n\nIt stands under camouflage nets on one of the forest roads, in a different place every time: a drone has to pass within about 350 m to make it out, so search the area road by road with the recon drone (Z picks the type). Then destroy its command vehicle and both Kornet carriers. You have two fire missions.',
     stages: [
       { t: 'Find the command post in the eastern forest', zone: [480, -480, 1000, FIND], on(m) { // one of four sites along the forest road, under nets: a drone or the crew sees its vehicles only from about 350 m
         const s = CPS[m.pick(CPS.length)], x = s[0], z = s[1], o = { tag: 2, gar: 1, cam: 0.24 }; m.site(x, z);
         m.veh(BTR, ASL, x, z, { ...o, k: 0 }); m.veh(TIGR, OVW, x, z, { ...o, k: 4 }); m.veh(TIGR, OVW, x, z, { ...o, k: 9 });
         m.veh(T72, OVW, x - 40, z + 230, { gar: 1, cam: 0.4 }); m.veh(BMP, ASL, x, z, { gar: 1, cam: 0.4, k: 15 }); m.atgm(x + 25, z - 25); m.rpg(x - 60, z + 170, 2); m.mines(x * 0.6 + FROG[0] * 0.4, z * 0.6 + FROG[1] * 0.4); },
-        ev: [[60, (m) => m.shell()], [150, (m) => m.shell()], [240, (m) => m.shell()], [330, (m) => m.shell()], [420, (m) => m.shell()], [510, (m) => m.shell()]],
+        ev: [[75, (m) => m.shell()], [150, (m) => { m.say('An Orlan is coming to look for you — a camouflage net or thick forest hides a still tank'); m.air(2, 1.2); }], [200, (m) => m.shell()], [320, (m) => m.shell()], [400, (m) => m.air(2, 0.6)], [440, (m) => m.shell()], [560, (m) => m.shell()]],
         done: (m) => m.seen(2) },
       { t: 'Destroy the command vehicle and the Kornet carriers', zone: [672, -644, 160, ATK], cnt: 2, on(m) { m.zone(m.sx, m.sz, 160, ATK); m.say('Command post found — destroy its three vehicles'); },
-        ev: [[50, (m) => m.shell()], [140, (m) => m.shell()], [230, (m) => m.shell()], [320, (m) => m.shell()]],
+        ev: [[60, (m) => m.shell()], [180, (m) => m.shell()], [300, (m) => m.shell()], [420, (m) => m.shell()]],
         done: (m) => m.left(2) === 0 }] },
 
   { id: 'night', name: 'Night breakthrough', card: 'Cut off at Tryvann in the dark. Fight south to the arena in 14 minutes.', lvl: 4, tod: 3, arty: 1, start: [-733, -1278],
@@ -137,7 +137,10 @@ export function initMissions(C, G, h) {
     atgm(x, z) { openPt(x, z, 150); return G.infSquad('atgm', RP[0], RP[1]); },
     mines(x, z) { return routePt(x, z, 120, 0, true) ? G.mines.lay(RP[0], RP[1], RP[2], RP[3]) : 0; },
     air(type, brg) { G.airSpawn(type, brg); }, // 0 FPV, 1 Lancet, 2 Orlan; bearing from the tank
-    shell() { if (G.arty && !G.arty.n && !veh.dead) G.arty.call(veh.x, veh.z, 'crew'); }, // the command post calls a barrage on where the tank is now
+    // searching fire: the command post does not know where the tank is, so the barrage lands 90-180 m off (250-400 m off a netted tank).
+    // Accurate fire comes only through the normal rule in arty.js: an Orlan or a crew that has watched the tank for 15 s.
+    shell() { if (!G.arty || G.arty.n || veh.dead || G.orlan > 0 || G.rep > 0) return; const a = rnd() * 6.283, r = G.net >= 1 ? 250 + rnd() * 150 : 90 + rnd() * 90;
+      G.arty.call(veh.x + Math.sin(a) * r, veh.z + Math.cos(a) * r, 'search'); if (!M.shT) { M.shT = 1; ui.toast('Enemy artillery is searching the area — they do not have your position yet'); } },
     say(t) { ui.toast(t); },
     pick(n) { return X.force >= 0 ? X.force % n : Math.min(n - 1, (rnd() * n) | 0); }, // a random variant (X.force: tests)
     site(x, z) { M.px = x; M.pz = z; }, get sx() { return M.px; }, get sz() { return M.pz; },
@@ -169,7 +172,7 @@ export function initMissions(C, G, h) {
   function begin() { // from G.restart and at load
     M.on = !!M.cur && !G.peace; G.msn = M.on ? M.cur : null; ui.show('obj', M.on); M.done = 0; M.zk = -1; key = -1;
     if (!M.on) return;
-    const c = M.cur; M.t = 0; M.esc = 0; M.s = 0; M.ck = 0; G.wave = c.lvl; G.state = 1; G.wt = 0; G.support.n = c.arty === undefined ? 1 : c.arty;
+    const c = M.cur; M.t = 0; M.esc = 0; M.shT = 0; M.s = 0; M.ck = 0; G.wave = c.lvl; G.state = 1; G.wt = 0; G.support.n = c.arty === undefined ? 1 : c.arty;
     if (c.tod !== undefined) h.tod(c.tod);
     const z = c.stages[0].zone; let x = c.start[0], zz = c.start[1], yaw = z ? Math.atan2(-(z[0] - x), -(z[1] - zz)) : 0;
     if (routePt(x, zz, 80, 0, true)) { x = RP[0]; zz = RP[1]; if (z) { const s = (z[0] - x) * RP[2] + (z[1] - zz) * RP[3] < 0 ? -1 : 1; yaw = Math.atan2(-RP[2] * s, -RP[3] * s); } }
