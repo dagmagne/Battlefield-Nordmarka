@@ -51,7 +51,7 @@ const res = await page.evaluate(async ({ waves, seed, move }) => {
       if (!isFinite(e.x + e.z + e.y + e.yaw + e.v)) bad.push(`NaN w${w} #${i}`);
       if (B.at(e.x, e.y + 1.2, e.z, 0) >= 0) bad.push(`inside building w${w} #${i} t${wt}`);
       if (e.stN >= 4 && !u.stk) { u.stk = 1; bad.push(`stuck repeatedly w${w} #${i} ${G.ROLES[e.role]} at ${Math.round(e.x)},${Math.round(e.z)}`); }
-      if (Math.abs(e.x) > 1560 || Math.abs(e.z) > 1560) bad.push(`outside play w${w} #${i}`);
+      if (!__W.inP(e.x, e.z, -5)) bad.push(`outside play w${w} #${i}`);
       // test the hit reaction once per unit after a while: a 20 hp graze
       if (wt === u.spawnT + 35 && e.type === 0) { e.hp -= 20; u.grazed = true; }
       if (u.grazed && e.retT > 0) u.smoked = true;

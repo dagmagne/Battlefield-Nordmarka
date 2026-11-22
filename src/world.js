@@ -12,6 +12,9 @@ const PLAY = 1560, MW = 3712, TREELINE = 900; // PLAY: the old square, still wha
 const PBX = playBox([-1850, -1560, 1560, 1750]);
 export const NEAR = 32, NCN = WS / NEAR, FAR = 128, FCN = WS / FAR;
 // landmark geometry (from tools/geo/raw/landmarks.json)
+// tank start points [x, z, yaw]: Frognerseteren = the car park at the junction of Tryvannsveien and Holmenkollveien by the station, facing up Tryvannsveien;
+// Holmenkollen = the car park on Holmenkollveien just east of the arena, facing north
+export const START = [[-317, -314, 1.13], [-310, 1179, -0.61]];
 export const LM = {
   frogner: { x: -139.5, z: -259.0, yaw: 0 }, // restaurant footprint centre from the lidar; local +z (front, terrace) faces south over the city
   // jump profiles: Midtstubakken deck [d, y] from the lidar surface model (tools/geo/jumps.py); wing [d, t, top y] lidar wing tops; block [from d, half width]
@@ -551,6 +554,8 @@ export async function genWorld(tick, Q, startAt) {
     trails.forEach((t, ti) => { if (t.n < 80) return; for (let q = 20; q < t.n - 20; q++) { const d = Math.hypot(t.pts[q * 2] - T[0], t.pts[q * 2 + 1] - T[1]); if (d < bd) { bd = d; bi = q; bt = ti; } } });
     const t = trails.splice(bt, 1)[0]; trails.unshift(t);
     W.startI = bi; W.start.x = t.pts[bi * 2]; W.start.z = t.pts[bi * 2 + 1]; W.start.yaw = Math.atan2(-(t.pts[bi * 2 + 4] - W.start.x), -(t.pts[bi * 2 + 5] - W.start.z)); }
+  // the tank itself starts on a plowed car park by a road, facing up the road (the trail point above is from the groomer and still serves the scripted drives: W.startI on trails[0])
+  { const s = START[startAt === 'holmenkollen' ? 1 : 0]; W.start.x = s[0]; W.start.z = s[1]; W.start.yaw = s[2]; }
   return W;
 }
 

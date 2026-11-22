@@ -405,7 +405,7 @@ export function initCombat(C) {
       if (e.role === OVW) { e.noLos = e.los ? 0 : e.noLos + dt; if ((e.ph === 1 && (e.noLos > 28 || d > 1300)) || (e.ph === 0 && e.phT > 100)) { pickSpot(e, brgOf(e.x, e.z), 600, 950); e.noLos = 0; e.phT = 0; e.evalT = 0; } }
       const atSpot = e.role === OVW && (e.ph === 1 || Math.hypot(e.ox - e.x, e.oz - e.z) < 14);
       if (atSpot && e.ph === 0) { e.ph = 1; e.phT = 0; } else if (e.role === OVW && e.ph === 0) e.phT += dt;
-      const halt = d < 70 || atSpot || (e.state === 1 && d < (e.role === FLK && e.ph === 0 ? 260 : e.hold)) || (e.gl && Math.hypot(e.glx - e.x, e.glz - e.z) < e.glr);
+      const halt = (d < 70 && !(e.gl && e.hold === 0)) || atSpot || (e.state === 1 && d < (e.role === FLK && e.ph === 0 ? 260 : e.hold)) || (e.gl && Math.hypot(e.glx - e.x, e.glz - e.z) < e.glr);
       if (halt) {
         const a = wrap(Math.atan2(-(veh.x - e.x), -(veh.z - e.z)) - e.yaw); if (e.type === 0 && Math.abs(a) > 0.6 && e.state === 1) { e.st = clamp(a * 2, -1, 1); e.tgt = 0.7; } // turn the front armour to the threat
         e.idleT += dt; if (e.idleT > (e.role === RAID ? 6 : e.role === OVW ? 30 : 13) + (e.grp & 3)) scoot(e, e.role === OVW ? -5 : 15);

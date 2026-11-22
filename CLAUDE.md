@@ -8,6 +8,8 @@ There are two worlds, chosen on the start screen (or with `?w=`):
 
 Scripted runs with `?nohint` and no `?w` default to Frognerseteren.
 
+**Start points (`START` in `world.js`):** the tank starts on a plowed car park by a road, facing up the road: Frognerseteren = the car park at the junction of Tryvannsveien and Holmenkollveien by the station (-317, -314), Holmenkollen = the car park on Holmenkollveien east of the arena (-310, 1179). The groomer's start (a point on a ski trail, facing along the trail) is still computed, because `W.startI` on `trails[0]` drives the scripted runs (`auto`, `perf.mjs`, `scenes.mjs`). Missions from Frognerseteren start on the road at that junction (`FROG` in `missions.js`, snapped to the road and turned towards the first objective); `arena` starts in the arena, `night` at the Tryvann car park. The column mission's route runs through the junction, so a vehicle with a goal and `hold: 0` no longer halts within 70 m of the tank: it pushes past.
+
 **Game modes** (start screen: mode, then mission / start point / world; `#pick` holds the groups `#pg0`–`#pg3`): **Missions** (six scripted fights, `?m=<id>`), **Defence** (the six waves, `?w=holmenkollen|frogner`) and **Free roam** (`?peace`; the fantasy world is always free roam). The choice on the start screen wins over a stored peace-mode setting.
 
 ## Priorities (in order)

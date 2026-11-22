@@ -6,7 +6,7 @@
 const T72 = 0, BMP = 1, TIGR = 2, BTR = 3, BUG = 4, MOTO = 5, ASL = 0, OVW = 1, RAID = 3;
 const GO = 0, DEF = 1, ATK = 2, FIND = 3; // zone kinds: drive there, defend it, attack what is there, search area
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-const FROG = [-145, -451], TOWER = [-663, -1486], ARENA = [-542, 1340], VOKS = [-840, -515];
+const FROG = [-317, -314], TOWER = [-663, -1486], ARENA = [-542, 1340], VOKS = [-840, -515];
 // Holmenkollveien from the arena north to Voksenkollen station, about every 200 m: the column's waypoints (a single far goal let it cut corners over other roads and through the forest)
 const HKV = [[-569, 1457], [-484, 1275], [-372, 1107], [-402, 917], [-415, 727], [-359, 534], [-331, 336], [-319, 136], [-291, -48], [-282, -245], [-399, -360], [-595, -389], [-772, -483], VOKS];
 const CPS = [[672, -644], [771, -997], [548, -1308], [364, 274]]; // command post sites on the eastern forest road (road 23)
