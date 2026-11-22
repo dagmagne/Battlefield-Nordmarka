@@ -89,6 +89,17 @@ if (want('arena')) {
   check('arena: three attacks (4, 5, 6 vehicles, drones in the last), all beaten is a win', r.a.s === 1 && r.n2 === 5 && r.b.s === 2 && r.n3 === 6 && r.air >= 1 && r.s.done === 1, r);
 }
 
+// ---- Command post: each of the four sites places sensibly; a recon drone high over the start does not see it, one overhead does ----
+if (want('cp')) {
+  for (let i = 0; i < 4; i++) {
+    const r = await ev(`(()=>{ MS.force=${i}; start('cp'); const p=place(), D=G.drone, c=tag(2)[0]; G.droneType(2); G.droneKey(); run(8); D.pitch=-0.5; D.yaw=Math.atan2(-(c.x-D.x),-(c.z-D.z)); run(3); const far=G.enemies.some((e)=>e.on&&e.seen), dist=Math.hypot(c.x-D.x,c.z-D.z)|0;
+      D.x=c.x+60; D.z=c.z+60; D.y=__W.heightAt(D.x,D.z)+110; D.pitch=-1.1; D.yaw=Math.atan2(60,60); __veh.x=D.x; __veh.z=D.z+300; run(2); const s=st(); MS.force=-1; return {site:[M.px,M.pz], en:p.en, far, dist, near:s.s, cl:c.x|0}; })()`);
+    console.log(`     site ${i} at ${r.site}:`); for (const e of r.en) console.log('       ' + e);
+    const bad = r.en.filter((e) => /Tigr|BTR/.test(e) && +/can(\d+)/.exec(e)[1] > 110).length, close = r.en.filter((e) => +/ d(\d+)/.exec(e)[1] < 300).length;
+    check(`cp site ${i}: 5 vehicles placed sensibly, not seen by a recon drone ${r.dist} m away, found from overhead`, r.en.length === 5 && !bad && !close && !r.far && r.near === 1, { far: r.far, stage: r.near });
+  }
+}
+
 // ---- Command post: found when a command vehicle is seen; barrages are called on the tank; destroyed is a win ----
 if (want('cp')) {
   const r = await ev(`(()=>{ start('cp'); const tod=__api.state().tod, arty=G.support.n, c0=G.arty.calls; run(70); const c1=G.arty.calls, a=st(); tag(2)[0].spotT=5; run(1); const b=st(); G.kill(tag(1)[0]); run(1); const c=st(); killTag(2); return {tod,arty,c0,c1,a,b,c,s:st(),n1:tag(1).length}; })()`);

@@ -346,7 +346,7 @@ export function initCombat(C) {
     if (bp < 0 && !fix) return false;
     e.cage = type === 0 && G.wave >= 3 && rnd() < 0.4; // cope cage over the turret on some T-72s
     Object.assign(e, { on: true, dead: false, type, x: bx, z: bz, y: hAt(bx, bz), pitch: 0, roll: 0, tl: 0, tt: 0, tlV: 0, turYaw: 0, gunPitch: 0, recoil: 0, v: 0, hp: E.hp, state: 0, rl: 3 + rnd() * 4, path: bp, pi: bi, burn: 0, burnt: 0, see: 0, losT: rnd() * 0.3, los: false, known: 0, shots: 0, burstN: 0, immob: false, evalT: 0, errT: 0,
-      role, grp, jn: 0, brg: dir ? brg : brgOf(bx, bz), side: rnd() < 0.5 ? -1 : 1, ph: 0, net: bn, gx: veh.x, gz: veh.z, scT: 0, shL: 0, hpL: E.hp, retT: 0, smk: 1, dsm: 0, gar: 0, gl: 0, glx: 0, glz: 0, glr: 60, tag: 0, revT: 0, stN: 0, cT: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: bx, stZ: bz, wantT: 0,
+      role, grp, jn: 0, brg: dir ? brg : brgOf(bx, bz), side: rnd() < 0.5 ? -1 : 1, ph: 0, net: bn, gx: veh.x, gz: veh.z, scT: 0, shL: 0, hpL: E.hp, retT: 0, smk: 1, dsm: 0, gar: 0, gl: 0, glx: 0, glz: 0, glr: 60, tag: 0, cam: 1, revT: 0, stN: 0, cT: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: bx, stZ: bz, wantT: 0,
       hold: type >= BUGT ? 110 + rnd() * 140 : role === RAID ? 230 + rnd() * 150 : role === FLK ? 300 + rnd() * 200 : type ? 320 + rnd() * 160 : 400 + rnd() * 250 });
     if (type === TIGRT || type >= BUGT) e.smk = 0; // no smoke dischargers on the light vehicles
     if (role === OVW && !fix) pickSpot(e, brgOf(bx, bz), 650, 1000); else if (role === OVW) { e.ox = bx; e.oz = bz; e.ph = 1; }
@@ -503,7 +503,7 @@ export function initCombat(C) {
       if (e.see >= 1) { e.known = Math.max(e.known, 12); if (e.los > 0) G.spot = true; }
       // the crew sees it (the same sight line, reversed): inside the sight's field of view or close by, within a range that shrinks at night without the thermal sight
       if (e.los > 0.2 && !veh.dead) { const rng = 1600 * (1 - (R.therm ? 0.15 : 0.6) * clamp((2 - todCur[1]) / 22, 0, 1));
-        if (d < rng && (d < 180 || Math.abs(wrap(Math.atan2(-(e.x - veh.x), -(e.z - veh.z)) - aim.yaw)) < 0.75)) e.spotT = Math.max(e.spotT, 6); }
+        if (d < rng * e.cam && (d < 180 || Math.abs(wrap(Math.atan2(-(e.x - veh.x), -(e.z - veh.z)) - aim.yaw)) < 0.75)) e.spotT = Math.max(e.spotT, 6); }
       if (G.rep > 5) e.known = Math.max(e.known, 3); // a contact report from another crew (radio delay) tells it where to look
       e.known -= dt;
       const engage = e.los > 0 && d < E.range && e.see >= 1;
@@ -940,7 +940,7 @@ export function initCombat(C) {
   function droneScan(T) {
     const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || e.dead) continue;
-      const dx = e.x - D.x, dy = e.y + 1.5 - D.y, dz = e.z - D.z, dd = Math.hypot(dx, dy, dz); if (dd > T.see || dd < 1) continue;
+      const dx = e.x - D.x, dy = e.y + 1.5 - D.y, dz = e.z - D.z, dd = Math.hypot(dx, dy, dz); if (dd > T.see * e.cam || dd < 1) continue; // (e.cam < 1: under camouflage nets, missions)
       if ((dx * fx + dy * fy + dz * fz) / dd < 0.72) continue; // about ±44°, the wide drone camera
       if (losVis(D.x, D.y, D.z, e.x, e.y + 1.5, e.z) > 0.15) e.spotT = Math.max(e.spotT, T.mark); }
     inf.scan(D.x, D.y, D.z, fx, fy, fz, T.see, T.mark);

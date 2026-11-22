@@ -9,6 +9,7 @@ const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const FROG = [-145, -451], TOWER = [-663, -1486], ARENA = [-542, 1340], VOKS = [-840, -515];
 // Holmenkollveien from the arena north to Voksenkollen station, about every 200 m: the column's waypoints (a single far goal let it cut corners over other roads and through the forest)
 const HKV = [[-569, 1457], [-484, 1275], [-372, 1107], [-402, 917], [-415, 727], [-359, 534], [-331, 336], [-319, 136], [-291, -48], [-282, -245], [-399, -360], [-595, -389], [-772, -483], VOKS];
+const CPS = [[672, -644], [771, -997], [548, -1308], [364, 274]]; // command post sites on the eastern forest road (road 23)
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
 // Every mission: id (URL ?m=), name, card (start screen), brief (briefing card), lvl (stands in for the wave number: cope cages from 3),
@@ -68,15 +69,16 @@ export const MISSIONS = [
         ev: [[15, (m) => m.air(2, 0.3)], [45, (m) => m.air(0, 0.5)], [80, (m) => m.air(1, 0)], [120, (m) => m.air(0, 1.4)]],
         done: (m) => m.left(3) === 0 }] },
 
-  { id: 'cp', name: 'Find the command post', card: 'A hidden command post directs artillery at you. Find it with the drone and destroy it.', lvl: 3, tod: 2, arty: 2, start: FROG,
-    brief: 'An enemy command post somewhere in the forest east of Frognerseteren is directing artillery, and it knows roughly where you are: keep moving.\n\nFind it — the recon drone (Z picks the type) sees far — then destroy its command vehicle and both Kornet carriers. You have two fire missions.',
+  { id: 'cp', name: 'Find the command post', card: 'A camouflaged command post directs artillery at you. Search the forest with the drone and destroy it.', lvl: 3, tod: 2, arty: 2, start: FROG,
+    brief: 'An enemy command post somewhere in the forest east of Frognerseteren is directing artillery, and it knows roughly where you are: keep moving.\n\nIt stands under camouflage nets on one of the forest roads, in a different place every time: a drone has to pass within about 350 m to make it out, so search the area road by road with the recon drone (Z picks the type). Then destroy its command vehicle and both Kornet carriers. You have two fire missions.',
     stages: [
-      { t: 'Find the command post in the eastern forest', zone: [560, -560, 450, FIND], on(m) {
-        m.veh(BTR, ASL, 672, -644, { tag: 2, gar: 1 }); m.veh(TIGR, OVW, 700, -720, { tag: 2, gar: 1 }); m.veh(TIGR, OVW, 660, -560, { tag: 2, gar: 1 });
-        m.veh(T72, OVW, 642, -265, { gar: 1 }); m.veh(BMP, ASL, 779, -798, { gar: 1 }); m.atgm(690, -660); m.rpg(600, -380, 2); m.mines(570, -108); },
+      { t: 'Find the command post in the eastern forest', zone: [480, -480, 1000, FIND], on(m) { // one of four sites along the forest road, under nets: a drone or the crew sees its vehicles only from about 350 m
+        const s = CPS[m.pick(CPS.length)], x = s[0], z = s[1], o = { tag: 2, gar: 1, cam: 0.24 }; m.site(x, z);
+        m.veh(BTR, ASL, x, z, { ...o, k: 0 }); m.veh(TIGR, OVW, x, z, { ...o, k: 4 }); m.veh(TIGR, OVW, x, z, { ...o, k: 9 });
+        m.veh(T72, OVW, x - 40, z + 230, { gar: 1, cam: 0.4 }); m.veh(BMP, ASL, x, z, { gar: 1, cam: 0.4, k: 15 }); m.atgm(x + 25, z - 25); m.rpg(x - 60, z + 170, 2); m.mines(x * 0.6 + FROG[0] * 0.4, z * 0.6 + FROG[1] * 0.4); },
         ev: [[60, (m) => m.shell()], [150, (m) => m.shell()], [240, (m) => m.shell()], [330, (m) => m.shell()], [420, (m) => m.shell()], [510, (m) => m.shell()]],
         done: (m) => m.seen(2) },
-      { t: 'Destroy the command vehicle and the Kornet carriers', zone: [672, -644, 160, ATK], cnt: 2, on(m) { m.say('Command post found — destroy its three vehicles'); },
+      { t: 'Destroy the command vehicle and the Kornet carriers', zone: [672, -644, 160, ATK], cnt: 2, on(m) { m.zone(m.sx, m.sz, 160, ATK); m.say('Command post found — destroy its three vehicles'); },
         ev: [[50, (m) => m.shell()], [140, (m) => m.shell()], [230, (m) => m.shell()], [320, (m) => m.shell()]],
         done: (m) => m.left(2) === 0 }] },
 
@@ -117,13 +119,13 @@ export function initMissions(C, G, h) {
     RP[0] = x; RP[1] = z; return false;
   }
   const api = {
-    // one vehicle: road-bound types stand on the nearest road, the others on open ground; o: tag, gar (garrison), goal [x, z] (drives there, not at the tank) or via (a list of such points, driven in order), glr, hold, k (place in a column), step
+    // one vehicle: road-bound types stand on the nearest road, the others on open ground; o: tag, gar (garrison), cam (camouflage: the factor on the range at which a drone or the crew makes it out), goal [x, z] (drives there, not at the tank) or via (a list of such points, driven in order), glr, hold, k (place in a column), step
     veh(type, role, x, z, o = {}) {
       const T = G.ETYPE[type], g = o.via ? o.via[0] : o.goal; let tx = g ? g[0] : veh.x, tz = g ? g[1] : veh.z, yaw;
       if ((T.road || o.k !== undefined) && routePt(x, z, 90, o.k || 0, false, o.step)) { const s = (tx - RP[0]) * RP[2] + (tz - RP[1]) * RP[3] < 0 ? -1 : 1; yaw = Math.atan2(-RP[2] * s, -RP[3] * s); }
       else { openPt(x, z, T.road ? 45 : 110); yaw = Math.atan2(-(tx - RP[0]), -(tz - RP[1])); }
       if (!G.spawn(type, role, NaN, -1, RP[0], RP[1], yaw)) return null;
-      const e = G.lastSpawn; e.tag = o.tag || 1; e.gar = o.gar ? 1 : 0; if (o.hold !== undefined) e.hold = o.hold;
+      const e = G.lastSpawn; e.tag = o.tag || 1; e.gar = o.gar ? 1 : 0; e.cam = o.cam || 1; if (o.hold !== undefined) e.hold = o.hold;
       e.via = o.via || null; e.wp = 0; e.vr = o.glr || 60;
       if (g) { e.gl = 1; e.glx = e.gx = g[0]; e.glz = e.gz = g[1]; e.glr = o.via ? 0 : e.vr; }
       return e;
@@ -137,6 +139,9 @@ export function initMissions(C, G, h) {
     air(type, brg) { G.airSpawn(type, brg); }, // 0 FPV, 1 Lancet, 2 Orlan; bearing from the tank
     shell() { if (G.arty && !G.arty.n && !veh.dead) G.arty.call(veh.x, veh.z, 'crew'); }, // the command post calls a barrage on where the tank is now
     say(t) { ui.toast(t); },
+    pick(n) { return X.force >= 0 ? X.force % n : Math.min(n - 1, (rnd() * n) | 0); }, // a random variant (X.force: tests)
+    site(x, z) { M.px = x; M.pz = z; }, get sx() { return M.px; }, get sz() { return M.pz; },
+    zone(x, z, r, k) { M.zx = x; M.zz = z; M.zr = r; M.zk = k; key = -1; },
     left(tag) { let n = 0; for (let i = 0; i < E.length; i++) { const e = E[i]; if (e.on && !e.dead && e.tag === tag) n++; } return n; },
     seen(tag) { for (let i = 0; i < E.length; i++) { const e = E[i]; if (e.on && e.tag === tag && e.seen) return true; } return false; },
     inZone() { return M.zk >= 0 && Math.hypot(veh.x - M.zx, veh.z - M.zz) < M.zr; },
@@ -221,7 +226,7 @@ export function initMissions(C, G, h) {
   ui.show('obj', false);
   const up0 = G.update; G.update = (dt) => { up0(dt); update(dt); };
   const rs0 = G.restart; G.restart = () => { rs0(); begin(); };
-  const X = { M, list: MISSIONS, api, best: () => best, begin,
+  const X = { M, list: MISSIONS, api, best: () => best, begin, force: -1,
     set(id) { M.i = MISSIONS.findIndex((m) => m.id === id); M.cur = M.i >= 0 ? MISSIONS[M.i] : null; return !!M.cur; },
     id: () => (M.cur ? M.cur.id : '') };
   return X;
