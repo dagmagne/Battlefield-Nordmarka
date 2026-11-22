@@ -24,7 +24,7 @@ export const ATYPE = [{ name: 'FPV drone', hp: 1, v: 28, vd: 38, alt: 28, r: 0.6
   { name: 'Lancet', hp: 2, v: 45, vd: 68, alt: 110, r: 0.8, d0: 40, d1: 55, see: 750, warn: 420, bat: 220, pc: 0.45, score: 40 },
   { name: 'Orlan-10', hp: 4, v: 27, vd: 27, alt: 180, r: 1.7, d0: 0, d1: 0, see: 900, warn: 1400, bat: 1e9, pc: 0, score: 60 }];
 const HMG_RATE = 20; // hatch MG3 rounds per second (shares the 7.62 belt with the coax)
-const RELOAD = 6, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
+const RELOAD = 4, MGV = 820, SN = 96, SS = 10, GRAV = 9.81, WAVES = 6;
 // shell types: 0 APFSDS, 1 HEAT, 2 HE, 3 coax MG, 4 enemy 125 mm, 5 enemy 30 mm, 6 smoke grenade, 7 VOG grenade dropped from the bomber, 8 enemy Kornet ATGM (wire-guided), 9 enemy MG, 10 enemy 152 mm artillery (src/arty.js), 11 own 155 mm artillery (src/support.js), 12 enemy RPG rocket (src/infantry.js)
 const TRACE = [[34, 27, 14, 0.5, 7], [34, 17, 6, 0.5, 6], [34, 17, 6, 0.5, 6], [16, 4.5, 1.6, 0.22, 3], [9, 34, 11, 0.5, 7], [8, 24, 8, 0.3, 4], [0, 0, 0, 0, 0], [3, 2.4, 1.5, 0.1, 1], [18, 9, 3, 0.14, 5], [14, 5, 1.5, 0.18, 3], [12, 8, 4.5, 0.32, 6], [30, 16, 6, 0.55, 8], [26, 14, 5, 0.3, 4]];
 const BDMG = [20, 45, 70, 0, 35, 3, 0, 25, 40, 0, 120, 120, 25]; // direct-hit damage to a building by shell type (the drone charge does 100)
