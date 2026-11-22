@@ -3,6 +3,7 @@ struct ObjU { parts: array<mat4x4f, 8>, tr: vec4f };
 struct Def { wp: vec3f, n: vec3f, lp: vec3f };
 fn objDeform(pos: vec3f, nrm: vec3f, cm: vec4f, up: vec4f) -> Def {
   var lp = pos; var ln = nrm;
+  if (up.x < -7.5 && up.x > -8.5 && OB.tr.z > 0.0) { lp = vec3f(0.0); } // riders baked into a vehicle (uv.x = -8, bikes.js) are not drawn on its wreck: they lie beside it as bodies
   if (cm.w > 7.5 && cm.w < 8.5) {
     // track link: pos = (x, along, outward) at loop position up.x on the loop of vehicle type up.w. TRKL (loop lengths) and TRKT (two vec4
     // per segment: start s, radius (0 = straight), start angle | point or centre y z, outward y z) come from gear.js, in front of this file

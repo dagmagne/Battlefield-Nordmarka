@@ -147,6 +147,7 @@ export function initCombat(C) {
     e.dead = true; e.hp = 0; e.burn = 0.01; e.state = 3; e.v = 0; e.seen = true; e.lx = e.x; e.lz = e.z; G.kills++; G.score += ETYPE[e.type].score; hudDirty = true;
     explode(e.x, e.y + 1.4, e.z, 2.4); explode(e.x, e.y + 0.4, e.z, 1.2);
     if (e.type === 0 && rnd() < 0.45) e.tlV = 7 + rnd() * 5; // ammunition cook-off throws the turret
+    if (e.type >= BUGT && inf) inf.bodies(e.x, e.z, e.yaw, e.type === BUGT ? 3 : 2); // open vehicles: the crew lies beside the wreck (the riders in the mesh are hidden on a wreck)
     ui.toast(ETYPE[e.type].name + ' destroyed'); R.hitT = 0.6;
   }
   function hurtPlayer(d, fc, low) {

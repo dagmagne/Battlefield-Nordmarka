@@ -330,6 +330,10 @@ export function initInfantry(C, G, h) {
     if (plan === 'ATGM ambush' || w === 6 || (w >= 4 && rnd() < 0.3)) placeATGM(ax + (rnd() - 0.5) * 0.8);
     return made;
   }
+  // the crew of a destroyed buggy or motorcycle: n bodies thrown clear beside the wreck (no score: the vehicle was the kill)
+  function bodies(x, z, yaw, n) { const q = squad(QDIS); if (q < 0) return;
+    for (let k = 0; k < n; k++) { const a = yaw + (k & 1 ? 1.6 : -1.6) + (rnd() - 0.5) * 0.6 + (k >> 1) * 1.1, r = 1.6 + rnd() * 1.2 + (k >> 1) * 0.8, i = soldier(q, RIF, x + Math.sin(a) * r, z + Math.cos(a) * r, rnd() * 6.283); if (i < 0) return;
+      const o = i * 8; d[o + 7] = 2; d[o + 4] = 6; d[o + 5] = 0; SEEN[i] = 1; SPT[i] = 8; } }
   function reset() { d.fill(0); I.n = 0; QK.fill(-1); QB.fill(-1); I.kills = 0; I.rockets = 0; I.atgms = 0; I.bursts = 0; I.drawn = 0; lastState = 0; }
   const ROLE = { rifle: RIF, rpg: RPG, atgm: ATG, loader: LDR };
   // tests: one soldier (a squad of his own) at (x, z); in building b (house team position) when given
@@ -341,5 +345,5 @@ export function initInfantry(C, G, h) {
   // tests: kind 'rpg' (house b, or forest at x, z), 'atgm', 'dis' (dismounts from enemy e), 'auto-rpg' (placeRPG on the axis)
   G.infSquad = (kind, x, z, n, b) => kind === 'rpg' ? (b >= 0 ? houseTeam(b, n || 2) : fieldTeam(x, z, n || 2)) : kind === 'atgm' ? atgmTeam(x, z) : kind === 'dis' ? dismount(x, n || 5) : kind === 'auto-rpg' ? placeRPG(x) : kind === 'auto-atgm' ? placeATGM(x) : -1;
   I.kill = kill; I.flee = flee; I.reset = reset; I.tx = TX; I.tz = TZ; I.mt = MT; I.ex = EX; I.ey = EY; I.ez = EZ;
-  return { update, seg, aimHit, blast, onBld, trail, lpos, map, scan, wave, reset, hitKill: (by) => { if (I.hi >= 0) kill(I.hi, by); } };
+  return { update, seg, aimHit, blast, onBld, trail, lpos, map, scan, wave, reset, bodies, hitKill: (by) => { if (I.hi >= 0) kill(I.hi, by); } };
 }
