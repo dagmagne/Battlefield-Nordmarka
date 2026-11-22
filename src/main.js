@@ -23,6 +23,7 @@ const objDefW = TRACK_WGSL + objDefW0; // the track loop tables (gear.js) in fro
 import { initCombat, MAXE, MAXG, MAXM, MAXA, MAXI } from './combat.js';
 import { initMissions, MISSIONS } from './missions.js';
 import { buildNet } from './net.js';
+import { initLang, tr, trPage } from './lang.js';
 import { buildSoldier, initSoldiers, IST, WALK_V, RUN_V } from './soldier.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
@@ -38,6 +39,7 @@ import TITLE from './data/title.webp';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
+const lang = initLang(qs); trPage(document); // language first: the start screen is already on the page
 // title screen art and music (the music button works before the game has loaded; the in-game one goes through api.music)
 $('load').style.backgroundImage = `linear-gradient(180deg,#0b142099 0%,#0b142000 30%,#0b142000 50%,#0b1420e6 100%),url(data:image/webp;base64,${TITLE})`;
 const music = initMusic(qs);
@@ -109,7 +111,7 @@ async function main() {
   if (!wsel) { const P = $('pick'); P.style.display = 'block'; $('bar').style.display = $('msg').style.display = 'none';
     let best = {}; try { best = JSON.parse(localStorage.gmsn || '{}') || {}; } catch (e) { /* ignore */ }
     const g1 = $('pg1'), back = g1.firstChild; MISSIONS.forEach((m, i) => { const b = document.createElement('button'), s = best[m.id]; b.dataset.m = m.id; b.dataset.w = 'frogner';
-      b.innerHTML = `<b>${i + 1} · ${m.name}</b><span>${m.card}</span>` + (s > 0 ? `<i>✓ best ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</i>` : ''); g1.insertBefore(b, back); });
+      b.innerHTML = `<b>${i + 1} · ${tr(m.name)}</b><span>${tr(m.card)}</span>` + (s > 0 ? `<i>✓ ${tr('best ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'))}</i>` : ''); g1.insertBefore(b, back); });
     const r = await new Promise((res) => { P.onclick = (e) => { const b = e.target.closest && e.target.closest('button'); if (!b) return;
       if (b.dataset.go) { for (const g of P.children) g.classList.toggle('on', g.id === b.dataset.go); return; } res(b.dataset); }; });
     wsel = r.w; msel = r.m || ''; pickPeace = r.p === '1'; try { localStorage.gpeace = pickPeace ? '1' : '0'; } catch (e) { /* ignore */ }
@@ -599,6 +601,7 @@ async function main() {
     net() { if (R.game) R.game.netKey(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
     restart() { treesRestore(); if (R.game) R.game.restart(); },
+    lang(v) { if (v === lang) return; try { localStorage.glang = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('lang'); location.href = u.href; }, // English or Norwegian: stored, applied by a reload
     mission(id) { if (msn.set(id) && game.peace) game.peace = false; api.restart(); }, // '' = the defence waves
     snow(v) { R.snow = v === undefined ? 1 - R.snow : v; ui.toast(R.snow ? 'Snowfall on' : 'Snowfall off'); },
     tod(i) { if (i < 0) i = (todIndex + 1) % 4; setTod(i); tshDirty = 2; ui.toast(TODN[i]); },
@@ -614,7 +617,7 @@ async function main() {
     },
     vib(v) { R.hap.setLevel(v); try { localStorage.gvib = String(v); } catch (e) { /* ignore */ } ui.toast(['Vibration off', 'Vibration light', 'Vibration full'][v]); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, peace: game.peace, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
+    state: () => ({ lang, quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, peace: game.peace, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);

@@ -1,9 +1,10 @@
 // Input (keyboard, mouse, touch) and DOM UI. All state lives in `inp`; nothing here allocates per frame.
+import { tr } from './lang.js';
 const $ = (id) => document.getElementById(id);
 export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, yawR: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, aa: false, sight: false };
 const keys = new Set();
 const SPD = []; for (let i = 0; i < 200; i++) SPD.push(String(i));
-const CAMN = ['CMDR', 'SIGHT', '', 'FLY', 'DRONE'];
+const CAMN = ['CMDR', 'SIGHT', '', 'FLY', 'DRONE']; // (translated once in initUI)
 const RNG = []; for (let i = 0; i <= 400; i++) RNG.push(i * 10 + ' m');
 
 export function initUI(api, isTouch) {
@@ -13,9 +14,17 @@ export function initUI(api, isTouch) {
   const modalOpen = () => $('help').classList.contains('show') || $('menu').classList.contains('show');
   const showHelp = (v) => { $('help').classList.toggle('show', v); if (!v) { try { localStorage.setItem('hint1', '1'); } catch (e) { /* private mode */ } } };
   const showMenu = (v) => { $('menu').classList.toggle('show', v); if (v) syncMenu(); };
-  let toastT = 0;
-  const toast = (m) => { const t = $('toast'); t.textContent = m; t.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => { t.style.opacity = 0; }, 1400); };
-  const U = { toast, showHelp, showMenu, dbgOn: false };
+  for (let i = 0; i < CAMN.length; i++) CAMN[i] = tr(CAMN[i]);
+  // Messages (rare events, so this may allocate). A message stays 2.5 s plus 55 ms per character (at most 9 s), so a long one can be
+  // read. A new one does not wipe one that has been up for less than 1.5 s: it waits its turn (a queue of 3, the oldest dropped);
+  // a warning (one with an exclamation mark) is shown at once.
+  let toastT = 0, tUp = 0, tQT = 0; const tQ = [];
+  const tShow = (m) => { const t = $('toast'); t.textContent = m; t.style.opacity = 1; tUp = performance.now(); clearTimeout(toastT); toastT = setTimeout(() => { t.style.opacity = 0; tUp = 0; }, Math.min(9000, 2500 + 55 * m.length)); };
+  const tPump = () => { tQT = 0; if (!tQ.length) return; const w = tUp ? 1500 - (performance.now() - tUp) : 0; if (w > 0) { tQT = setTimeout(tPump, w); return; } tShow(tQ.shift()); if (tQ.length) tQT = setTimeout(tPump, 1500); };
+  const toast = (m0) => { if (!m0) return; const m = tr(m0), now = performance.now();
+    if (tUp && now - tUp < 1500 && m0.indexOf('!') < 0) { if (tQ.length >= 3) tQ.shift(); tQ.push(m); if (!tQT) tQT = setTimeout(tPump, 1500 - (now - tUp)); return; }
+    tShow(m); };
+  const U = { toast, showHelp, showMenu, dbgOn: false, tr };
 
   // ---- keyboard ----
   addEventListener('keydown', (e) => {
@@ -124,12 +133,12 @@ export function initUI(api, isTouch) {
   const hold = (id, v) => { const b = $(id); const set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); inp.holdY = on ? v : 0; b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   inp.holdY = 0; hold('bUp', 1); hold('bDn', -1);
   const seg = (id, fn) => { $(id).addEventListener('click', (e) => { const v = e.target.dataset && e.target.dataset.v; if (v !== undefined) { fn(v); syncMenu(); } }); };
-  seg('mQ', (v) => api.quality(v)); seg('mD', (v) => api.tod(+v)); seg('mN', (v) => api.snow(+v)); seg('mS', (v) => api.sound(+v)); seg('mU', (v) => api.music(+v)); seg('mP', (v) => api.peace(+v)); seg('mR', (v) => api.drs(+v)); seg('mF', (v) => api.trees(v)); seg('mB', (v) => api.debug(+v)); seg('mV', (v) => api.vib(+v));
+  seg('mQ', (v) => api.quality(v)); seg('mD', (v) => api.tod(+v)); seg('mN', (v) => api.snow(+v)); seg('mS', (v) => api.sound(+v)); seg('mU', (v) => api.music(+v)); seg('mP', (v) => api.peace(+v)); seg('mR', (v) => api.drs(+v)); seg('mF', (v) => api.trees(v)); seg('mB', (v) => api.debug(+v)); seg('mV', (v) => api.vib(+v)); seg('mL', (v) => api.lang(v));
   for (const m of ['help', 'menu']) $(m).addEventListener('pointerdown', (e) => { if (e.target === $(m)) { showHelp(false); showMenu(false); } });
   function syncMenu() {
     const s = api.state();
     const mark = (id, v) => { for (const b of $(id).children) b.classList.toggle('on', b.dataset.v === String(v)); };
-    mark('mQ', s.quality); mark('mD', s.tod); mark('mN', s.snow ? 1 : 0); mark('mS', s.sound ? 1 : 0); mark('mU', s.music ? 1 : 0); mark('mP', s.peace ? 1 : 0); mark('mR', s.drs ? 1 : 0); mark('mF', s.trees); mark('mB', s.debug ? 1 : 0); mark('mV', s.vib);
+    mark('mQ', s.quality); mark('mD', s.tod); mark('mN', s.snow ? 1 : 0); mark('mS', s.sound ? 1 : 0); mark('mU', s.music ? 1 : 0); mark('mP', s.peace ? 1 : 0); mark('mR', s.drs ? 1 : 0); mark('mF', s.trees); mark('mB', s.debug ? 1 : 0); mark('mV', s.vib); mark('mL', s.lang);
     $('mI').textContent = s.info;
   }
 
@@ -145,7 +154,7 @@ export function initUI(api, isTouch) {
   // Hold to confirm (pad only): ✕ drone, ○ artillery and □ camouflage net act after a 1 s hold (hK = the button index + 1). The ring round the crosshair fills by a CSS
   // animation that starts when #hold is shown, so nothing is written to the DOM while it fills.
   const HOLD_MS = 1000; let hK = 0, hT = 0;
-  const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = text; $('hold').classList.add('show'); };
+  const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = tr(text); $('hold').classList.add('show'); };
   const holdEnd = () => { if (hK) { hK = 0; $('hold').classList.remove('show'); } };
   const pollPad = (fly) => {
     gTh = gSt = gX = gZ = gY = 0; gFire = gMg = gAA = gSight = false; inp.yawR = 0;
@@ -200,13 +209,13 @@ export function initUI(api, isTouch) {
   U.hud = (kmh, camMode, range) => {
     if (kmh !== lSpd) { lSpd = kmh; $('spd').textContent = SPD[kmh] || '199'; }
     if (range !== lR) { lR = range; $('rng').textContent = RNG[range / 10] || '4000+ m'; }
-    if (camMode !== lC) { lC = camMode; $('sC').textContent = CAMN[camMode]; document.body.classList.toggle('flying', camMode === 3); document.body.classList.toggle('droning', camMode === 4); tFire = false; $('joyhint').textContent = camMode >= 3 ? 'FLY' : 'DRIVE'; }
+    if (camMode !== lC) { lC = camMode; $('sC').textContent = CAMN[camMode]; document.body.classList.toggle('flying', camMode === 3); document.body.classList.toggle('droning', camMode === 4); tFire = false; $('joyhint').textContent = tr(camMode >= 3 ? 'FLY' : 'DRIVE'); }
   };
   // rare game-state updates (ammo, hull, wave): only called when something changes
-  U.set = (id, text, cls) => { const e = $(id); e.textContent = text; if (cls !== undefined) e.className = cls; };
+  U.set = (id, text, cls) => { const e = $(id); e.textContent = tr(text); if (cls !== undefined) e.className = cls; };
   U.show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
   // drone buttons (rare): the DRONE button names the selected type; in flight the action button reads BOOM (FPV), DROP (bomber) or is hidden (recon)
-  U.droneUI = (name, flying) => { $('bXl').textContent = name; $('bBl').textContent = flying === 1 ? 'DROP' : 'BOOM'; $('bB').style.visibility = flying === 2 ? 'hidden' : ''; };
+  U.droneUI = (name, flying) => { $('bXl').textContent = tr(name); $('bBl').textContent = tr(flying === 1 ? 'DROP' : 'BOOM'); $('bB').style.visibility = flying === 2 ? 'hidden' : ''; };
   // drone OSD (rare writes: at most every 0.15 s and only for the corners whose text changed). mode 0 off, 1 analog FPV goggles, 2 digital DJI-style.
   // o: [type, zoom, signal %, seconds left, battery %, speed m/s ×10, height m, distance m, bearing to the tank (0..7, 0 = ahead), grenades]
   const OSDA = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'], OSDN = ['FPV', 'BOMB', 'RECON'], oL = new Float32Array(10).fill(-1); let oM = -1, oT = 0;
@@ -233,7 +242,7 @@ export function initUI(api, isTouch) {
   const cardGo = () => { if (goFn) goFn(); else api.restart(); }, cardAlt = () => { if (altFn) altFn(); else api.restart(); };
   U.card = (o) => { overCont = !!(o && o.cont); $('over').classList.toggle('show', !!o); if (!o) return;
     goFn = o.goFn || null; altFn = o.altFn || null; altOn = !!o.alt; cardKeys = !!o.keys;
-    $('ovT').textContent = o.title; $('ovP').textContent = o.text; $('ovGo').textContent = o.go || 'Restart (R)'; $('ovAlt').textContent = o.alt || ''; $('ovAlt').style.display = altOn ? '' : 'none';
+    $('ovT').textContent = tr(o.title); $('ovP').textContent = tr(o.text); $('ovGo').textContent = tr(o.go || 'Restart (R)'); $('ovAlt').textContent = tr(o.alt || ''); $('ovAlt').style.display = altOn ? '' : 'none';
     if (document.pointerLockElement) document.exitPointerLock(); };
   U.over = (title, text, cont) => U.card(title ? { title, text, cont } : null);
   U.cardOpen = () => $('over').classList.contains('show');

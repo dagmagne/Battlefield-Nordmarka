@@ -108,7 +108,7 @@ kbd{margin:0 1px}
 #hold.show .hf{animation:hfill 1s linear forwards}
 @keyframes hfill{to{stroke-dashoffset:0}}
 #holdT{position:absolute;left:50%;top:94px;transform:translateX(-50%);white-space:nowrap;padding:4px 11px;font-weight:650;font-size:12px;letter-spacing:.06em}
-#toast{left:50%;top:calc(var(--st) + 60px);transform:translateX(-50%);padding:7px 14px;font-weight:600;opacity:0;transition:opacity .25s}
+#toast{left:50%;top:calc(var(--st) + 60px);transform:translateX(-50%);padding:7px 14px;font-weight:600;opacity:0;transition:opacity .25s;max-width:min(760px,84vw);text-align:center}
 #keys,#padk,#padd{left:var(--sl);bottom:var(--sb);padding:6px 11px;font-size:11.5px;opacity:.92}
 #padk,#padd,.pad #keys,.pad.droning #padk{display:none}
 .pad #padk,.pad.droning #padd{display:block}
@@ -212,6 +212,7 @@ kbd{margin:0 1px}
   </div></div>
   <div id="menu" class="modal"><div class="card pill">
     <h2>Settings</h2>
+    <div class="row"><span>Language <span class="note">(reloads)</span></span><div class="seg" id="mL"><button data-v="en">English</button><button data-v="no">Norsk</button></div></div>
     <div class="row"><span>Quality <span class="note">(reloads)</span></span><div class="seg" id="mQ"><button data-v="auto">Auto</button><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button><button data-v="ultra">Ultra</button></div></div>
     <div class="row"><span>Time of day</span><div class="seg" id="mD"><button data-v="0">Midday</button><button data-v="1">Golden</button><button data-v="2">Blue hour</button><button data-v="3">Night</button></div></div>
     <div class="row"><span>Snowfall</span><div class="seg" id="mN"><button data-v="0">Off</button><button data-v="1">On</button></div></div>

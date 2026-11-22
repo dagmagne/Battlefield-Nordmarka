@@ -634,7 +634,7 @@ export function initCombat(C) {
     c.setTransform(1, 0, 0, 1, 0, 0); bm.rect(c, BCX - BEXT, BCZ - BEXT, 2 * BEXT, bPx, bPx);
     c.setTransform(bPx / bCss, 0, 0, bPx / bCss, 0, 0);
     markers(c, bCss, sc, cx, BCX, BCZ, BEXT, clamp(bCss / 380, 1.2, 2.6)); // markers scale with the view's CSS size
-    c.font = '600 13px system-ui, sans-serif'; c.fillStyle = '#0b1420c8'; c.fillRect(6, bCss - 32, 212, 24); c.fillStyle = '#ffffffd0'; c.fillText('MAP  ·  Tab or tap to close', 14, bCss - 15);
+    c.font = '600 13px system-ui, sans-serif'; c.fillStyle = '#0b1420c8'; c.fillRect(6, bCss - 32, 212, 24); c.fillStyle = '#ffffffd0'; c.fillText(ui.tr ? ui.tr('MAP  ·  Tab or tap to close') : 'MAP  ·  Tab or tap to close', 14, bCss - 15);
     c.fillStyle = '#ffffffb0'; c.fillRect(12, 14, 500 * sc, 3); c.fillText('500 m', 16 + 500 * sc, 20); // scale bar
   }
 
