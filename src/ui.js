@@ -33,6 +33,7 @@ export function initUI(api, isTouch) {
     else if (c === 'KeyM') api.sound();
     else if (c === 'KeyU') api.music();
     else if (c === 'KeyG') api.smoke();
+    else if (c === 'KeyK') api.net();
     else if (c === 'KeyX') api.drone();
     else if (c === 'KeyZ') api.droneType();
     else if (c === 'KeyB') api.arty();
@@ -101,7 +102,7 @@ export function initUI(api, isTouch) {
   for (const id of ['map', 'bmap']) { const m = $(id); m.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); m.addEventListener('click', (e) => { e.stopPropagation(); api.bigMap(id === 'map'); }); }
   // ---- buttons ----
   const btn = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); b.blur(); }); };
-  btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bY', () => api.droneType()); btn('bR', api.drone); btn('bA', api.arty); btn('bA2', api.arty);
+  btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bN', api.net); btn('bX', api.drone); btn('bY', () => api.droneType()); btn('bR', api.drone); btn('bA', api.arty); btn('bA2', api.arty);
   // hold buttons: FIRE (tank), BOOM (drone) and the coax MG
   const holdBtn = (id, fn) => { const b = $(id), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); fn(on); b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true)); btn('bMu', () => api.music());
@@ -135,6 +136,7 @@ export function initUI(api, isTouch) {
   // ---- gamepad (standard mapping: DualShock/DualSense over Bluetooth) ----
   // Only polled while a pad is connected; buttons are edge-detected through a preallocated array.
   let padN = 0; const pb = new Uint8Array(20);
+  U.netUI = (s) => { const b = $('bN'); b.classList.toggle('on', s === 2); b.style.opacity = s === 1 ? 0.6 : ''; }; // touch NET button: rigging (dim), up (green)
   addEventListener('gamepadconnected', () => { padN++; });
   addEventListener('gamepaddisconnected', () => { padN = Math.max(0, padN - 1); });
   const PADT = [2, 4, 10, 12, 13, 14, 15]; // buttons only the tank uses
@@ -151,7 +153,7 @@ export function initUI(api, isTouch) {
     const gl = navigator.getGamepads();
     let g = null; for (let i = 0; i < gl.length; i++) if (gl[i] && gl[i].connected) { g = gl[i]; break; }
     U.pad = g; if (!g) { holdEnd(); return; }
-    const b = g.buttons, ax = g.axes, n = Math.min(b.length, 16);
+    const b = g.buttons, ax = g.axes, n = Math.min(b.length, 18);
     const down = (i) => i < n && b[i].pressed;
     const press = (i) => { const d = down(i); const e = d && !pb[i]; pb[i] = d ? 1 : 0; return e; };
     const bv = (i) => (i < n ? b[i].value : 0);
@@ -172,7 +174,7 @@ export function initUI(api, isTouch) {
       for (let j = 0; j < PADT.length; j++) pb[PADT[j]] = down(PADT[j]) ? 1 : 0; // tank-only buttons: track them so a press in flight does not fire on return
       return;
     }
-    if (press(4)) api.smoke(); if (press(2)) api.ammo(-1); if (press(10)) api.cam();
+    if (press(4)) api.smoke(); if (press(2)) api.ammo(-1); if (press(10)) api.cam(); if (press(17)) api.net(); // (17: the touchpad click)
     if (press(12)) inp.zoom -= 0.35; if (press(13)) inp.zoom += 0.35; // sight magnification (commander view: camera distance)
     if (press(14)) api.droneType(-2); if (press(15)) api.droneType(-1);
     gSight = bv(6) > 0.5; gMg = bv(5) > 0.5; gAA = bv(11) > 0.5;

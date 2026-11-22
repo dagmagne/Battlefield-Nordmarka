@@ -44,6 +44,7 @@ const T72T = 0, BMPT = 1, TIGRT = 2, BTRT = 3, BUGT = 4, MOTOT = 5;
 // spotting: e.see grows at vis·sig/(1+(d/SEE_R)²)·cue − SEE_FLOOR per second; 1 = detected (turret on, engages), the first shot needs 1 + d/1000.
 // vis: line-of-sight transmittance (foliage optical depth: one e-fold per FOL_L m of full canopy, blocked below 0.1);
 // sig: how conspicuous the Leopard is (moving, firing, concealed under canopy, darkness vs. the sight: night = loss without a muzzle flash).
+const NET_T = 8, NETK = 0.35; // camouflage net: seconds to rig it; the factor on the tank's signature for an observer that has not detected it yet
 const SEE_R = 700, SEE_FLOOR = 0.12, FOL_L = 14, FOL_MAX = 255 * FOL_L * 2.3;
 
 export function initCombat(C) {
@@ -61,7 +62,7 @@ export function initCombat(C) {
     role: 0, grp: -1, brg: 0, side: 1, ph: 0, gx: 0, gz: 0, net: 0, hold: 500, ox: 0, oz: 0, scT: 0, sx: 0, sz: 0, shL: 0, hpL: 0, retT: 0, smk: 0, revT: 0, rvD: -1, stN: 0, cT: 0, cnx: 0, cnz: 0, noRt: 0, idleT: 0, noLos: 0, phT: 0, stT: 0, stX: 0, stZ: 0, wantT: 0, tgt: 0, st: 0, tax: 0, taz: 0, tcT: 0, fa: 0, faT: 0, cage: false, spotT: 0, seen: false, lostT: 0, lx: 0, lz: 0 }); // spotT: seconds left as a fresh contact on the map; lx/lz: last known position
   const AIR = []; for (let i = 0; i < MAXA; i++) AIR.push({ on: false, type: 0, st: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, roll: 0, tp: 0, tr: 0, spin: 0, hp: 0, t: 0, chk: 0, tx: 0, tz: 0, ang: 0, warned: false, seen: false, d: C.aobj ? C.aobj[i] : new Float32Array(132) });
   // infantry (phase 6), read by the soldier renderer: n = slots in use; per soldier 8 floats [x, y, z, yaw, pose, phase, aim, state]
-  G.air = AIR; G.thr = new Float32Array(4); G.orlan = 0; // HUD threat arrows (angle, strength) ×2; seconds an Orlan has held the player in view
+  G.air = AIR; G.thr = new Float32Array(4); G.orlan = 0; G.net = 0; G.netOn = false; // HUD threat arrows (angle, strength) ×2; seconds an Orlan has held the player in view
   const AQT = new Float32Array(6), AQY = new Int8Array(6).fill(-1), AQB = new Float32Array(6); // this wave's air raids: time, type, bearing
   // pending spawns of the current wave (staggered groups, reinforcements): preallocated, filled by planWave on a wave start
   const PQ = []; for (let i = 0; i < PQN; i++) PQ.push({ t: 0, trig: -1, type: 0, role: 0, brg: 0, grp: 0, ann: 0 });
@@ -497,7 +498,7 @@ export function initCombat(C) {
       // perception (staggered line-of-sight checks)
       e.losT -= dt;
       if (e.losT <= 0) { e.losT = 0.28; e.los = !veh.dead && d < 2200 ? losVis(e.x, e.y + 2.2, e.z, veh.x, veh.y + 1.9, veh.z) : 0; }
-      if (e.los > 0) e.see = Math.min(4, e.see + (e.los * playerSig(E) / (1 + d * d / (SEE_R * SEE_R)) * (e.known > 0 ? 1.6 : 1) - SEE_FLOOR) * dt);
+      if (e.los > 0) e.see = Math.min(4, e.see + (e.los * playerSig(E) * (G.net >= 1 && e.see < 1 ? NETK : 1) / (1 + d * d / (SEE_R * SEE_R)) * (e.known > 0 ? 1.6 : 1) - SEE_FLOOR) * dt);
       else e.see -= 0.5 * dt;
       if (e.see < 0) e.see = 0;
       if (e.see >= 1) { e.known = Math.max(e.known, 12); if (e.los > 0) G.spot = true; }
@@ -564,6 +565,7 @@ export function initCombat(C) {
     if (veh.immob > 0 && !veh.dead) ui.set('sT', 'TRACK ' + Math.ceil(veh.immob) + ' s', 'st bad'); ui.show('sT', veh.immob > 0 && !veh.dead);
     ui.set('sA', AMMO[G.sel].name + ' ' + G.n[G.sel], 'st ' + (G.n[G.sel] ? 'on' : 'bad'));
     ui.set('sM', 'MG ' + lastMg, 'st'); ui.set('sK', 'SMOKE ' + G.smokeN, 'st');
+    ui.set('sN', G.netOn && G.net < 1 ? 'NET ' + Math.ceil((1 - G.net) * NET_T) + ' s' : 'NET', 'st' + (G.net >= 1 ? ' on' : G.netOn ? ' warn' : '')); if (ui.netUI) ui.netUI(G.net >= 1 ? 2 : G.netOn ? 1 : 0);
     const DT = DTYPE[D.on ? D.type : G.dsel];
     ui.set('sD', D.on ? DT.name + (D.type === 1 ? ' ×' + D.bombs : '') + ' · ' + D.sec + ' s' : DT.name + ' ' + G.dn[G.dsel], 'st' + (D.on ? (D.sec > 15 ? ' on' : ' warn') : ''));
     if (ui.droneUI) ui.droneUI(DT.name, D.on ? D.type : -1);
@@ -751,7 +753,7 @@ export function initCombat(C) {
         if (dc > 330) { gx = a.tx; gz = a.tz; } else { a.ang += T.v / 280 * dt; gx = a.tx + Math.sin(a.ang) * 280; gz = a.tz + Math.cos(a.ang) * 280; }
         steer(a, gx - a.x, hAt(a.tx, a.tz) + T.alt - a.y, gz - a.z, T.v, Math.min(1, dt * 0.7));
         a.chk -= dt; if (a.chk <= 0) { a.chk = 0.5; const vis = veh.dead ? 0 : losVis(a.x, a.y, a.z, veh.x, tankY, veh.z) * (1 - 0.7 * (R.trees ? canAt(veh.x, veh.z) / 255 : 0));
-          if (vis > 0.25) { G.orlan += 0.5; for (let j = 0; j < MAXE; j++) { const e = G.enemies[j]; if (e.on && !e.dead) e.known = Math.max(e.known, 4); } } else G.orlan = 0; }
+          if (vis * (G.net >= 1 && G.orlan <= 0 ? 0.45 : 1) > 0.25) { G.orlan += 0.5; for (let j = 0; j < MAXE; j++) { const e = G.enemies[j]; if (e.on && !e.dead) e.known = Math.max(e.known, 4); } } else G.orlan = 0; }
       } else { // FPV and Lancet
         a.t -= dt; if (a.t <= 0) { airBoom(a, false); continue; }
         const dx = veh.x - a.x, dz = veh.z - a.z, dh = Math.hypot(dx, dz), smk = smokeNear(veh.x, veh.z, 35);
@@ -763,7 +765,7 @@ export function initCombat(C) {
           a.chk -= dt; if (a.chk <= 0 && !veh.dead) { a.chk = 0.4; const dd = Math.hypot(dh, tankY - a.y);
             if (dd < T.see) { const vis = losVis(a.x, a.y, a.z, veh.x, tankY, veh.z), conc = R.trees ? canAt(veh.x, veh.z) / 255 : 0;
               if (vis > 0.2) { a.tx += (veh.x - a.tx) * 0.25; a.tz += (veh.z - a.tz) * 0.25; } // narrowing the search on what it glimpses
-              const p = T.pc * vis * (1 - 0.75 * conc) * (1 - 0.5 * Math.min(Math.abs(veh.v) / 8, 1)) * (smk ? (a.type ? 0 : 0.3) : 1) * (1 - dd / T.see * 0.5);
+              const p = T.pc * (G.net >= 1 ? NETK : 1) * vis * (1 - 0.75 * conc) * (1 - 0.5 * Math.min(Math.abs(veh.v) / 8, 1)) * (smk ? (a.type ? 0 : 0.3) : 1) * (1 - dd / T.see * 0.5);
               if (rnd() < p) { a.st = 2; a.warned = true; ui.toast(`${T.name} from the ${dirName(a.x - veh.x, a.z - veh.z)} diving on you — shoot it (Q) or move!`); } } }
         } else { // terminal dive with lead on the tank
           const tof = Math.hypot(dh, tankY - a.y) / T.vd, lx = veh.x - Math.sin(veh.yaw) * veh.v * tof * 0.7, lz = veh.z - Math.cos(veh.yaw) * veh.v * tof * 0.7;
@@ -824,7 +826,7 @@ export function initCombat(C) {
     if (inp.fire && !veh.dead && !R.pose && (!D.on || D.auto) && D.hold <= 0 && !fireBlock) {
       if (G.n[G.sel] <= 0) { if (dryT <= 0) { dryT = 1.5; ui.toast('Out of ' + AMMO[G.sel].name); } }
       else if (G.rl <= 0) {
-        G.n[G.sel]--; G.rl = RELOAD; hudDirty = true;
+        G.n[G.sel]--; G.rl = RELOAD; hudDirty = true; netOff('Net thrown off by the gun');
         fire(0, G.sel, aim.mx, aim.my, aim.mz, aim.gx, aim.gy, aim.gz, AMMO[G.sel].v, 0.0005, 5);
         muzzle(aim.mx, aim.my, aim.mz, aim.gx, aim.gy, aim.gz, 1);
         C.sfx('gun', aim.mx, aim.my, aim.mz, 1);
@@ -863,6 +865,9 @@ export function initCombat(C) {
         if ((G.mg & 1) === 0) glow(hx + tx / l * 0.5, hy + ty / l * 0.5, hz + tz / l * 0.5, 0.6, 26, 14, 4); }
       if (Math.ceil(G.mg / 50) * 50 !== lastMg) hudDirty = true;
     } else hmgT = Math.min(hmgT, 1);
+    // camouflage net: rigged over NET_T s while the tank stands still; driving or firing throws it off
+    if (G.netOn) { if (veh.dead || Math.abs(veh.v) > 1) netOff(veh.dead ? '' : 'Net thrown off — the tank moved'); else if (G.mgOn || G.hmgOn) netOff('Net thrown off by the machine gun');
+      else if (G.net < 1) { const s0 = Math.ceil((1 - G.net) * NET_T); G.net = Math.min(1, G.net + dt / NET_T); if (G.net >= 1) { hudDirty = true; ui.toast('Camouflage net up — harder to find until you move or fire'); } else if (Math.ceil((1 - G.net) * NET_T) !== s0) hudDirty = true; } }
     // smoke clouds
     for (let c = 0; c < 16; c++) { const o = c * 5; if (CL[o + 4] < 1) continue; CL[o + 3] += dt; const gh = W.groundAt(CL[o], CL[o + 2], CL[o + 1] - 1.8); CL[o + 1] = Math.max(gh + 1.8, CL[o + 1] - 3 * dt);
       if (CL[o + 3] > 24) { CL[o + 4] = 0; continue; }
@@ -904,6 +909,11 @@ export function initCombat(C) {
     mapT -= dt; if (mapT <= 0 && !R.simOnly) { mapT = 0.2; drawMap(); }
     if (bigOn && !R.simOnly) { bigT -= dt; if (bigT <= 0) { bigT = 0.25; drawBig(); } }
   };
+  function netOff(msg) { if (!G.netOn) return; G.netOn = false; G.net = 0; hudDirty = true; if (msg) ui.toast(msg); }
+  // K: rig or stow the camouflage net. It only makes the tank harder to find: an enemy that has already detected it keeps seeing it
+  G.netKey = () => { if (veh.dead) return; if (G.netOn) { netOff('Camouflage net stowed'); return; }
+    if (Math.abs(veh.v) > 0.5) { ui.toast('Stop the tank to rig the camouflage net'); return; }
+    G.netOn = true; G.net = 0; hudDirty = true; ui.toast(`Rigging the camouflage net — ${NET_T} s. Driving or firing throws it off`); };
   G.ammo = (i) => { if (i < 0) i = (G.sel + 1) % 3; if (i === G.sel || veh.dead) return; G.sel = i; R.shellV = AMMO[i].v; G.rl = RELOAD; hudDirty = true; ui.toast('Loading ' + AMMO[i].name); };
   G.smoke = () => {
     if (veh.dead) return; if (G.smokeN <= 0) { ui.toast('No smoke grenades left'); return; }
@@ -1030,7 +1040,7 @@ export function initCombat(C) {
     inf.reset(); // phase 6B
     D.on = false; D.auto = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
     for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; D.iok = false;
-    Object.assign(G, { sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
+    Object.assign(G, { netOn: false, net: 0, sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;
     R.snap = true; hudDirty = true; ui.over(null); ui.toast('Stand by — contact expected from the north');
   };
