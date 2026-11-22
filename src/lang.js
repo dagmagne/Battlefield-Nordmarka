@@ -81,7 +81,7 @@ const D = {
   // cards
   'Your Leopard was knocked out': 'Leoparden din ble slått ut', 'Nordmarka held': 'Nordmarka holdt',
   // wave scenarios
-  'Recon in force': 'Stridsoppklaring', 'Tank platoon with escort': 'Stridsvogntropp med følge', 'BMP raid on the roads': 'BMP-raid langs veiene', 'Motorised raid': 'Motorisert raid', 'ATGM ambush': 'Panservernbakhold', Pincer: 'Knipetang', 'Two echelons': 'To echeloner', 'Final assault': 'Sluttangrep',
+  'Recon in force': 'Stridsoppklaring', 'Tank platoon with escort': 'Stridsvogntropp med følge', 'BMP raid on the roads': 'BMP-raid langs veiene', 'Motorised raid': 'Motorisert raid', 'ATGM ambush': 'Panservernbakhold', Pincer: 'Knipetang', 'Two echelons': 'Angrep i to puljer', 'Final assault': 'Sluttangrep',
   // messages: tank, weapons, damage
   'Stand by — contact expected from the north': 'Klar — kontakt ventes fra nord', 'More enemy movement reported — watch your flanks': 'Mer fiendtlig bevegelse meldt — pass på flankene', 'Track hit — repairing': 'Beltet er truffet — reparerer', 'Track repaired': 'Beltet er reparert',
   'ATGM hit on the front armour!': 'Panservernrakett i frontpanseret!', 'ATGM hit!': 'Truffet av panservernrakett!', 'RPG hit on the front armour': 'RPG-treff i frontpanseret', 'RPG hit in the rear!': 'RPG-treff bak!', 'RPG hit on the side!': 'RPG-treff i siden!',
