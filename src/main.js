@@ -21,6 +21,9 @@ import { setTod, updateTod, writeTod, todIndex } from './tod.js';
 import { buildLeopard, buildT72, buildBMP, buildTigr, buildBTR, buildBuggy, buildMoto, buildDrone, buildMine, buildLancet, buildOrlan, tankParts, turMat, gunMat, LEO, TRK, TRACK_WGSL } from './tank.js';
 const objDefW = TRACK_WGSL + objDefW0; // the track loop tables (gear.js) in front of the deform function that reads them
 import { initCombat, MAXE, MAXG, MAXM, MAXA, MAXI } from './combat.js';
+import { initMissions, MISSIONS } from './missions.js';
+import { buildNet } from './net.js';
+import { initLang, tr, trPage } from './lang.js';
 import { buildSoldier, initSoldiers, IST, WALK_V, RUN_V } from './soldier.js';
 import { buildTrees } from './trees.js';
 import { buildProps } from './props.js';
@@ -36,6 +39,9 @@ import TITLE from './data/title.webp';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
+const lang = initLang(qs); trPage(document); // language first: the start screen is already on the page
+const pickLang = (v) => { if (v === lang) return; try { localStorage.glang = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('lang'); location.href = u.href; }; // stored, applied by a reload
+for (const b of $('lLang').children) { b.classList.toggle('on', b.dataset.v === lang); b.onclick = () => pickLang(b.dataset.v); } // the language choice on the start screen
 // title screen art and music (the music button works before the game has loaded; the in-game one goes through api.music)
 $('load').style.backgroundImage = `linear-gradient(180deg,#0b142099 0%,#0b142000 30%,#0b142000 50%,#0b1420e6 100%),url(data:image/webp;base64,${TITLE})`;
 const music = initMusic(qs);
@@ -101,10 +107,18 @@ async function main() {
 
   const tick = (m, p) => { $('msg').textContent = m + '…'; $('bar').firstChild.style.width = (p * 100).toFixed(0) + '%'; return new Promise((r) => setTimeout(r, 0)); };
   // world choice: ?w=fantasi|holmenkollen|frogner, otherwise ask (scripted runs with ?nohint default to Frognerseteren)
-  let wsel = qs.get('w') || (qs.has('nohint') ? 'frogner' : '');
-  if (!wsel) { $('pick').style.display = 'flex'; $('bar').style.display = $('msg').style.display = 'none';
-    wsel = await new Promise((r) => { for (const b of $('pick').children) b.onclick = () => r(b.dataset.w); });
-    $('pick').style.display = 'none'; $('bar').style.display = $('msg').style.display = ''; }
+  // mode, mission and world: from the URL (?w= world and start, ?m= mission, ?peace), else the start screen (mode -> mission, start point or world)
+  let msel = MISSIONS.some((m) => m.id === qs.get('m')) ? qs.get('m') : '', pickPeace = null;
+  let wsel = qs.get('w') || (qs.has('nohint') || msel ? 'frogner' : '');
+  if (!wsel) { const P = $('pick'); P.style.display = 'block'; $('bar').style.display = $('msg').style.display = 'none';
+    let best = {}; try { best = JSON.parse(localStorage.gmsn || '{}') || {}; } catch (e) { /* ignore */ }
+    const g1 = $('pg1'), back = g1.firstChild; MISSIONS.forEach((m, i) => { const b = document.createElement('button'), s = best[m.id]; b.dataset.m = m.id; b.dataset.w = 'frogner';
+      b.innerHTML = `<b>${i + 1} · ${tr(m.name)}</b><span>${tr(m.card)}</span>` + (s > 0 ? `<i>✓ ${tr('best ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'))}</i>` : ''); g1.insertBefore(b, back); });
+    const r = await new Promise((res) => { P.onclick = (e) => { const b = e.target.closest && e.target.closest('button'); if (!b) return;
+      if (b.dataset.go) { for (const g of P.children) g.classList.toggle('on', g.id === b.dataset.go); return; } res(b.dataset); }; });
+    wsel = r.w; msel = r.m || ''; pickPeace = r.p === '1'; try { localStorage.gpeace = pickPeace ? '1' : '0'; } catch (e) { /* ignore */ }
+    P.style.display = 'none'; $('bar').style.display = $('msg').style.display = ''; }
+  if (wsel === 'fantasi') msel = '';
   await tick('Shaping terrain', 0);
   const W = wsel === 'fantasi' ? await genFantasy(tick, Q) : await genWorld(tick, Q, wsel);
   const PLAY = W.PLAY, MW = W.MW;
@@ -206,7 +220,7 @@ async function main() {
     device.queue.writeBuffer(u, 0, d);
     return { vb: mkBuf(mesh.v, U.VERTEX), ib: mkBuf(mesh.i, U.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
-  const groomer = mkObj(buildLeopard()), droneO = mkObj(buildDrone());
+  const groomer = mkObj(buildLeopard()), droneO = mkObj(buildDrone()), droneO2 = mkObj(buildDrone()), netO = mkObj(buildNet()); // droneO2: the recon drone keeping watch on its own
   const propsMesh = buildProps(W), props = mkObj(propsMesh); // the CPU copy stays alive: building state changes edit and re-upload ranges of it
   const BL = initBuildings(W, propsMesh, HALF);
   BL.upload = (v0, v1) => device.queue.writeBuffer(props.vb, v0 * 56, propsMesh.v, v0 * 14, (v1 - v0) * 14);
@@ -586,8 +600,11 @@ async function main() {
     arty() { if (R.game) R.game.support.key(); },
     ammo(i) { if (R.game) R.game.ammo(i); },
     smoke() { if (R.game) R.game.smoke(); },
+    net() { if (R.game) R.game.netKey(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
     restart() { treesRestore(); if (R.game) R.game.restart(); },
+    lang(v) { pickLang(v); }, // English or Norwegian (menu row; the start screen has the same choice)
+    mission(id) { if (msn.set(id) && game.peace) game.peace = false; api.restart(); }, // '' = the defence waves
     snow(v) { R.snow = v === undefined ? 1 - R.snow : v; ui.toast(R.snow ? 'Snowfall on' : 'Snowfall off'); },
     tod(i) { if (i < 0) i = (todIndex + 1) % 4; setTod(i); tshDirty = 2; ui.toast(TODN[i]); },
     debug(v) { R.debug = v === undefined ? !R.debug : !!v; ui.setDebug(R.debug); },
@@ -602,14 +619,15 @@ async function main() {
     },
     vib(v) { R.hap.setLevel(v); try { localStorage.gvib = String(v); } catch (e) { /* ignore */ } ui.toast(['Vibration off', 'Vibration light', 'Vibration full'][v]); },
     drs(v) { R.drs = !!v; if (!v) R.scale = Q.scale; try { localStorage.gdrs = v ? '1' : '0'; } catch (e) { /* ignore */ } },
-    state: () => ({ quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, peace: game.peace, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
+    state: () => ({ lang, quality: pref, tod: todIndex, snow: R.snow, sound: audio.on, music: music.on, peace: game.peace, vib: R.hap ? R.hap.level : 2, drs: R.drs, trees: R.treeSel, debug: R.debug, info: `Tier: ${Q.name} · ${R.w}×${R.h} canvas · render scale ${(R.scale * 100).toFixed(0)}% · ${W.trees.count.toLocaleString()} trees · GPU: ${R.gpuName}` }),
   };
   ui = initUI(api, isTouch);
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); if (R.hap) R.hap.ev(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: qs.has('peace') || qs.has('auto') || qs.has('perf') || W.name === 'fantasy' || peacePref() });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, dobj2: droneO2.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: W.name === 'fantasy' || (pickPeace !== null ? pickPeace : qs.has('peace') || qs.has('auto') || qs.has('perf') || (!msel && peacePref())) });
   R.game = game; R.aimHit = game.aimHit;
+  const msn = initMissions({ W, R, veh, aim, cam, rnd, ui, parts, bld: BL }, game, { quiet: qs.has('nohint') || qs.has('auto') || qs.has('perf'), tp: (x, z, yaw) => window.__tp(x, z, yaw), tod: (i) => { if (i !== todIndex) { setTod(i); tshDirty = 2; } }, go: (id) => api.mission(id) });
   const SOL = initSoldiers(MAXI, W.groundAt);
   // Sound is off by default until recorded engine and drone loops replace the synthetic ones (they read as a spaceship).
   // The menu row or M turns it on and the choice is remembered; ?sound starts with it on, ?mute forces it off.
@@ -946,7 +964,9 @@ async function main() {
     const nt = 0.12 + 0.88 * GU[O.misc];
     groomer.d[128] = veh.trL; groomer.d[129] = veh.trR; groomer.d[130] = veh.dead ? Math.min(1, (game.burnP || 0) * 0.5) : 0; groomer.d[131] = 1;
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
+    const netOn = game.net > 0; if (netOn) { const nd = netO.d, s = game.net * game.net * (3 - 2 * game.net); nd.set(groomer.d); for (let p = 0; p < 3; p++) { nd[p * 16 + 4] *= s; nd[p * 16 + 5] *= s; nd[p * 16 + 6] *= s; } device.queue.writeBuffer(netO.u, 0, nd); } // the camouflage net rises from the ground as it is rigged
     const droneOn = game.drone.on; if (droneOn) device.queue.writeBuffer(droneO.u, 0, droneO.d);
+    const watchOn = game.watch.on; if (watchOn) device.queue.writeBuffer(droneO2.u, 0, droneO2.d);
     for (let i = 0; i < MAXE; i++) if (game.enemies[i].on) device.queue.writeBuffer(eObj[i].u, 0, eObj[i].d);
     for (let i = 0; i < MAXA; i++) if (game.air[i].on) device.queue.writeBuffer(aObj[i].u, 0, aObj[i].d);
     if (game.fxN) device.queue.writeBuffer(fxBuf, 0, game.fx, 0, game.fxN * 12);
@@ -981,7 +1001,9 @@ async function main() {
       sp.setBindGroup(0, shBG[c]);
       if (!hH) {
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
+      if (netOn) { sp.setBindGroup(1, netO.bg); sp.setVertexBuffer(0, netO.vb); sp.setIndexBuffer(netO.ib, 'uint32'); sp.drawIndexed(netO.n); }
       if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
+      if (watchOn) { sp.setBindGroup(1, droneO2.bg); sp.setVertexBuffer(0, droneO2.vb); sp.setIndexBuffer(droneO2.ib, 'uint32'); sp.drawIndexed(droneO2.n); }
       for (let i = 0; i < MAXA; i++) { const a = game.air[i]; if (!a.on || c > 0) continue; const m = aMesh[a.type]; sp.setBindGroup(1, aObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.cage ? 6 : e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
@@ -996,8 +1018,10 @@ async function main() {
     p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
     p.setBindGroup(0, bg0);
     p.setPipeline(objPipe);
-    if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n); }
+    if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n);
+      if (netOn) { p.setBindGroup(1, netO.bg); p.setVertexBuffer(0, netO.vb); p.setIndexBuffer(netO.ib, 'uint32'); p.drawIndexed(netO.n); } }
     if (droneOn && !hV && !(cam.mode === 4 && R.dFirst)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
+    if (watchOn && !hV) { p.setBindGroup(1, droneO2.bg); p.setVertexBuffer(0, droneO2.vb); p.setIndexBuffer(droneO2.ib, 'uint32'); p.drawIndexed(droneO2.n); }
     for (let i = 0; i < MAXA; i++) { const a = game.air[i]; if (!a.on || hV) continue; const m = aMesh[a.type]; p.setBindGroup(1, aObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.cage ? 6 : e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);
@@ -1081,7 +1105,8 @@ async function main() {
   window.__aim = (yaw, pitch, mode) => { R.pose = null; R.chase = null; aim.yaw = yaw; aim.pitch = pitch; if (mode !== undefined) cam.mode = mode; R.snap = true; };
   window.__tod = (i) => { setTod(i - 1, true); tshDirty = 1; };
   window.__tp = (x, z, yaw, top) => { veh.x = x; veh.z = z; veh.yaw = aim.yaw = yaw; veh.v = 0; veh.vy = 0; veh.air = false; veh.y = veh.gPrev = (top ? W.groundAt(x, z, 1e5) : W.heightAt(x, z)) + 0.03; stInit = false; R.snap = true; }; // top: on the highest surface (a bridge deck)
-  Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui });
+  Object.assign(window, { __parts: parts, __game: game, __R: R, __W: W, __cam: cam, __veh: veh, __aimS: aim, __inp: inp, __api: api, __ui: ui, __msn: msn });
+  if (msel && W.name !== 'fantasy' && msn.set(msel)) msn.begin(); // a mission chosen on the start screen or with ?m=
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { last = performance.now(); requestAnimationFrame(frame); } });
   $('load').style.display = 'none'; music.game();
   if (!qs.has('nohint') && !auto && !R.pose) ui.firstRun();

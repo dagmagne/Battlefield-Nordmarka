@@ -1,9 +1,10 @@
 // Input (keyboard, mouse, touch) and DOM UI. All state lives in `inp`; nothing here allocates per frame.
+import { tr } from './lang.js';
 const $ = (id) => document.getElementById(id);
 export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, yawR: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, aa: false, sight: false };
 const keys = new Set();
 const SPD = []; for (let i = 0; i < 200; i++) SPD.push(String(i));
-const CAMN = ['CMDR', 'SIGHT', '', 'FLY', 'DRONE'];
+const CAMN = ['CMDR', 'SIGHT', '', 'FLY', 'DRONE']; // (translated once in initUI)
 const RNG = []; for (let i = 0; i <= 400; i++) RNG.push(i * 10 + ' m');
 
 export function initUI(api, isTouch) {
@@ -13,15 +14,24 @@ export function initUI(api, isTouch) {
   const modalOpen = () => $('help').classList.contains('show') || $('menu').classList.contains('show');
   const showHelp = (v) => { $('help').classList.toggle('show', v); if (!v) { try { localStorage.setItem('hint1', '1'); } catch (e) { /* private mode */ } } };
   const showMenu = (v) => { $('menu').classList.toggle('show', v); if (v) syncMenu(); };
-  let toastT = 0;
-  const toast = (m) => { const t = $('toast'); t.textContent = m; t.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => { t.style.opacity = 0; }, 1400); };
-  const U = { toast, showHelp, showMenu, dbgOn: false };
+  for (let i = 0; i < CAMN.length; i++) CAMN[i] = tr(CAMN[i]);
+  // Messages (rare events, so this may allocate). A message stays 2.5 s plus 55 ms per character (at most 9 s), so a long one can be
+  // read. A new one does not wipe one that has been up for less than 1.5 s: it waits its turn (a queue of 3, the oldest dropped);
+  // a warning (one with an exclamation mark) is shown at once.
+  let toastT = 0, tUp = 0, tQT = 0; const tQ = [];
+  const tShow = (m) => { const t = $('toast'); t.textContent = m; t.style.opacity = 1; tUp = performance.now(); clearTimeout(toastT); toastT = setTimeout(() => { t.style.opacity = 0; tUp = 0; }, Math.min(9000, 2500 + 55 * m.length)); };
+  const tPump = () => { tQT = 0; if (!tQ.length) return; const w = tUp ? 1500 - (performance.now() - tUp) : 0; if (w > 0) { tQT = setTimeout(tPump, w); return; } tShow(tQ.shift()); if (tQ.length) tQT = setTimeout(tPump, 1500); };
+  const toast = (m0) => { if (!m0) return; const m = tr(m0), now = performance.now();
+    if (tUp && now - tUp < 1500 && m0.indexOf('!') < 0) { if (tQ.length >= 3) tQ.shift(); tQ.push(m); if (!tQT) tQT = setTimeout(tPump, 1500 - (now - tUp)); return; }
+    tShow(m); };
+  const U = { toast, showHelp, showMenu, dbgOn: false, tr };
 
   // ---- keyboard ----
   addEventListener('keydown', (e) => {
     if (e.repeat || e.metaKey || e.ctrlKey) return;
     const c = e.code;
     if (modalOpen()) { if (c === 'Escape' || c === 'Enter' || c === 'Space' || c === 'KeyH') { showHelp(false); showMenu(false); e.preventDefault(); } return; }
+    if (cardKeys && U.cardOpen() && (c === 'Enter' || c === 'Space')) { e.preventDefault(); cardGo(); return; } // a briefing card: Enter or Space starts
     keys.add(c);
     if (c === 'Tab' && !e.repeat) api.bigMap();
     if (c === 'Space' || c === 'Tab') e.preventDefault();
@@ -32,6 +42,7 @@ export function initUI(api, isTouch) {
     else if (c === 'KeyM') api.sound();
     else if (c === 'KeyU') api.music();
     else if (c === 'KeyG') api.smoke();
+    else if (c === 'KeyK') api.net();
     else if (c === 'KeyX') api.drone();
     else if (c === 'KeyZ') api.droneType();
     else if (c === 'KeyB') api.arty();
@@ -100,7 +111,7 @@ export function initUI(api, isTouch) {
   for (const id of ['map', 'bmap']) { const m = $(id); m.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); m.addEventListener('click', (e) => { e.stopPropagation(); api.bigMap(id === 'map'); }); }
   // ---- buttons ----
   const btn = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); }); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); b.blur(); }); };
-  btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bX', api.drone); btn('bY', () => api.droneType()); btn('bR', api.drone); btn('bA', api.arty); btn('bA2', api.arty);
+  btn('bS', () => api.ammo(-1)); btn('bK', api.smoke); btn('bN', api.net); btn('bX', api.drone); btn('bY', () => api.droneType()); btn('bR', api.drone); btn('bA', api.arty); btn('bA2', api.arty);
   // hold buttons: FIRE (tank), BOOM (drone) and the coax MG
   const holdBtn = (id, fn) => { const b = $(id), set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); fn(on); b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   holdBtn('bT', (on) => { tFire = on; }); holdBtn('bB', (on) => { tFire = on; }); holdBtn('bM', (on) => { tMg = on; }); btn('bC', api.cam); btn('bD', () => api.tod(-1)); btn('bG', () => showMenu(true)); btn('bMu', () => api.music());
@@ -116,32 +127,34 @@ export function initUI(api, isTouch) {
       } catch (e) { toast('Fullscreen not available'); }
     });
     for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => b.classList.toggle('on', !!fsEl())); }
-  btn('mW', () => { const l = new URL(location.href); l.searchParams.delete('w'); l.searchParams.delete('nohint'); location.href = l.href; });
+  btn('mW', () => { const l = new URL(location.href); for (const k of ['w', 'm', 'peace', 'nohint']) l.searchParams.delete(k); location.href = l.href; });
+  btn('mX', () => { showMenu(false); api.restart(); });
   btn('hGo', () => showHelp(false)); btn('mGo', () => showMenu(false)); btn('mH', () => { showMenu(false); showHelp(true); });
   const hold = (id, v) => { const b = $(id); const set = (on) => (e) => { e.stopPropagation(); e.preventDefault(); inp.holdY = on ? v : 0; b.classList.toggle('down', on); if (on) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } }; b.addEventListener('pointerdown', set(true)); b.addEventListener('pointerup', set(false)); b.addEventListener('pointercancel', set(false)); };
   inp.holdY = 0; hold('bUp', 1); hold('bDn', -1);
   const seg = (id, fn) => { $(id).addEventListener('click', (e) => { const v = e.target.dataset && e.target.dataset.v; if (v !== undefined) { fn(v); syncMenu(); } }); };
-  seg('mQ', (v) => api.quality(v)); seg('mD', (v) => api.tod(+v)); seg('mN', (v) => api.snow(+v)); seg('mS', (v) => api.sound(+v)); seg('mU', (v) => api.music(+v)); seg('mP', (v) => api.peace(+v)); seg('mR', (v) => api.drs(+v)); seg('mF', (v) => api.trees(v)); seg('mB', (v) => api.debug(+v)); seg('mV', (v) => api.vib(+v));
+  seg('mQ', (v) => api.quality(v)); seg('mD', (v) => api.tod(+v)); seg('mN', (v) => api.snow(+v)); seg('mS', (v) => api.sound(+v)); seg('mU', (v) => api.music(+v)); seg('mP', (v) => api.peace(+v)); seg('mR', (v) => api.drs(+v)); seg('mF', (v) => api.trees(v)); seg('mB', (v) => api.debug(+v)); seg('mV', (v) => api.vib(+v)); seg('mL', (v) => api.lang(v));
   for (const m of ['help', 'menu']) $(m).addEventListener('pointerdown', (e) => { if (e.target === $(m)) { showHelp(false); showMenu(false); } });
   function syncMenu() {
     const s = api.state();
     const mark = (id, v) => { for (const b of $(id).children) b.classList.toggle('on', b.dataset.v === String(v)); };
-    mark('mQ', s.quality); mark('mD', s.tod); mark('mN', s.snow ? 1 : 0); mark('mS', s.sound ? 1 : 0); mark('mU', s.music ? 1 : 0); mark('mP', s.peace ? 1 : 0); mark('mR', s.drs ? 1 : 0); mark('mF', s.trees); mark('mB', s.debug ? 1 : 0); mark('mV', s.vib);
+    mark('mQ', s.quality); mark('mD', s.tod); mark('mN', s.snow ? 1 : 0); mark('mS', s.sound ? 1 : 0); mark('mU', s.music ? 1 : 0); mark('mP', s.peace ? 1 : 0); mark('mR', s.drs ? 1 : 0); mark('mF', s.trees); mark('mB', s.debug ? 1 : 0); mark('mV', s.vib); mark('mL', s.lang);
     $('mI').textContent = s.info;
   }
 
   // ---- gamepad (standard mapping: DualShock/DualSense over Bluetooth) ----
   // Only polled while a pad is connected; buttons are edge-detected through a preallocated array.
   let padN = 0; const pb = new Uint8Array(20);
+  U.netUI = (s) => { const b = $('bN'); b.classList.toggle('on', s === 2); b.style.opacity = s === 1 ? 0.6 : ''; }; // touch NET button: rigging (dim), up (green)
   addEventListener('gamepadconnected', () => { padN++; });
   addEventListener('gamepaddisconnected', () => { padN = Math.max(0, padN - 1); });
   const PADT = [2, 4, 10, 12, 13, 14, 15]; // buttons only the tank uses
   const dz = (v) => { const a = Math.abs(v); return a < 0.15 ? 0 : Math.sign(v) * (a - 0.15) / 0.85; };
   let gTh = 0, gSt = 0, gX = 0, gZ = 0, gY = 0, gFire = false, gMg = false, gAA = false, gSight = false;
-  // Hold to confirm (pad only): ✕ drone and ○ artillery fire after a 1 s hold. The ring round the crosshair fills by a CSS
+  // Hold to confirm (pad only): ✕ drone, ○ artillery and □ camouflage net act after a 1 s hold (hK = the button index + 1). The ring round the crosshair fills by a CSS
   // animation that starts when #hold is shown, so nothing is written to the DOM while it fills.
   const HOLD_MS = 1000; let hK = 0, hT = 0;
-  const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = text; $('hold').classList.add('show'); };
+  const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = tr(text); $('hold').classList.add('show'); };
   const holdEnd = () => { if (hK) { hK = 0; $('hold').classList.remove('show'); } };
   const pollPad = (fly) => {
     gTh = gSt = gX = gZ = gY = 0; gFire = gMg = gAA = gSight = false; inp.yawR = 0;
@@ -155,12 +168,12 @@ export function initUI(api, isTouch) {
     const bv = (i) => (i < n ? b[i].value : 0);
     const sync = () => { for (let i = 0; i < n; i++) pb[i] = b[i].pressed ? 1 : 0; };
     if (modalOpen()) { holdEnd(); if (press(0) || press(1) || press(9)) { showHelp(false); showMenu(false); } sync(); return; }
-    if ($('over').classList.contains('show')) { holdEnd(); if (press(0)) api.restart(); else if (press(1) && overCont) U.over(null); sync(); return; } // end card: ✕ restart, ○ keep playing (after a victory)
+    if ($('over').classList.contains('show')) { holdEnd(); if (press(0)) cardGo(); else if (press(1)) { if (altOn) cardAlt(); else if (overCont) U.card(null); } sync(); return; } // card: ✕ the main button, ○ the second one, or keep playing (after a victory)
     // ✕ drone / ○ artillery: start on the press, cancel on release, fire after HOLD_MS
     if (press(0)) { const l = api.droneLabel(); if (l) holdStart(1, 'HOLD ✕ · ' + l); else api.drone(); } // '' = no hold needed (skip the blast view, or nothing to launch: the toast says why)
     if (press(1)) holdStart(2, 'HOLD ○ · FIRE MISSION');
-    if (hK && !down(hK === 1 ? 0 : 1)) holdEnd();
-    else if (hK && performance.now() - hT >= HOLD_MS) { const k = hK; holdEnd(); if (k === 1) api.drone(); else api.arty(); }
+    if (hK && !down(hK - 1)) { const k = hK; holdEnd(); if (k === 3) api.ammo(-1); } // let go early: nothing, except □, whose tap is the ammunition change
+    else if (hK && performance.now() - hT >= HOLD_MS) { const k = hK; holdEnd(); if (k === 1) api.drone(); else if (k === 2) api.arty(); else api.net(); }
     if (press(3)) api.thermal(); if (press(8)) api.bigMap(); if (press(9)) showMenu(true);
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
     gFire = bv(7) > 0.5;
@@ -170,7 +183,7 @@ export function initUI(api, isTouch) {
       for (let j = 0; j < PADT.length; j++) pb[PADT[j]] = down(PADT[j]) ? 1 : 0; // tank-only buttons: track them so a press in flight does not fire on return
       return;
     }
-    if (press(4)) api.smoke(); if (press(2)) api.ammo(-1); if (press(10)) api.cam();
+    if (press(4)) api.smoke(); if (press(2)) holdStart(3, 'HOLD □ · CAMOUFLAGE NET'); if (press(10)) api.cam(); // □: a tap changes ammunition (on release), a hold rigs or stows the net (the touchpad is no use: the browser treats it as a mouse)
     if (press(12)) inp.zoom -= 0.35; if (press(13)) inp.zoom += 0.35; // sight magnification (commander view: camera distance)
     if (press(14)) api.droneType(-2); if (press(15)) api.droneType(-1);
     gSight = bv(6) > 0.5; gMg = bv(5) > 0.5; gAA = bv(11) > 0.5;
@@ -196,13 +209,13 @@ export function initUI(api, isTouch) {
   U.hud = (kmh, camMode, range) => {
     if (kmh !== lSpd) { lSpd = kmh; $('spd').textContent = SPD[kmh] || '199'; }
     if (range !== lR) { lR = range; $('rng').textContent = RNG[range / 10] || '4000+ m'; }
-    if (camMode !== lC) { lC = camMode; $('sC').textContent = CAMN[camMode]; document.body.classList.toggle('flying', camMode === 3); document.body.classList.toggle('droning', camMode === 4); tFire = false; $('joyhint').textContent = camMode >= 3 ? 'FLY' : 'DRIVE'; }
+    if (camMode !== lC) { lC = camMode; $('sC').textContent = CAMN[camMode]; document.body.classList.toggle('flying', camMode === 3); document.body.classList.toggle('droning', camMode === 4); tFire = false; $('joyhint').textContent = tr(camMode >= 3 ? 'FLY' : 'DRIVE'); }
   };
   // rare game-state updates (ammo, hull, wave): only called when something changes
-  U.set = (id, text, cls) => { const e = $(id); e.textContent = text; if (cls !== undefined) e.className = cls; };
+  U.set = (id, text, cls) => { const e = $(id); e.textContent = tr(text); if (cls !== undefined) e.className = cls; };
   U.show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
   // drone buttons (rare): the DRONE button names the selected type; in flight the action button reads BOOM (FPV), DROP (bomber) or is hidden (recon)
-  U.droneUI = (name, flying) => { $('bXl').textContent = name; $('bBl').textContent = flying === 1 ? 'DROP' : 'BOOM'; $('bB').style.visibility = flying === 2 ? 'hidden' : ''; };
+  U.droneUI = (name, flying) => { $('bXl').textContent = tr(name); $('bBl').textContent = tr(flying === 1 ? 'DROP' : 'BOOM'); $('bB').style.visibility = flying === 2 ? 'hidden' : ''; };
   // drone OSD (rare writes: at most every 0.15 s and only for the corners whose text changed). mode 0 off, 1 analog FPV goggles, 2 digital DJI-style.
   // o: [type, zoom, signal %, seconds left, battery %, speed m/s ×10, height m, distance m, bearing to the tank (0..7, 0 = ahead), grenades]
   const OSDA = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'], OSDN = ['FPV', 'BOMB', 'RECON'], oL = new Float32Array(10).fill(-1); let oM = -1, oT = 0;
@@ -224,10 +237,17 @@ export function initUI(api, isTouch) {
     oSet('oTC', sig < 25 ? (mode === 1 ? 'LOW SIGNAL' : 'WEAK SIGNAL — turn back') : '');
   };
   // end-of-game card (knocked out / victory); `cont` lets the player close it and keep going
-  let overCont = false;
-  U.over = (title, text, cont) => { overCont = !!cont; $('over').classList.toggle('show', !!title); if (title) { $('ovT').textContent = title; $('ovP').textContent = text; if (document.pointerLockElement) document.exitPointerLock(); } };
-  $('ovGo').addEventListener('click', () => api.restart());
-  $('over').addEventListener('pointerdown', (e) => { if (e.target === $('over') && overCont) U.over(null); });
+  // o: { title, text, cont (may be closed to keep playing), go / goFn (main button; default Restart), alt / altFn (second button; default restart), keys (Enter or Space presses the main button) }
+  let overCont = false, goFn = null, altFn = null, altOn = false, cardKeys = false;
+  const cardGo = () => { if (goFn) goFn(); else api.restart(); }, cardAlt = () => { if (altFn) altFn(); else api.restart(); };
+  U.card = (o) => { overCont = !!(o && o.cont); $('over').classList.toggle('show', !!o); if (!o) return;
+    goFn = o.goFn || null; altFn = o.altFn || null; altOn = !!o.alt; cardKeys = !!o.keys;
+    $('ovT').textContent = tr(o.title); $('ovP').textContent = tr(o.text); $('ovGo').textContent = tr(o.go || 'Restart (R)'); $('ovAlt').textContent = tr(o.alt || ''); $('ovAlt').style.display = altOn ? '' : 'none';
+    if (document.pointerLockElement) document.exitPointerLock(); };
+  U.over = (title, text, cont) => U.card(title ? { title, text, cont } : null);
+  U.cardOpen = () => $('over').classList.contains('show');
+  $('ovGo').addEventListener('click', cardGo); $('ovAlt').addEventListener('click', cardAlt);
+  $('over').addEventListener('pointerdown', (e) => { if (e.target === $('over') && overCont) U.card(null); });
   U.setDebug = (on) => { U.dbgOn = on; $('dbg').style.display = on ? 'block' : 'none'; };
   U.dbgText = (t) => { $('dbg').textContent = t; };
   let seen = false; try { seen = !!localStorage.getItem('hint1'); } catch (e) { /* ignore */ }

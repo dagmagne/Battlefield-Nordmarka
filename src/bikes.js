@@ -139,7 +139,9 @@ function band(b, y0, y1, rx, rz, cz, a0, a1, n) {
 // toe = extra toe-down angle (the soles are levelled first: the model's ankle is rigid), up = vehicle part of the torso, head and arms,
 // straps = harness straps over the shoulders. The overall is toned down to a warm grey-white and darkened where it is worn and where the
 // body shades itself (seat, inner thighs, knees, cuffs, undersides): the object shader has no occlusion for it.
-function bakeRider(b, o) {
+// the rider with his weapon and straps; every vertex is tagged uv.x = -8, which objdeform.wgsl collapses once the vehicle is a wreck
+function bakeRider(b, o) { const v0 = b.v.length; bakeRider0(b, o); for (let q = v0; q < b.v.length; q += VS) b.v[q + 10] = -8; }
+function bakeRider0(b, o) {
   SOL.place(PP, 0, 0, 0, 0, 0, 1, 0, 0);
   const M = SOL.out, v = SOLM.v, idx = SOLM.i, map = new Int32Array(v.length / VS).fill(-1), fa = [0, 0], up = o.up || 0, arm = o.arm === undefined ? up : o.arm, rifle = o.rifle, vS = cnt(b);
   for (let s = 0; s < 2; s++) { const m = (9 + s) * 16; fa[s] = Math.atan2(M[m + 9], M[m + 5]) + (o.toe || 0); }

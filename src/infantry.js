@@ -185,7 +185,7 @@ export function initInfantry(C, G, h) {
   // ---------- weapons ----------
   const eye = (i) => { const o = i * 8, p = d[o + 4]; if (EX[i] === EX[i]) { LP[0] = EX[i]; LP[1] = EY[i]; LP[2] = EZ[i]; } else { LP[0] = d[o]; LP[1] = d[o + 1] + (p === 4 ? 0.45 : p === 3 || p === 7 ? 1.05 : 1.55); LP[2] = d[o + 2]; } };
   function rocket(i, dist) {
-    eye(i); const sx = LP[0], sy = LP[1], sz = LP[2], tof = dist / RPG_V, sg = 0.5 + dist * 0.012 + Math.abs(veh.v) * 0.15; // about half the rockets miss a still tank at 250 m
+    eye(i); const sx = LP[0], sy = LP[1], sz = LP[2], tof = dist / RPG_V, sg = 0.7 + dist * 0.016 + Math.abs(veh.v) * 0.15; // about two rockets in three miss a still tank at 250 m
     const tx = veh.x - Math.sin(veh.yaw) * veh.v * tof * 0.8 + (rnd() + rnd() - 1) * sg - sx, ty = veh.y + 1.25 + (rnd() + rnd() - 1) * sg * 0.4 - sy + 0.5 * RPG_G * 9.81 * tof * tof, tz = veh.z - Math.cos(veh.yaw) * veh.v * tof * 0.8 + (rnd() + rnd() - 1) * sg - sz;
     const l = Math.hypot(tx, ty, tz) || 1, dx = tx / l, dy = ty / l, dz = tz / l;
     h.fire(1, 12, sx + dx * 0.8, sy + dy * 0.8, sz + dz * 0.8, dx, dy, dz, RPG_V, 0, 4); I.rockets++;
@@ -275,7 +275,7 @@ export function initInfantry(C, G, h) {
       if (LT[i] <= 0) { LT[i] = 0.45; eye(i); VIS[i] = !veh.dead && dist < 1800 ? h.losVis(LP[0], LP[1], LP[2], veh.x, veh.y + 1.9, veh.z) : 0;
         if (VIS[i] > 0.2 && !veh.dead) { const p = d[o + 4], hid = HB[i] >= 0 && !exposed(i), r = (p === 4 ? 220 : p === 3 || p === 7 ? 380 : 600) * (hid ? 0.12 : 1) * thm * rng0 * (1 - (R.trees ? h.canAt(x, z) / 255 * 0.5 : 0));
           if (dist < r && (dist < 60 || Math.abs(wrap(Math.atan2(-(x - veh.x), -(z - veh.z)) - aim.yaw)) < 0.75)) SPT[i] = Math.max(SPT[i], 6); } }
-      if (VIS[i] > 0) SEE[i] = Math.min(4, SEE[i] + (VIS[i] * sig / (1 + dist * dist / (RL[i] === ATG ? SEE_RA * SEE_RA : SEE_RI * SEE_RI)) * (KN[i] > 0 ? 1.6 : 1) - FLOOR) * dt); else SEE[i] -= 0.4 * dt;
+      if (VIS[i] > 0) SEE[i] = Math.min(4, SEE[i] + (VIS[i] * 0.6 * sig * (G.net >= 1 && SEE[i] < 1 ? 0.35 : 1) / (1 + dist * dist / (RL[i] === ATG ? SEE_RA * SEE_RA : SEE_RI * SEE_RI)) * (KN[i] > 0 ? 1.6 : 1) - FLOOR) * dt); else SEE[i] -= 0.4 * dt;
       if (SEE[i] < 0) SEE[i] = 0; // detection progress never goes negative (as for the vehicles)
       if (dist < HEAR && Math.abs(veh.v) > 1 && !veh.dead) KN[i] = Math.max(KN[i], 5); // they hear the engine and the tracks
       if (SEE[i] >= 1 && VIS[i] > 0) G.spot = true;
@@ -330,6 +330,10 @@ export function initInfantry(C, G, h) {
     if (plan === 'ATGM ambush' || w === 6 || (w >= 4 && rnd() < 0.3)) placeATGM(ax + (rnd() - 0.5) * 0.8);
     return made;
   }
+  // the crew of a destroyed buggy or motorcycle: n bodies thrown clear beside the wreck (no score: the vehicle was the kill)
+  function bodies(x, z, yaw, n) { const q = squad(QDIS); if (q < 0) return;
+    for (let k = 0; k < n; k++) { const a = yaw + (k & 1 ? 1.6 : -1.6) + (rnd() - 0.5) * 0.6 + (k >> 1) * 1.1, r = 1.6 + rnd() * 1.2 + (k >> 1) * 0.8, i = soldier(q, RIF, x + Math.sin(a) * r, z + Math.cos(a) * r, rnd() * 6.283); if (i < 0) return;
+      const o = i * 8; d[o + 7] = 2; d[o + 4] = 6; d[o + 5] = 0; SEEN[i] = 1; SPT[i] = 8; } }
   function reset() { d.fill(0); I.n = 0; QK.fill(-1); QB.fill(-1); I.kills = 0; I.rockets = 0; I.atgms = 0; I.bursts = 0; I.drawn = 0; lastState = 0; }
   const ROLE = { rifle: RIF, rpg: RPG, atgm: ATG, loader: LDR };
   // tests: one soldier (a squad of his own) at (x, z); in building b (house team position) when given
@@ -341,5 +345,5 @@ export function initInfantry(C, G, h) {
   // tests: kind 'rpg' (house b, or forest at x, z), 'atgm', 'dis' (dismounts from enemy e), 'auto-rpg' (placeRPG on the axis)
   G.infSquad = (kind, x, z, n, b) => kind === 'rpg' ? (b >= 0 ? houseTeam(b, n || 2) : fieldTeam(x, z, n || 2)) : kind === 'atgm' ? atgmTeam(x, z) : kind === 'dis' ? dismount(x, n || 5) : kind === 'auto-rpg' ? placeRPG(x) : kind === 'auto-atgm' ? placeATGM(x) : -1;
   I.kill = kill; I.flee = flee; I.reset = reset; I.tx = TX; I.tz = TZ; I.mt = MT; I.ex = EX; I.ey = EY; I.ez = EZ;
-  return { update, seg, aimHit, blast, onBld, trail, lpos, map, scan, wave, reset, hitKill: (by) => { if (I.hi >= 0) kill(I.hi, by); } };
+  return { update, seg, aimHit, blast, onBld, trail, lpos, map, scan, wave, reset, bodies, hitKill: (by) => { if (I.hi >= 0) kill(I.hi, by); } };
 }

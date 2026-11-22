@@ -233,6 +233,13 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
   // bilinear ground height: the nearest texel jumps 1-2 m per 2 m on a slope, which showed as light and dark squares on stand treads lying just above it
   let hf = clamp((wp.xz + G.world.x) * 0.5 - 0.5, vec2f(0.0), vec2f(2046.0)); let tx = vec2i(floor(hf)); let hw = hf - floor(hf);
   let hgt = mix(mix(textureLoad(heightTex, tx, 0).r, textureLoad(heightTex, tx + vec2i(1, 0), 0).r, hw.x), mix(textureLoad(heightTex, tx + vec2i(0, 1), 0).r, textureLoad(heightTex, tx + vec2i(1, 1), 0).r, hw.x), hw.y);
+  if (m == 33u) { // camouflage net: cloth strips with garnish holes cut out (the holes close with distance, where they would only shimmer)
+    let q = in.lp;
+    let hole = vn(vec2f(q.x * 13.0 + q.y * 11.0, q.z * 13.0 - q.y * 11.0)) + 0.35 * vn(vec2f(q.x * 41.0 - q.y * 31.0, q.z * 41.0 + q.y * 31.0));
+    if (hole > 0.97 + smoothstep(25.0, 70.0, dist)) { discard; }
+    alb *= (0.8 + 0.3 * vn(vec2f(q.x * 19.0 + q.y * 11.0, q.z * 17.0 + q.y * 9.0))) * (0.75 + 0.25 * smoothstep(0.97, 0.8, hole)); // creases, darker towards the edge of a hole
+    alb = min(alb, vec3f(0.74)); spec = 0.02; gloss = 10.0;
+  }
   let hAbove = max(wp.y - hgt, 0.0);
   let L = G.sunDir.xyz;
   let ndl = saturate(dot(n, L));
@@ -246,6 +253,7 @@ struct OV { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) 
       if (m >= 24u && m <= 28u) { th = select(select(select(0.74, 0.4, m == 27u), 0.95, m == 28u), 1.05, m == 25u); } // riders baked into a vehicle mesh are warm bodies
       th += 1.2 * smoothstep(0.7, 1.9, in.lp.z) * smoothstep(0.7, 1.1, in.lp.y) * smoothstep(1.75, 1.55, in.lp.y);
       th = mix(th, 1.0 + 0.9 * vn(in.lp.xz * 1.7 + in.lp.y * 2.0), OB.tr.z);
+      if (m == 33u) { th = 0.2; }
     }
     return vec4f(thermal(mix(th, 0.1, saturate(sn)), wp), 1.0);
   }
