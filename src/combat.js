@@ -45,6 +45,7 @@ const T72T = 0, BMPT = 1, TIGRT = 2, BTRT = 3, BUGT = 4, MOTOT = 5;
 // vis: line-of-sight transmittance (foliage optical depth: one e-fold per FOL_L m of full canopy, blocked below 0.1);
 // sig: how conspicuous the Leopard is (moving, firing, concealed under canopy, darkness vs. the sight: night = loss without a muzzle flash).
 const NET_T = 8, NETK = 0.35; // camouflage net: seconds to rig it; the factor on the tank's signature for an observer that has not detected it yet
+const SEEK = 0.6, AIMK = 1.4; // enemy crews: gain on how fast they pick the tank up, and the factor on their gunnery error (the owner was overwhelmed at 1 and 1)
 const SEE_R = 700, SEE_FLOOR = 0.12, FOL_L = 14, FOL_MAX = 255 * FOL_L * 2.3;
 
 export function initCombat(C) {
@@ -500,7 +501,7 @@ export function initCombat(C) {
       // perception (staggered line-of-sight checks)
       e.losT -= dt;
       if (e.losT <= 0) { e.losT = 0.28; e.los = !veh.dead && d < 2200 ? losVis(e.x, e.y + 2.2, e.z, veh.x, veh.y + 1.9, veh.z) : 0; }
-      if (e.los > 0) e.see = Math.min(4, e.see + (e.los * playerSig(E) * (G.net >= 1 && e.see < 1 ? NETK : 1) / (1 + d * d / (SEE_R * SEE_R)) * (e.known > 0 ? 1.6 : 1) - SEE_FLOOR) * dt);
+      if (e.los > 0) e.see = Math.min(4, e.see + (e.los * SEEK * playerSig(E) * (G.net >= 1 && e.see < 1 ? NETK : 1) / (1 + d * d / (SEE_R * SEE_R)) * (e.known > 0 ? 1.6 : 1) - SEE_FLOOR) * dt);
       else e.see -= 0.5 * dt;
       if (e.see < 0) e.see = 0;
       if (e.see >= 1) { e.known = Math.max(e.known, 12); if (e.los > 0) G.spot = true; }
@@ -530,7 +531,7 @@ export function initCombat(C) {
       e.y = (a + b + c + dd) / 4 + 0.02; e.pitch += (Math.atan2((a + b - c - dd) / 2, hl * 2) - e.pitch) * k; e.roll += (Math.atan2((a + c - b - dd) / 2, hw * 2) - e.roll) * k;
       // gunnery: lead, an aim error that settles with each shot, ballistic elevation
       e.errT -= dt;
-      if (e.errT <= 0) { e.errT = 2.2; const sg = (1.1 + d * 0.0042 + Math.abs(veh.v) * 0.22) * (1 + (2.2 + d / 700) / (1 + e.shots)) * (R.easy || 1); e.ex = (rnd() + rnd() + rnd() - 1.5) * sg; e.ey = (rnd() + rnd() + rnd() - 1.5) * sg * 0.45; e.ez = (rnd() + rnd() + rnd() - 1.5) * sg; }
+      if (e.errT <= 0) { e.errT = 2.2; const sg = (1.1 + d * 0.0042 + Math.abs(veh.v) * 0.22) * (1 + (2.2 + d / 700) / (1 + e.shots)) * (R.easy || 1) * AIMK; e.ex = (rnd() + rnd() + rnd() - 1.5) * sg; e.ey = (rnd() + rnd() + rnd() - 1.5) * sg * 0.45; e.ez = (rnd() + rnd() + rnd() - 1.5) * sg; }
       const M = e.d, ox = M[4] * K.gy + M[8] * K.gz + M[12], oy = M[5] * K.gy + M[9] * K.gz + M[13], oz = M[6] * K.gy + M[10] * K.gz + M[14];
       let wx = fx, wy = 0, wz = fz;
       if (e.see > 0.6 || e.known > 0) {
