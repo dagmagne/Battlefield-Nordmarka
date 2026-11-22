@@ -142,7 +142,7 @@ export function initUI(api, isTouch) {
   const PADT = [2, 4, 10, 12, 13, 14, 15]; // buttons only the tank uses
   const dz = (v) => { const a = Math.abs(v); return a < 0.15 ? 0 : Math.sign(v) * (a - 0.15) / 0.85; };
   let gTh = 0, gSt = 0, gX = 0, gZ = 0, gY = 0, gFire = false, gMg = false, gAA = false, gSight = false;
-  // Hold to confirm (pad only): ✕ drone and ○ artillery fire after a 1 s hold. The ring round the crosshair fills by a CSS
+  // Hold to confirm (pad only): ✕ drone, ○ artillery and □ camouflage net act after a 1 s hold (hK = the button index + 1). The ring round the crosshair fills by a CSS
   // animation that starts when #hold is shown, so nothing is written to the DOM while it fills.
   const HOLD_MS = 1000; let hK = 0, hT = 0;
   const holdStart = (k, text) => { hK = k; hT = performance.now(); $('holdT').textContent = text; $('hold').classList.add('show'); };
@@ -153,7 +153,7 @@ export function initUI(api, isTouch) {
     const gl = navigator.getGamepads();
     let g = null; for (let i = 0; i < gl.length; i++) if (gl[i] && gl[i].connected) { g = gl[i]; break; }
     U.pad = g; if (!g) { holdEnd(); return; }
-    const b = g.buttons, ax = g.axes, n = Math.min(b.length, 18);
+    const b = g.buttons, ax = g.axes, n = Math.min(b.length, 16);
     const down = (i) => i < n && b[i].pressed;
     const press = (i) => { const d = down(i); const e = d && !pb[i]; pb[i] = d ? 1 : 0; return e; };
     const bv = (i) => (i < n ? b[i].value : 0);
@@ -163,8 +163,8 @@ export function initUI(api, isTouch) {
     // ✕ drone / ○ artillery: start on the press, cancel on release, fire after HOLD_MS
     if (press(0)) { const l = api.droneLabel(); if (l) holdStart(1, 'HOLD ✕ · ' + l); else api.drone(); } // '' = no hold needed (skip the blast view, or nothing to launch: the toast says why)
     if (press(1)) holdStart(2, 'HOLD ○ · FIRE MISSION');
-    if (hK && !down(hK === 1 ? 0 : 1)) holdEnd();
-    else if (hK && performance.now() - hT >= HOLD_MS) { const k = hK; holdEnd(); if (k === 1) api.drone(); else api.arty(); }
+    if (hK && !down(hK - 1)) { const k = hK; holdEnd(); if (k === 3) api.ammo(-1); } // let go early: nothing, except □, whose tap is the ammunition change
+    else if (hK && performance.now() - hT >= HOLD_MS) { const k = hK; holdEnd(); if (k === 1) api.drone(); else if (k === 2) api.arty(); else api.net(); }
     if (press(3)) api.thermal(); if (press(8)) api.bigMap(); if (press(9)) showMenu(true);
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
     gFire = bv(7) > 0.5;
@@ -174,7 +174,7 @@ export function initUI(api, isTouch) {
       for (let j = 0; j < PADT.length; j++) pb[PADT[j]] = down(PADT[j]) ? 1 : 0; // tank-only buttons: track them so a press in flight does not fire on return
       return;
     }
-    if (press(4)) api.smoke(); if (press(2)) api.ammo(-1); if (press(10)) api.cam(); if (press(17)) api.net(); // (17: the touchpad click)
+    if (press(4)) api.smoke(); if (press(2)) holdStart(3, 'HOLD □ · CAMOUFLAGE NET'); if (press(10)) api.cam(); // □: a tap changes ammunition (on release), a hold rigs or stows the net (the touchpad is no use: the browser treats it as a mouse)
     if (press(12)) inp.zoom -= 0.35; if (press(13)) inp.zoom += 0.35; // sight magnification (commander view: camera distance)
     if (press(14)) api.droneType(-2); if (press(15)) api.droneType(-1);
     gSight = bv(6) > 0.5; gMg = bv(5) > 0.5; gAA = bv(11) > 0.5;
