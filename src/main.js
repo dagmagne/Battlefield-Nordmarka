@@ -40,6 +40,8 @@ import TITLE from './data/title.webp';
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
 const lang = initLang(qs); trPage(document); // language first: the start screen is already on the page
+const pickLang = (v) => { if (v === lang) return; try { localStorage.glang = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('lang'); location.href = u.href; }; // stored, applied by a reload
+for (const b of $('lLang').children) { b.classList.toggle('on', b.dataset.v === lang); b.onclick = () => pickLang(b.dataset.v); } // the language choice on the start screen
 // title screen art and music (the music button works before the game has loaded; the in-game one goes through api.music)
 $('load').style.backgroundImage = `linear-gradient(180deg,#0b142099 0%,#0b142000 30%,#0b142000 50%,#0b1420e6 100%),url(data:image/webp;base64,${TITLE})`;
 const music = initMusic(qs);
@@ -601,7 +603,7 @@ async function main() {
     net() { if (R.game) R.game.netKey(); },
     thermal(v) { R.therm = v === undefined ? (R.therm + 1) % 3 : v; ui.toast(['Thermal sight off', 'Thermal sight: white-hot', 'Thermal sight: black-hot'][R.therm] + (R.therm && cam.mode !== 1 && cam.mode !== 4 ? ' (gunner sight and drone)' : '')); },
     restart() { treesRestore(); if (R.game) R.game.restart(); },
-    lang(v) { if (v === lang) return; try { localStorage.glang = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('lang'); location.href = u.href; }, // English or Norwegian: stored, applied by a reload
+    lang(v) { pickLang(v); }, // English or Norwegian (menu row; the start screen has the same choice)
     mission(id) { if (msn.set(id) && game.peace) game.peace = false; api.restart(); }, // '' = the defence waves
     snow(v) { R.snow = v === undefined ? 1 - R.snow : v; ui.toast(R.snow ? 'Snowfall on' : 'Snowfall off'); },
     tod(i) { if (i < 0) i = (todIndex + 1) % 4; setTod(i); tshDirty = 2; ui.toast(TODN[i]); },

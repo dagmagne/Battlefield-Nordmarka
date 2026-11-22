@@ -20,6 +20,15 @@ for (const [name, vw, vh, q] of [['desk', 1280, 800, ''], ['phone', 852, 393, '&
   let r = await p.evaluate(`({t:[...document.querySelectorAll('#pg0 b')].map((b)=>b.textContent), lang:document.documentElement.lang, over:${OVER}})`);
   await p.screenshot({ path: `${out}/pick-${name}.png` });
   check(`${name}: the start screen is Norwegian`, r.t.join('|') === 'Oppdrag|Forsvar|Fri kjøring' && r.lang === 'no' && !r.over.length, r);
+  { // the language choice on the start screen: both buttons on screen, the current one marked, a click switches with a reload
+    const a = await p.evaluate(`(()=>{ const L=document.getElementById('lLang').getBoundingClientRect(), M=document.getElementById('lMu').getBoundingClientRect(), H=document.querySelector('#load h1').getBoundingClientRect(), hit=(a,b)=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
+      return {on:document.querySelector('#lLang .on').dataset.v, vis:L.width>80&&L.left>=0&&L.top>=0, clear:!hit(L,M)&&!hit(L,H)}; })()`);
+    await p.evaluate(`history.replaceState(null,'',location.pathname+'?q=low&drs=0&mute${q}')`);
+    await Promise.all([p.waitForNavigation({ timeout: 60000 }), p.click('#lLang button[data-v="en"]')]); await p.waitForSelector('#pg0 button', { state: 'visible', timeout: 60000 });
+    const en = await p.evaluate(`({t:document.querySelector('#pg0 b').textContent, on:document.querySelector('#lLang .on').dataset.v})`);
+    await Promise.all([p.waitForNavigation({ timeout: 60000 }), p.click('#lLang button[data-v="no"]')]); await p.waitForSelector('#pg0 button', { state: 'visible', timeout: 60000 });
+    const no = await p.evaluate(`({t:document.querySelector('#pg0 b').textContent, on:document.querySelector('#lLang .on').dataset.v})`);
+    check(`${name}: language buttons on the start screen: visible, clear of the title and MUSIC, switch both ways`, a.on === 'no' && a.vis && a.clear && en.t === 'Missions' && en.on === 'en' && no.t === 'Oppdrag' && no.on === 'no', { a, en, no }); }
   await p.click('#pick button[data-go="pg1"]'); await p.waitForTimeout(300);
   r = await p.evaluate(`({t:[...document.querySelectorAll('#pg1 button[data-m] b')].map((b)=>b.textContent), fit:[...document.querySelectorAll('#pg1 button[data-m]')].every((b)=>{ const q=b.getBoundingClientRect(); return q.top>=0&&q.bottom<=innerHeight+1; })})`);
   await p.screenshot({ path: `${out}/missions-${name}.png` });
