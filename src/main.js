@@ -216,7 +216,7 @@ async function main() {
     device.queue.writeBuffer(u, 0, d);
     return { vb: mkBuf(mesh.v, U.VERTEX), ib: mkBuf(mesh.i, U.INDEX), n: mesh.i.length, u, d, bg: device.createBindGroup({ layout: bglO, entries: [{ binding: 0, resource: { buffer: u } }] }) };
   };
-  const groomer = mkObj(buildLeopard()), droneO = mkObj(buildDrone()), netO = mkObj(buildNet());
+  const groomer = mkObj(buildLeopard()), droneO = mkObj(buildDrone()), droneO2 = mkObj(buildDrone()), netO = mkObj(buildNet()); // droneO2: the recon drone keeping watch on its own
   const propsMesh = buildProps(W), props = mkObj(propsMesh); // the CPU copy stays alive: building state changes edit and re-upload ranges of it
   const BL = initBuildings(W, propsMesh, HALF);
   BL.upload = (v0, v1) => device.queue.writeBuffer(props.vb, v0 * 56, propsMesh.v, v0 * 14, (v1 - v0) * 14);
@@ -620,7 +620,7 @@ async function main() {
   const turM = new Float32Array(16), gunM = new Float32Array(16);
   // sound hook: gameplay code reports events here; the audio module (if present) installs R.sfx. name, world position, strength.
   const sfx = (name, x, y, z, k) => { if (R.sfx) R.sfx(name, x, y, z, k); if (R.hap) R.hap.ev(name, x, y, z, k); };
-  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: W.name === 'fantasy' || (pickPeace !== null ? pickPeace : qs.has('peace') || qs.has('auto') || qs.has('perf') || (!msel && peacePref())) });
+  const game = initCombat({ W, R, veh, aim, cam, inp, parts, rnd, ui, sfx, HALF, WS, HN, PLAY, collAt, solid, bld: BL, turM, gunM, dobj: droneO.d, dobj2: droneO2.d, mineMesh, treeHit, aobj: aObj.map((a) => a.d), eobj: eObj.map((e) => e.d), peace: W.name === 'fantasy' || (pickPeace !== null ? pickPeace : qs.has('peace') || qs.has('auto') || qs.has('perf') || (!msel && peacePref())) });
   R.game = game; R.aimHit = game.aimHit;
   const msn = initMissions({ W, R, veh, aim, cam, rnd, ui, parts, bld: BL }, game, { quiet: qs.has('nohint') || qs.has('auto') || qs.has('perf'), tp: (x, z, yaw) => window.__tp(x, z, yaw), tod: (i) => { if (i !== todIndex) { setTod(i); tshDirty = 2; } }, go: (id) => api.mission(id) });
   const SOL = initSoldiers(MAXI, W.groundAt);
@@ -961,6 +961,7 @@ async function main() {
     device.queue.writeBuffer(groomer.u, 0, groomer.d);
     const netOn = game.net > 0; if (netOn) { const nd = netO.d, s = game.net * game.net * (3 - 2 * game.net); nd.set(groomer.d); for (let p = 0; p < 3; p++) { nd[p * 16 + 4] *= s; nd[p * 16 + 5] *= s; nd[p * 16 + 6] *= s; } device.queue.writeBuffer(netO.u, 0, nd); } // the camouflage net rises from the ground as it is rigged
     const droneOn = game.drone.on; if (droneOn) device.queue.writeBuffer(droneO.u, 0, droneO.d);
+    const watchOn = game.watch.on; if (watchOn) device.queue.writeBuffer(droneO2.u, 0, droneO2.d);
     for (let i = 0; i < MAXE; i++) if (game.enemies[i].on) device.queue.writeBuffer(eObj[i].u, 0, eObj[i].d);
     for (let i = 0; i < MAXA; i++) if (game.air[i].on) device.queue.writeBuffer(aObj[i].u, 0, aObj[i].d);
     if (game.fxN) device.queue.writeBuffer(fxBuf, 0, game.fx, 0, game.fxN * 12);
@@ -997,6 +998,7 @@ async function main() {
       sp.setPipeline(objShPipe); sp.setBindGroup(1, groomer.bg); sp.setVertexBuffer(0, groomer.vb); sp.setIndexBuffer(groomer.ib, 'uint32'); sp.drawIndexed(groomer.n);
       if (netOn) { sp.setBindGroup(1, netO.bg); sp.setVertexBuffer(0, netO.vb); sp.setIndexBuffer(netO.ib, 'uint32'); sp.drawIndexed(netO.n); }
       if (droneOn) { sp.setBindGroup(1, droneO.bg); sp.setVertexBuffer(0, droneO.vb); sp.setIndexBuffer(droneO.ib, 'uint32'); sp.drawIndexed(droneO.n); }
+      if (watchOn) { sp.setBindGroup(1, droneO2.bg); sp.setVertexBuffer(0, droneO2.vb); sp.setIndexBuffer(droneO2.ib, 'uint32'); sp.drawIndexed(droneO2.n); }
       for (let i = 0; i < MAXA; i++) { const a = game.air[i]; if (!a.on || c > 0) continue; const m = aMesh[a.type]; sp.setBindGroup(1, aObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on) continue; const m = eMesh[e.cage ? 6 : e.type]; sp.setBindGroup(1, eObj[i].bg); sp.setVertexBuffer(0, m.vb); sp.setIndexBuffer(m.ib, 'uint32'); sp.drawIndexed(m.n); }
       if (!hO) { sp.setBindGroup(1, props.bg); sp.setVertexBuffer(0, props.vb); sp.setIndexBuffer(props.ib, 'uint32'); sp.drawIndexed(props.n);
@@ -1014,6 +1016,7 @@ async function main() {
     if (!hV && (cam.mode !== 1 || R.pose)) { p.setBindGroup(1, groomer.bg); p.setVertexBuffer(0, groomer.vb); p.setIndexBuffer(groomer.ib, 'uint32'); p.drawIndexed(groomer.n);
       if (netOn) { p.setBindGroup(1, netO.bg); p.setVertexBuffer(0, netO.vb); p.setIndexBuffer(netO.ib, 'uint32'); p.drawIndexed(netO.n); } }
     if (droneOn && !hV && !(cam.mode === 4 && R.dFirst)) { p.setBindGroup(1, droneO.bg); p.setVertexBuffer(0, droneO.vb); p.setIndexBuffer(droneO.ib, 'uint32'); p.drawIndexed(droneO.n); }
+    if (watchOn && !hV) { p.setBindGroup(1, droneO2.bg); p.setVertexBuffer(0, droneO2.vb); p.setIndexBuffer(droneO2.ib, 'uint32'); p.drawIndexed(droneO2.n); }
     for (let i = 0; i < MAXA; i++) { const a = game.air[i]; if (!a.on || hV) continue; const m = aMesh[a.type]; p.setBindGroup(1, aObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     for (let i = 0; i < MAXE; i++) { const e = game.enemies[i]; if (!e.on || hV) continue; const m = eMesh[e.cage ? 6 : e.type]; p.setBindGroup(1, eObj[i].bg); p.setVertexBuffer(0, m.vb); p.setIndexBuffer(m.ib, 'uint32'); p.drawIndexed(m.n); }
     if (!hO) { p.setBindGroup(1, props.bg); p.setVertexBuffer(0, props.vb); p.setIndexBuffer(props.ib, 'uint32'); p.drawIndexed(props.n);

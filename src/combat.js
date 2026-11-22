@@ -52,6 +52,7 @@ export function initCombat(C) {
   const SO = new Float32Array(5), TRO = new Float32Array(5), S = new Float32Array(SN * SS), CL = new Float32Array(16 * 5), FL = new Float32Array(24 * 8);
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
   G.dview = [1, 1, 1]; // last view level per drone type (kept between launches)
+  const RW = G.watch = { on: false, type: 2, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, ax: 0, az: 0, spin: 0, tp: 0, tr: 0, scan: 0, sec: -1 }; // the recon drone keeping watch on its own (see updateWatch)
   const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
     type: 0, bombs: 0, rel: 0, climb: 0, away: false, auto: false, ax: 0, az: 0, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
   G.inf = { n: 0, d: new Float32Array(MAXI * 8) }; // soldiers (phase 6): per soldier [x, y, z, yaw, pose, phase, aim, state]; logic in infantry.js, drawn by the renderer
@@ -567,7 +568,7 @@ export function initCombat(C) {
     ui.set('sM', 'MG ' + lastMg, 'st'); ui.set('sK', 'SMOKE ' + G.smokeN, 'st');
     ui.set('sN', G.netOn && G.net < 1 ? 'NET ' + Math.ceil((1 - G.net) * NET_T) + ' s' : 'NET', 'st' + (G.net >= 1 ? ' on' : G.netOn ? ' warn' : '')); if (ui.netUI) ui.netUI(G.net >= 1 ? 2 : G.netOn ? 1 : 0);
     const DT = DTYPE[D.on ? D.type : G.dsel];
-    ui.set('sD', D.on ? DT.name + (D.type === 1 ? ' ×' + D.bombs : '') + ' · ' + D.sec + ' s' : DT.name + ' ' + G.dn[G.dsel], 'st' + (D.on ? (D.sec > 15 ? ' on' : ' warn') : ''));
+    ui.set('sD', (D.on ? DT.name + (D.type === 1 ? ' ×' + D.bombs : '') + ' · ' + D.sec + ' s' : DT.name + ' ' + G.dn[G.dsel]) + (RW.on ? ' · RECON↑ ' + RW.sec * 5 + ' s' : ''), 'st' + (D.on ? (D.sec > 15 ? ' on' : ' warn') : RW.on ? ' on' : ''));
     if (ui.droneUI) ui.droneUI(DT.name, D.on ? D.type : -1);
     ui.set('wave', G.peace ? 'FREE ROAM' : (G.msn ? G.msnHud : G.wave ? 'WAVE ' + G.wave + (G.won ? '' : '/' + WAVES) : 'STAND BY') + ' · ' + G.kills + ' KILLS · ' + G.score);
   }
@@ -611,6 +612,7 @@ export function initCombat(C) {
     c.strokeStyle = '#05080cb0'; c.lineWidth = 3 * u; c.beginPath(); c.moveTo(vx, vy); c.lineTo(vx - Math.sin(t) * 26 * u, vy - Math.cos(t) * 26 * u); c.stroke();
     c.strokeStyle = '#ffd36b'; c.lineWidth = 1.5 * u; c.stroke();
     c.fillStyle = '#7dffb0'; c.strokeStyle = '#05080cd0'; c.lineWidth = ol; c.beginPath(); c.moveTo(vx - Math.sin(a) * 7 * u, vy - Math.cos(a) * 7 * u); c.lineTo(vx - Math.sin(a + 2.5) * 5 * u, vy - Math.cos(a + 2.5) * 5 * u); c.lineTo(vx - Math.sin(a - 2.5) * 5 * u, vy - Math.cos(a - 2.5) * 5 * u); c.closePath(); c.fill(); c.stroke();
+    if (RW.on) { const q = RW.yaw, dx = cx + (RW.x - mx) * sc, dy = cx + (RW.z - mz) * sc; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(dx - Math.sin(q) * 8 * u, dy - Math.cos(q) * 8 * u); c.lineTo(dx - Math.sin(q + 2.4) * 5 * u, dy - Math.cos(q + 2.4) * 5 * u); c.lineTo(dx - Math.sin(q - 2.4) * 5 * u, dy - Math.cos(q - 2.4) * 5 * u); c.closePath(); c.fill(); c.stroke(); }
     if (D.on) { const q = D.yaw, dx = cx + (D.x - mx) * sc, dy = cx + (D.z - mz) * sc; c.fillStyle = '#6fd6ff'; c.beginPath(); c.moveTo(dx - Math.sin(q) * 8 * u, dy - Math.cos(q) * 8 * u); c.lineTo(dx - Math.sin(q + 2.4) * 5 * u, dy - Math.cos(q + 2.4) * 5 * u); c.lineTo(dx - Math.sin(q - 2.4) * 5 * u, dy - Math.cos(q - 2.4) * 5 * u); c.closePath(); c.fill(); c.stroke(); }
   }
 
@@ -710,10 +712,10 @@ export function initCombat(C) {
     else if (immS >= 0) { immS = -1; hudDirty = true; }
   }
   // drones see mines (buried ones by the disturbed snow) inside their camera cone
-  function droneMines(fx, fy, fz, range) {
+  function droneMines(fx, fy, fz, range, S) {
     let n = 0;
-    for (let i = 0; i < MAXM; i++) { if ((MS[i] !== 1 && MS[i] !== 2) || MR[i]) continue; const dx = MX[i] - D.x, dy = MY[i] - D.y, dz = MZ[i] - D.z, dd = Math.hypot(dx, dy, dz);
-      if (dd > range || (dx * fx + dy * fy + dz * fz) / dd < 0.72) continue; if (losVis(D.x, D.y, D.z, MX[i], MY[i] + 0.3, MZ[i]) > 0.1) { MR[i] = 1; mesh(i); n++; } }
+    for (let i = 0; i < MAXM; i++) { if ((MS[i] !== 1 && MS[i] !== 2) || MR[i]) continue; const dx = MX[i] - S.x, dy = MY[i] - S.y, dz = MZ[i] - S.z, dd = Math.hypot(dx, dy, dz);
+      if (dd > range || (dx * fx + dy * fy + dz * fz) / dd < 0.72) continue; if (losVis(S.x, S.y, S.z, MX[i], MY[i] + 0.3, MZ[i]) > 0.1) { MR[i] = 1; mesh(i); n++; } }
     if (n) ui.toast(`Drone: ${n} mine${n > 1 ? 's' : ''} spotted — marked`);
   }
   function minesReset() { MS.fill(0); MR.fill(0); MP.fill(0); FLD.fill(0); rlAt = -1; rlT = 0; for (let i = 0; i < MAXM; i++) mesh(i); }
@@ -948,19 +950,35 @@ export function initCombat(C) {
     }
   }
   // drone sensor: enemies inside the camera's view cone with a clear line are marked on the map (staggered: every 0.3 s)
-  function droneScan(T) {
-    const cp = Math.cos(D.pitch), fx = -Math.sin(D.yaw) * cp, fy = Math.sin(D.pitch), fz = -Math.cos(D.yaw) * cp;
+  function droneScan(T, S) { // S: the drone looking (the one flown, or the recon keeping watch)
+    const cp = Math.cos(S.pitch), fx = -Math.sin(S.yaw) * cp, fy = Math.sin(S.pitch), fz = -Math.cos(S.yaw) * cp;
     for (let i = 0; i < MAXE; i++) { const e = G.enemies[i]; if (!e.on || e.dead) continue;
-      const dx = e.x - D.x, dy = e.y + 1.5 - D.y, dz = e.z - D.z, dd = Math.hypot(dx, dy, dz); if (dd > T.see * e.cam || dd < 1) continue; // (e.cam < 1: under camouflage nets, missions)
+      const dx = e.x - S.x, dy = e.y + 1.5 - S.y, dz = e.z - S.z, dd = Math.hypot(dx, dy, dz); if (dd > T.see * e.cam || dd < 1) continue; // (e.cam < 1: under camouflage nets, missions)
       if ((dx * fx + dy * fy + dz * fz) / dd < 0.72) continue; // about ±44°, the wide drone camera
-      if (losVis(D.x, D.y, D.z, e.x, e.y + 1.5, e.z) > 0.15) e.spotT = Math.max(e.spotT, T.mark); }
-    inf.scan(D.x, D.y, D.z, fx, fy, fz, T.see, T.mark);
-    droneMines(fx, fy, fz, D.type ? 450 : 250);
+      if (losVis(S.x, S.y, S.z, e.x, e.y + 1.5, e.z) > 0.15) e.spotT = Math.max(e.spotT, T.mark); }
+    inf.scan(S.x, S.y, S.z, fx, fy, fz, T.see, T.mark);
+    droneMines(fx, fy, fz, S.type ? 450 : 250, S);
   }
   // velocity response like a DJI in normal mode: a firm rate while the sticks are deflected, a slow one when they are let go,
   // so the drone coasts for a second or two (time constant 1/coast s); u = stick deflection 0..1
   const glide = (dt, firm, coast, u) => Math.min(1, dt * (coast + (firm - coast) * Math.min(1, u * 1.5)));
+  // the recon drone keeping watch on its own (X while flying it): it circles 80 m round the spot where it was left, at its height, the
+  // camera sweeping round and down, and keeps spotting until the battery is flat. It has its own slot (RW), so another drone can be flown meanwhile.
+  function updateWatch(dt) {
+    const S = RW; if (!S.on) return; if (veh.dead) { S.on = false; return; }
+    const T = DTYPE[2]; S.t -= dt; S.spin += dt * 95;
+    let ox = S.x - S.ax, oz = S.z - S.az; if (Math.abs(ox) + Math.abs(oz) < 1) ox = 1; // left exactly over its centre (straight up from the tank): head out to the circle
+    const od = Math.hypot(ox, oz), k = Math.min(1, dt * 1.2);
+    const tx = -oz / od * T.v * 0.6 + (80 - od) / 80 * ox / od * T.v * 0.6, tz = ox / od * T.v * 0.6 + (80 - od) / 80 * oz / od * T.v * 0.6;
+    S.vx += (tx - S.vx) * k; S.vz += (tz - S.vz) * k; S.yaw += 0.35 * dt; S.pitch = -0.75;
+    S.x = clamp(S.x + S.vx * dt, -HALF + 60, HALF - 60); S.z = clamp(S.z + S.vz * dt, -HALF + 60, HALF - 60); S.y = Math.max(S.y, W.groundAt(S.x, S.z, S.y) + 25);
+    if (S.t <= 0 || Math.hypot(S.x - veh.x, S.z - veh.z) > T.r) { S.on = false; hudDirty = true; ui.toast(S.t <= 0 ? 'Recon drone battery empty — lost' : 'Recon drone out of radio range — lost'); return; }
+    S.scan -= dt; if (S.scan <= 0) { S.scan = 0.3; droneScan(T, S); }
+    const sec = Math.ceil(S.t / 5); if (sec !== S.sec) { S.sec = sec; hudDirty = true; }
+    droneParts(C.dobj2, S); C.dobj2[131] = 1;
+  }
   function updateDrone(dt) {
+    updateWatch(dt);
     if (!D.on) { if (D.hold > 0) { D.hold -= dt; if (D.hold <= 0 || veh.dead || (inp.fire && !fireWas)) { D.hold = 0; droneEnd(null); } } return; }
     if (veh.dead) { droneEnd('Drone link lost'); return; }
     const T = DTYPE[D.type], g0 = W.groundAt(D.x, D.z, D.y);
@@ -1003,17 +1021,22 @@ export function initCombat(C) {
     // video link quality for the goggles / OSD (0..1): fine out to 70 % of the radio range, then fading; a hill between tank and drone costs much, a building some
     D.sq -= dt; if (D.sq <= 0) { D.sq = 0.25; const d3 = Math.hypot(D.x - veh.x, D.y - veh.y - 3, D.z - veh.z); D.sigT = clamp((T.r - d3) / (0.3 * T.r), 0, 1) * radioPath(veh.x, veh.y + 3, veh.z, D.x, D.y, D.z); }
     D.sig += (D.sigT - D.sig) * Math.min(1, dt * 3);
-    D.scan -= dt; if (D.scan <= 0) { D.scan = 0.3; droneScan(T); }
+    D.scan -= dt; if (D.scan <= 0) { D.scan = 0.3; droneScan(T, D); }
     const sec = Math.ceil(D.t); if (sec !== D.sec) { D.sec = sec; hudDirty = true; }
     droneParts(C.dobj, D); C.dobj[131] = 1;
   }
   // X: launch the selected drone type from the turret roof, or cut the link to the one in the air (it is lost)
   G.droneKey = () => {
     if (D.hold > 0) { D.hold = 0; droneEnd(null); return; }
-    if (D.on && D.auto) { D.auto = false; D.yr = 0; cam.mode = 4; R.snap = true; hudDirty = true; ui.toast('Back on the recon drone'); return; }
-    if (D.on && D.type === 2) { D.auto = true; D.ax = D.x; D.az = D.z; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; ui.toast(`Recon drone keeps watch on its own for ${Math.ceil(D.t)} s — X takes it back`); return; } // the recon flies out its battery
+    if (D.on && D.type === 2 && !RW.on) { // the recon moves to the watch slot and flies out its battery there; the tank and the other drones are free
+      Object.assign(RW, { on: true, x: D.x, y: D.y, z: D.z, vx: D.vx, vy: 0, vz: D.vz, yaw: D.yaw, pitch: -0.75, t: D.t, ax: D.x, az: D.z, spin: D.spin, tp: 0, tr: 0, scan: 0, sec: -1 });
+      D.on = false; D.iok = false; cam.mode = 0; R.snap = true; hudDirty = true; fireBlock = true; droneParts(C.dobj2, RW); C.dobj2[131] = 1;
+      ui.toast(`Recon drone keeps watch on its own for ${Math.ceil(RW.t)} s — launch another drone with X; with RECON picked, X takes it back`); return; }
     if (D.on) { droneEnd('Drone link cut — back in the tank'); return; }
     if (veh.dead || cam.mode === 3) return;
+    if (RW.on && G.dsel === 2) { const T2 = DTYPE[2]; // RECON picked while one keeps watch: take it back
+      Object.assign(D, { on: true, type: 2, x: RW.x, y: RW.y, z: RW.z, vx: RW.vx, vy: 0, vz: RW.vz, yaw: RW.yaw, pitch: -0.6, t: RW.t, spin: RW.spin, tp: 0, tr: 0, sec: Math.ceil(RW.t), bombs: 0, rel: 0, yr: 0, view: G.dview[2], tpS: 0, sig: 1, sigT: 1, sq: 0, tMax: T2.t, climb: 0, away: true, scan: 0, iok: false, auto: false });
+      RW.on = false; cam.mode = 4; R.snap = true; hudDirty = true; droneParts(C.dobj, D); C.dobj[131] = 1; ui.toast('Back on the recon drone'); return; }
     const ty = G.dsel, T = DTYPE[ty];
     if (G.dn[ty] <= 0) { ui.toast(`No ${T.name} drones left` + (G.dn[0] + G.dn[1] + G.dn[2] ? ' — Z picks another type' : '')); return; }
     if (W.br.over(veh.x, veh.z, veh.y + 1) < veh.y + 40) { ui.toast('No room to launch a drone under the bridge — drive out first'); return; }
@@ -1027,19 +1050,19 @@ export function initCombat(C) {
         : 'Recon drone climbing — enemies in its camera go on the map · X: back to the tank (it keeps flying) · land on the tank to recover it');
   };
   // what a hold of pad ✕ would do now (for the hold ring's label); '' when it should act at once (skip the blast view, or nothing to launch)
-  G.droneLabel = () => D.hold > 0 ? '' : D.on && D.auto ? 'TAKE BACK RECON' : D.on && D.type === 2 ? 'RECON AUTOPILOT' : D.on ? 'CUT LINK'
+  G.droneLabel = () => D.hold > 0 ? '' : D.on && D.type === 2 && !RW.on ? 'RECON AUTOPILOT' : D.on ? 'CUT LINK' : RW.on && G.dsel === 2 && !veh.dead ? 'TAKE BACK RECON'
     : veh.dead || G.dn[G.dsel] <= 0 ? '' : 'LAUNCH ' + DTYPE[G.dsel].name;
   // Z: pick the drone type for the next launch (i: index, -1 or undefined next, -2 previous)
   G.droneType = (i) => {
-    if (D.on) { ui.toast(D.auto ? 'The recon drone is still up — X takes it back' : 'Land the drone or cut the link first'); return; }
+    if (D.on) { ui.toast('Land the drone or cut the link first'); return; }
     G.dsel = i === -2 ? (G.dsel + 2) % 3 : i === undefined || i < 0 ? (G.dsel + 1) % 3 : i; hudDirty = true;
-    const T = DTYPE[G.dsel]; ui.toast(`Drone: ${T.name} (${G.dn[G.dsel]} left)` + [' — one-way shaped charge', ' — hovers and drops grenades', ' — flies high and spots for the map'][G.dsel]);
+    const T = DTYPE[G.dsel]; ui.toast(RW.on && G.dsel === 2 ? 'Drone: RECON — one is keeping watch, X takes it back' : `Drone: ${T.name} (${G.dn[G.dsel]} left)` + [' — one-way shaped charge', ' — hovers and drops grenades', ' — flies high and spots for the map'][G.dsel]);
   };
   G.restart = () => {
     for (const e of G.enemies) e.on = false; for (const a of AIR) a.on = false; AQY.fill(-1); G.orlan = 0; G.thr.fill(0); minesReset(); veh.immob = 0; pqN = 0; G.bag = null; G.lastAxis = NaN; S.fill(0); CL.fill(0); FI.fill(0); C.bld.restore();
     arty.reset(); // phase 5A
     inf.reset(); // phase 6B
-    D.on = false; D.auto = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
+    D.on = false; D.auto = false; RW.on = false; D.hold = 0; if (cam.mode === 4) cam.mode = 0;
     for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; D.iok = false;
     Object.assign(G, { netOn: false, net: 0, sel: 0, mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, burnP: 0 }); G.n[0] = 20; G.n[1] = 12; G.n[2] = 10; R.shellV = AMMO[0].v;
     Object.assign(veh, { x: W.start.x, z: W.start.z, yaw: W.start.yaw, v: 0, hp: 100, dead: false, immob: 0, tl: 0, tt: 0, turYaw: 0, gunPitch: 0 }); veh.y = veh.gPrev = hAt(veh.x, veh.z); aim.yaw = veh.yaw; aim.pitch = 0;

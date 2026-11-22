@@ -71,10 +71,10 @@ r = await ev('({seen:B.seen, spot:+B.spotT.toFixed(1), range:RV, los:+__game.vis
 check('recon drone puts the BMP on the map', r.seen && r.spot > 30, r);
 await shot('recon-view'); await mapShot('map-3-recon');
 await ev('__game.droneKey(); __sim(1/60, 5)');
-r = await ev('({on:__game.drone.on, auto:__game.drone.auto, mode:__cam.mode, n:Array.from(__game.dn), hud:document.getElementById("sD").textContent})');
-check('X with the recon up hands it to its autopilot (still flying, you are back in the tank)', r.on && r.auto && r.mode === 0 && r.n[2] === 1, r);
-await ev('__game.drone.t=0.5; __sim(1/60, 60)');
-r = await ev('({on:__game.drone.on, n:Array.from(__game.dn)})');
+r = await ev('({on:__game.watch.on, auto:!__game.drone.on, mode:__cam.mode, n:Array.from(__game.dn), hud:document.getElementById("sD").textContent})');
+check('X with the recon up hands it to its autopilot (still flying, you are back in the tank)', r.on && r.auto && r.mode === 0 && r.n[2] === 1 && /RECON↑/.test(r.hud), r);
+await ev('__game.watch.t=0.5; __sim(1/60, 60)');
+r = await ev('({on:__game.watch.on, n:Array.from(__game.dn)})');
 check('the recon on autopilot is lost when its battery is flat', !r.on && r.n[2] === 1, r);
 
 // FPV still works: launch, detonate
@@ -82,11 +82,20 @@ await ev('__game.droneType(0); __game.droneKey(); __sim(1/60, 30); __inp.fire=tr
 r = await ev('({on:__game.drone.on, hold:+__game.drone.hold.toFixed(1), n:Array.from(__game.dn)})');
 check('FPV detonates on the button as before', !r.on && r.hold > 3 && r.n[0] === 4, r);
 // recon on autopilot: X with the recon up puts you back in the tank while it keeps circling and spotting until the battery is flat
-r = await ev(`(()=>{ const D=__game.drone; __sim(1/60, 60*6); __game.dn[2]=2; __game.droneType(2); __game.droneKey(); __sim(1/60, 60*10); __game.droneKey(); __sim(1/60, 30);
-  const out={on:D.on, auto:D.auto, mode:__cam.mode}; const rl0=__game.rl; __inp.fire=true; __sim(1/60,2); __inp.fire=false; out.fired=__game.rl>rl0;
+r = await ev(`(()=>{ const D=__game.watch; __sim(1/60, 60*6); __game.dn[2]=2; __game.droneType(2); __game.droneKey(); __sim(1/60, 60*10); __game.droneKey(); __sim(1/60, 30);
+  const out={on:D.on, auto:!__game.drone.on, mode:__cam.mode}; const rl0=__game.rl; __inp.fire=true; __sim(1/60,2); __inp.fire=false; out.fired=__game.rl>rl0;
   B.seen=false; B.spotT=0; D.ax=B.x; D.az=B.z; D.x=B.x+80; D.z=B.z; D.y=__W.heightAt(D.x,D.z)+100; __sim(1/60, 60*20); out.spotted=B.seen; out.circleR=Math.round(Math.hypot(D.x-D.ax,D.z-D.az));
   __cam.mode=1; D.t=1; __sim(1/60, 90); out.endOn=D.on; out.endMode=__cam.mode; __cam.mode=0; return out; })()`); // (review fix: the end of an autonomous flight leaves the gunner sight alone)
 check('recon on autopilot: back in the tank (gun fires), the drone circles, spots and flies until its battery is flat', r.on && r.auto && r.mode === 0 && r.fired && r.spotted && r.circleR > 50 && r.circleR < 110 && !r.endOn && r.endMode === 1, r);
+// another drone while the recon keeps watch: FPV out and detonated, the bomber out and back, then the recon taken back with RECON picked
+r = await ev(`(()=>{ const G=__game, D=G.drone, Wt=G.watch, o={}; __api.restart(); __sim(1/60, 30); G.droneType(2); G.droneKey(); __sim(1/60, 60*8); G.droneKey(); __sim(1/60, 30);
+  o.watch=Wt.on; o.t0=Wt.t; G.droneType(0); o.sel=G.dsel; G.droneKey(); __sim(1/60, 60); o.fpv=D.on&&D.type===0&&__cam.mode===4; o.both=Wt.on&&D.on; o.hud=document.getElementById('sD').textContent;
+  const p0=[Wt.x,Wt.z]; __sim(1/60, 60*3); o.watchMoves=Math.hypot(Wt.x-p0[0],Wt.z-p0[1])>5; __inp.fire=true; __sim(1/60,2); __inp.fire=false; __sim(1/60, 60*6); o.afterBoom={fpv:D.on, watch:Wt.on, mode:__cam.mode, n:Array.from(G.dn)};
+  G.droneType(1); G.droneKey(); __sim(1/60, 60*2); o.bomb=D.on&&D.type===1&&Wt.on; G.droneKey(); __sim(1/60, 30); o.cut={d:D.on, watch:Wt.on};
+  G.droneType(2); o.label=G.droneLabel(); G.droneKey(); __sim(1/60, 30); o.back={d:D.on&&D.type===2, watch:Wt.on, mode:__cam.mode, t:D.t<o.t0, n:Array.from(G.dn)}; G.droneKey(); __sim(1/60, 30); o.again=Wt.on&&!D.on; __api.restart(); o.reset=!Wt.on; return o; })()`);
+check('with the recon keeping watch an FPV can be launched and flown; both are in the air and the recon keeps circling', r.watch && r.sel === 0 && r.fpv && r.both && r.watchMoves && /RECON↑/.test(r.hud), r);
+check('the FPV detonates and the recon is still up; a bomber can go out next and its link be cut without touching the recon', !r.afterBoom.fpv && r.afterBoom.watch && r.afterBoom.n[0] === 4 && r.bomb && !r.cut.d && r.cut.watch, r);
+check('RECON picked + X takes the watching recon back (no new drone used), X again puts it on watch, a restart clears it', r.label === 'TAKE BACK RECON' && r.back.d && !r.back.watch && r.back.mode === 4 && r.back.t && r.back.n[2] === 1 && r.again && r.reset, r);
 check('no page errors', errs === 0, errs);
 await browser.close();
 console.log(fails ? `${fails} FAILED` : 'all passed');
