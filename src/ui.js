@@ -1,6 +1,6 @@
 // Input (keyboard, mouse, touch) and DOM UI. All state lives in `inp`; nothing here allocates per frame.
 import { tr } from './lang.js';
-const $ = (id) => document.getElementById(id);
+const $ = /** @type {(id: string) => any} */ ((id) => document.getElementById(id));
 export const inp = { th: 0, st: 0, lookX: 0, lookY: 0, yawR: 0, zoom: 0, mvX: 0, mvZ: 0, mvY: 0, fast: false, locked: false, drag: false, fire: false, mg: false, aa: false, sight: false };
 const keys = new Set();
 const SPD = []; for (let i = 0; i < 200; i++) SPD.push(String(i));

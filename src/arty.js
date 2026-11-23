@@ -9,7 +9,7 @@ export function initArty(A) {
   const { G, veh, rnd, ui, sfx, hAt, fire, explode, hurtPlayer, kill, bld, bldFx, parts, enemies } = A;
   const RT = new Float32Array(MAXR), RX = new Float32Array(MAXR), RZ = new Float32Array(MAXR), RS = new Int8Array(MAXR), RK = new Int8Array(MAXR); // time to impact, aim point, state (0 free, 1 scheduled, 2 whistled, 3 in flight), kind (1 ranging)
   const IX = new Float32Array(32), IZ = new Float32Array(32), IK = new Int8Array(32); // last impacts (ring), for tests
-  const T = G.arty = { x: 0, z: 0, cool: 0, n: 0, calls: 0, src: '', t: 0, brg: 0, el: 1, imp: 0, ix: IX, iz: IZ, ik: IK, rt: RT, rx: RX, rz: RZ, rs: RS, rk: RK };
+  const T = G.arty = { x: 0, z: 0, cool: 0, n: 0, calls: 0, src: '', t: 0, brg: 0, el: 1, imp: 0, ix: IX, iz: IZ, ik: IK, rt: RT, rx: RX, rz: RZ, rs: RS, rk: RK, call: null, reset: null, update: null, boom: null }; // the four functions are set below
   let lastState = 0;
   // schedule a barrage on (x, z): the ranging round first, then the rest
   T.call = (x, z, src) => {

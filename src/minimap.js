@@ -65,7 +65,7 @@ export function initMinimap(W, B, HALF, kOpt) {
   }
   // ---- functional bridges (src/bridges.js): the deck covers the road under it; the over-route redrawn across it, the parapets as a dark casing with short ticks at the ends ----
   if (W.br && W.br.n) for (const Bq of W.br.list) {
-    const ux = Bq.u[0], uz = Bq.u[1], P = (lu, lv) => [X(Bq.c[0] + ux * lu - uz * lv), X(Bq.c[1] + uz * lu + ux * lv)], hl = Bq.hl, hw = Bq.hw - 0.3, t = 3.5;
+    const ux = Bq.u[0], uz = Bq.u[1], P = /** @type {(lu: number, lv: number) => [number, number]} */ ((lu, lv) => [X(Bq.c[0] + ux * lu - uz * lv), X(Bq.c[1] + uz * lu + ux * lv)]), hl = Bq.hl, hw = Bq.hw - 0.3, t = 3.5;
     c.beginPath(); for (const [a, e] of [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]]) c.lineTo(...P(a, e)); c.closePath(); c.fillStyle = '#c9d2dc'; c.fill();
     c.save(); c.clip(); c.setLineDash([3.5 * ls, 2.5 * ls]); c.strokeStyle = '#6d93ba'; c.lineWidth = 1.4 * ls; for (const tr of W.trails) line(tr.pts, tr.pts.length >> 1); c.restore(); c.setLineDash([]);
     c.strokeStyle = '#0c1218f0'; c.lineWidth = 1.5 * ls;
