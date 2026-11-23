@@ -24,6 +24,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sjekker uten nettleser
+        run: npm run check
+
+      - name: Bygg
+        run: node build.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/configure-pages@v5
 
       - name: Klargjør nettsiden

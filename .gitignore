@@ -8,3 +8,4 @@ tools/geo/__pycache__/
 tools/snd/__pycache__/
 tools/geo/.venv/
 src/data/world.bin.lock
+index.html
