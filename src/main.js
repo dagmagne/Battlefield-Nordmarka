@@ -15,7 +15,7 @@ import particleW from './particle.wgsl';
 import soldierW from './soldier.wgsl';
 import soldierShW from './soldiershadow.wgsl';
 import { perspRZ, lookAt, mul, invert, ortho, clamp, lerp } from './math.js';
-import { genWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
+import { genWorld, preloadWorld, mipChain, WS, HN, HALF, NEAR, NCN, FAR, FCN } from './world.js';
 import { genFantasy } from './fantasy.js';
 import { setTod, updateTod, writeTod, todIndex } from './tod.js';
 import { buildLeopard, buildT72, buildBMP, buildTigr, buildBTR, buildBuggy, buildMoto, buildDrone, buildMine, buildLancet, buildOrlan, tankParts, turMat, gunMat, LEO, TRK, TRACK_WGSL } from './tank.js';
@@ -36,6 +36,7 @@ import { initHaptics } from './haptics.js';
 import { REC, RECM } from './sndrec.js';
 import { initMusic } from './music.js';
 import TITLE from './data/title.webp';
+import { assetUrl } from './asset.js';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
@@ -43,7 +44,7 @@ const lang = initLang(qs); trPage(document); // language first: the start screen
 const pickLang = (v) => { if (v === lang) return; try { localStorage.glang = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('lang'); location.href = u.href; }; // stored, applied by a reload
 for (const b of $('lLang').children) { b.classList.toggle('on', b.dataset.v === lang); b.onclick = () => pickLang(b.dataset.v); } // the language choice on the start screen
 // title screen art and music (the music button works before the game has loaded; the in-game one goes through api.music)
-$('load').style.backgroundImage = `linear-gradient(180deg,#0b142099 0%,#0b142000 30%,#0b142000 50%,#0b1420e6 100%),url(data:image/webp;base64,${TITLE})`;
+$('load').style.backgroundImage = `linear-gradient(180deg,#0b142099 0%,#0b142000 30%,#0b142000 50%,#0b1420e6 100%),url(${assetUrl(TITLE, 'image/webp')})`;
 const music = initMusic(qs);
 music.onchange = (on) => { for (const id of ['lMu', 'bMu']) $(id).classList.toggle('on', on); };
 music.onchange(music.on);
@@ -106,6 +107,7 @@ async function main() {
   ctx.configure({ device, format: cfmt, alphaMode: 'opaque' });
 
   const tick = (m, p) => { $('msg').textContent = m + '…'; $('bar').firstChild.style.width = (p * 100).toFixed(0) + '%'; return new Promise((r) => setTimeout(r, 0)); };
+  if (qs.get('w') !== 'fantasi') preloadWorld(); // split build: fetch the map blob while the start screen is up
   // world choice: ?w=fantasi|holmenkollen|frogner, otherwise ask (scripted runs with ?nohint default to Frognerseteren)
   // mode, mission and world: from the URL (?w= world and start, ?m= mission, ?peace), else the start screen (mode -> mission, start point or world)
   let msel = MISSIONS.some((m) => m.id === qs.get('m')) ? qs.get('m') : '', pickPeace = null;
@@ -120,7 +122,8 @@ async function main() {
     P.style.display = 'none'; $('bar').style.display = $('msg').style.display = ''; }
   if (wsel === 'fantasi') msel = '';
   await tick('Shaping terrain', 0);
-  const W = wsel === 'fantasi' ? await genFantasy(tick, Q) : await genWorld(tick, Q, wsel);
+  let W; try { W = wsel === 'fantasi' ? await genFantasy(tick, Q) : await genWorld(tick, Q, wsel); }
+  catch (e) { console.error(e); return fail('The map data could not be loaded. Check the connection and reload the page.'); }
   const PLAY = W.PLAY, MW = W.MW;
   W.br = initBridges(W.brg || [], W.heightAt); W.groundAt = W.br.groundAt; const brUndo = W.br.shade(W.nrm, HN, HALF); // functional bridges (src/bridges.js): deck slabs over the heightfield, walls; the road under a deck is shaded
   await tick('Building scene', 0.95);

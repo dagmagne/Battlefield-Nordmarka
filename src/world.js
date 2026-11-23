@@ -5,6 +5,7 @@
 // World frame: x = east, z = south, metres; origin 59.9753 N, 10.6800 E.
 import { clamp, lerp, smooth, hash1, hash2, playBox } from './math.js';
 import DATA from './data/world.bin';
+import { assetBytes, isUrl } from './asset.js';
 
 export const WS = 4096, HN = 2048, TEX = WS / HN, HALF = WS / 2;
 const PLAY = 1560, MW = 3712, TREELINE = 900; // PLAY: the old square, still what the tests stage inside; MW: the snow mask covers the widened box
@@ -249,13 +250,16 @@ function bridgeWorld(meta, H, mat) {
   return L;
 }
 
-async function inflate(b64) {
-  const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < u.length; i++) u[i] = bin.charCodeAt(i);
+let dataP = null; // the split build downloads the map blob: start early (preloadWorld, from the start screen) and share the promise
+const worldBytes = () => dataP || (dataP = assetBytes(DATA));
+export function preloadWorld() { if (isUrl(DATA)) worldBytes().catch(() => { dataP = null; }); }
+async function inflate() {
+  let u; try { u = await worldBytes(); } catch (e) { dataP = null; throw e; }
   return new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
 }
 
 export async function genWorld(tick, Q, startAt) {
-  const raw = await inflate(DATA), jl = new DataView(raw.buffer).getUint32(0, true);
+  const raw = await inflate(), jl = new DataView(raw.buffer).getUint32(0, true);
   const meta = JSON.parse(new TextDecoder().decode(raw.subarray(4, 4 + jl)));
   const blob = (n) => raw.subarray(4 + jl + meta.blobs[n][0], 4 + jl + meta.blobs[n][0] + meta.blobs[n][1]);
   const H = new Float32Array(HN * HN);

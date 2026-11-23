@@ -14,9 +14,11 @@ Owner's decisions (2026-11-23):
 
 ## Step 2: one URL, not one file (faster start)
 About 0.5 MB of the 4.4 MB bundle is code and shaders; the rest is map data, music, title image and sound as base64.
-- [ ] Build to `dist/`: `index.html` (shell + code) plus `world.bin`, `music.mp3`, `title.webp`, sound loops as hashed files, fetched at run time. `node build.mjs --single` keeps today's self-contained file.
-- [ ] Music and `world.bin` loaded only when needed (the fantasy world needs neither map data).
-- [ ] Service worker: everything cached after the first visit, works offline from the home screen.
+- [x] `node build.mjs --split` writes `dist/`: `index.html` (682 kB, 301 kB gzip) plus `world.bin`, `music.mp3`, `title.webp` as hashed files fetched at run time (the 84 kB of sound loops stay embedded). The plain `node build.mjs` is still today's self-contained file.
+- [x] The map blob is fetched while the start screen is up (not with `?w=fantasi`); the music streams.
+- [x] Service worker: everything cached after the first visit, starts offline (`tools/splittest.mjs`).
+- [x] Pages serves the single file at the root as before and the split build under `/next/`.
+- [ ] Owner tries `/next/` on phone, iPad and desktop (Safari, music, Add to Home Screen offline); then make it the root.
 - [ ] World generation in a Web Worker (the start screen stays responsive; groundwork for streamed map tiles and a larger world).
 
 ## Step 3: untangle the code (no change for the player)
