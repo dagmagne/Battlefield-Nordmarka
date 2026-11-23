@@ -38,7 +38,7 @@ import { initMusic } from './music.js';
 import TITLE from './data/title.webp';
 import { assetUrl } from './asset.js';
 
-const $ = (id) => document.getElementById(id);
+const $ = /** @type {(id: string) => any} */ ((id) => document.getElementById(id));
 const qs = new URLSearchParams(location.search);
 const lang = initLang(qs); trPage(document); // language first: the start screen is already on the page
 const pickLang = (v) => { if (v === lang) return; try { localStorage.glang = v; } catch (e) { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('lang'); location.href = u.href; }; // stored, applied by a reload
@@ -1097,7 +1097,7 @@ async function main() {
     if (R.manual) return;
     tickFrame(Math.min(0.05, raw), raw);
   }
-  window.__waitFrames = (n) => new Promise((r) => { if (R.manual) return r(); waitN = n; waiters.push(r); });
+  window.__waitFrames = (n) => new Promise(/** @param {(v?: any) => void} r */ (r) => { if (R.manual) return r(); waitN = n; waiters.push(r); });
   window.__step = (dt, n = 1) => { R.manual = true; for (let i = 0; i < n; i++) tickFrame(dt, dt); return device.queue.onSubmittedWorkDone(); };
   window.__sim = (dt, n = 1) => { R.manual = true; R.simOnly = true; for (let i = 0; i < n; i++) tickFrame(dt, dt); R.simOnly = false; };
   window.__info = () => `tier=${Q.name} ${R.w}x${R.h} scale=${R.scale.toFixed(2)} trees=${W.trees.count} draws=${draws} gpu=${R.gpuMs.toFixed(2)}ms ft=${R.ft.toFixed(2)}`;

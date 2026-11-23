@@ -9,8 +9,8 @@ Owner's decisions (2026-11-23):
 ## Step 1: safety net (no change for the player)
 - [x] GitHub Pages builds from source; `index.html` is no longer in git.
 - [x] `npm run check` (commentlint, langcheck, leocheck, soldiercheck, audio-check, bridgecheck) in CI on every push; bundle size in the job summary.
-- [ ] Type checking without a new build step: `// @ts-check` + JSDoc, `tsc --noEmit` in CI, one file at a time (needs `typescript` as a dev dependency).
-- [ ] Split `CLAUDE.md` (123 kB) into a short core (rules, build, workflow) and `docs/<system>.md` read on demand.
+- [x] Type checking without a new build step: `tsc -p .` (`checkJs` on every file in `src/` except the service worker, not strict; `src/types.d.ts` for ambient declarations) as the last step of `npm run check`, so CI runs it. Next: stricter options file by file.
+- [x] `CLAUDE.md` split (123 kB to 19 kB): rules, build and workflow stay; the notes per system are in `docs/dev/*.md`, read on demand.
 
 ## Step 2: one URL, not one file (faster start)
 About 0.5 MB of the 4.4 MB bundle is code and shaders; the rest is map data, music, title image and sound as base64.

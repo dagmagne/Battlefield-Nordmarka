@@ -54,7 +54,7 @@ export function initCombat(C) {
   const G = { fx: new Float32Array(MAXG * 12), fxN: 0, blasts: new Float32Array(16 * 4), blastN: 0, flash: new Float32Array(8), enemies: [], sel: 0, n: [20, 12, 10], mg: 2000, smokeN: 2, rl: 0, wave: 0, kills: 0, timer: 6, state: 0, won: false, score: 0, peace: !!C.peace };
   G.dview = [1, 1, 1]; // last view level per drone type (kept between launches)
   const RW = G.watch = { on: false, type: 2, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, ax: 0, az: 0, spin: 0, tp: 0, tr: 0, scan: 0, sec: -1 }; // the recon drone keeping watch on its own (see updateWatch)
-  const D = G.drone = { on: false, hold: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
+  const D = G.drone = { on: false, hold: 0, sig: 1, sigT: 1, sq: 0, bx: 0, by: 0, bz: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, t: 0, spin: 0, tp: 0, tr: 0, sec: -1,
     type: 0, bombs: 0, rel: 0, climb: 0, away: false, auto: false, ax: 0, az: 0, scan: 0, ix: 0, iy: 0, iz: 0, iok: false, drops: 0 }; // bomber: grenades left, drop cooldown, predicted impact point
   G.inf = { n: 0, d: new Float32Array(MAXI * 8) }; // soldiers (phase 6): per soldier [x, y, z, yaw, pose, phase, aim, state]; logic in infantry.js, drawn by the renderer
   G.dn = new Int32Array(3); for (let i = 0; i < 3; i++) G.dn[i] = DTYPE[i].n; G.dsel = 0; G.rep = 0; G.spot = false;
@@ -70,7 +70,7 @@ export function initCombat(C) {
   const PQ = []; for (let i = 0; i < PQN; i++) PQ.push({ t: 0, trig: -1, type: 0, role: 0, brg: 0, grp: 0, ann: 0 });
   let pqN = 0, noSlot = false, anyWreck = false; const GA = new Float32Array(8 * 3), GS = new Float32Array(8 * 4), COV = new Float32Array(36); let annNow = 0; // group anchors (x, z, set); per-release tally per group (n, unit x, unit z, distance); route points per 10° of bearing
   G.stuck = 0; G.lastAxis = NaN; G.bag = null; G.wt = 0; G.plan = '';
-  const map = typeof document !== 'undefined' && document.getElementById('map'), mctx = map && map.getContext ? map.getContext('2d') : null;
+  const map = typeof document !== 'undefined' && /** @type {any} */ (document.getElementById('map')), mctx = map && map.getContext ? map.getContext('2d') : null;
   const mm = mctx ? initMinimap(W, C.bld, HALF) : null; // static base map, pre-rendered once
 
   // ---------- small helpers ----------
@@ -619,7 +619,7 @@ export function initCombat(C) {
   }
 
   // ---------- the large map view (Tab, or a tap on the minimap): the playable area at a glance, the same markers ----------
-  const bmap = typeof document !== 'undefined' && document.getElementById('bmap'), bctx = bmap && bmap.getContext ? bmap.getContext('2d') : null;
+  const bmap = typeof document !== 'undefined' && /** @type {any} */ (document.getElementById('bmap')), bctx = bmap && bmap.getContext ? bmap.getContext('2d') : null;
   let bm = null, bigOn = false, bigT = 0, bCss = 0, bPx = 0; const PB = W.PB, BCX = (PB[0] + PB[2]) / 2, BCZ = (PB[1] + PB[3]) / 2, BEXT = Math.max(PB[2] - PB[0], PB[3] - PB[1]) / 2 + 120; // the big map: centre of the playable box, metres from it to the edge of the view
   G.bigMap = (on) => { // rare event: may allocate (the sharper base map is built on first use)
     if (!bctx) return; bigOn = on === undefined ? !bigOn : !!on; bmap.classList.toggle('show', bigOn); if (!bigOn) return;
