@@ -18,7 +18,8 @@ About 0.5 MB of the 4.4 MB bundle is code and shaders; the rest is map data, mus
 - [x] The map blob is fetched while the start screen is up (not with `?w=fantasi`); the music streams.
 - [x] Service worker: everything cached after the first visit, starts offline (`tools/splittest.mjs`).
 - [x] Pages serves the single file at the root as before and the split build under `/next/`.
-- [ ] Owner tries `/next/` on phone, iPad and desktop (Safari, music, Add to Home Screen offline); then make it the root.
+- [x] Owner tried `/next/` on an iPhone: starts, music plays, starts from the home screen in flight mode.
+- [ ] Try it on iPad, Mac Safari, Android and desktop; then make it the root (owner's call).
 - [ ] World generation in a Web Worker (the start screen stays responsive; groundwork for streamed map tiles and a larger world).
 
 ## Step 3: untangle the code (no change for the player)
