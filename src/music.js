@@ -4,6 +4,7 @@
 // The music button (start screen, in-game top bar), the menu row and U toggle it (localStorage.gmus); the sound switch
 // (M / menu) silences it too. Not started on its own in scripted runs (nohint auto perf).
 import MUS from './data/music.mp3';
+import { isUrl } from './asset.js';
 
 export function initMusic(qs) {
   const st = (k) => { try { return localStorage[k]; } catch (e) { return undefined; } };
@@ -14,8 +15,9 @@ export function initMusic(qs) {
   function el() { // built on first need: the base64 decode of 1.6 MB takes a few ms
     if (a || typeof Audio === 'undefined') return a;
     try {
-      const bin = atob(MUS), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-      a = M.a = new Audio(URL.createObjectURL(new Blob([u8], { type: 'audio/mpeg' }))); a.loop = true; a.preload = 'auto'; a.volume = vol;
+      let src = MUS; // split build: a file beside the page, streamed; single-file build: base64, played from a blob
+      if (!isUrl(MUS)) { const bin = atob(MUS), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); src = URL.createObjectURL(new Blob([u8], { type: 'audio/mpeg' })); }
+      a = M.a = new Audio(src); a.loop = true; a.preload = 'auto'; a.volume = vol;
     } catch (e) { a = null; }
     return a;
   }

@@ -35,14 +35,18 @@ jobs:
         run: npm run check
 
       - name: Bygg
-        run: node build.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          node build.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          node build.mjs --split | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/configure-pages@v5
 
       - name: Klargjør nettsiden
         run: |
-          mkdir -p _site
+          # roten er enkeltfilen som før; /next/ er det delte bygget (egne datafiler + service worker) til utprøving
+          mkdir -p _site/next
           cp index.html _site/
+          cp -r dist/. _site/next/
 
       - uses: actions/upload-pages-artifact@v4
         with:

@@ -25,4 +25,6 @@ jobs:
         run: npm run check
 
       - name: Build
-        run: node build.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          node build.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          node build.mjs --split | tee -a "$GITHUB_STEP_SUMMARY"
